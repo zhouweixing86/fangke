@@ -265,7 +265,7 @@ class EmployeeServiceTest {
 
     private EmployeeRequest request(String empNo, String phone, String idCard) {
         return new EmployeeRequest(empNo, "张三", 1L, null, "工程师",
-                phone, idCard, LocalDate.of(2026, 1, 1), LocalDate.of(2028, 12, 31), null);
+                phone, idCard, LocalDate.of(2026, 1, 1), LocalDate.of(2028, 12, 31), null, null);
     }
 
     private byte[] jpeg(int width, int height) throws IOException {
@@ -294,6 +294,18 @@ class EmployeeServiceTest {
         assertEquals(64, e.getPhoneHmac().length());
         assertEquals(Employee.STATUS_ACTIVE, e.getStatus());
         assertNull(e.getPhonePlain(), "明文不应残留在实体里");
+    }
+
+    @Test
+    @DisplayName("车牌号：去空格转大写入库，空白存 null（二期车辆识别直接匹配）")
+    void plateNoNormalized() {
+        Employee withPlate = service.create(new EmployeeRequest("000901", "有车族", 1L, null, "工程师",
+                "13800000901", null, null, null, null, " 京a 12345 "), 1L);
+        assertEquals("京A12345", withPlate.getPlateNo());
+
+        Employee noPlate = service.create(new EmployeeRequest("000902", "无车族", 1L, null, "工程师",
+                "13800000902", null, null, null, null, "   "), 1L);
+        assertNull(noPlate.getPlateNo());
     }
 
     @Test

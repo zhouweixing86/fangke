@@ -80,6 +80,8 @@ export interface EmployeeView {
   deptId: number | null
   deptName: string
   title: string
+  /** 车牌号（主车，二期车辆识别用） */
+  plateNo: string
   phoneMask: string
   idCardMask: string
   status: number

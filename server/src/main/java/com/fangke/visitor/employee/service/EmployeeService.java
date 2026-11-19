@@ -83,6 +83,7 @@ public class EmployeeService {
         employee.setDeptId(request.deptId());
         employee.setLeaderId(request.leaderId());
         employee.setTitle(trimToNull(request.title()));
+        employee.setPlateNo(request.plateNo());
         employee.setValidFrom(request.validFrom());
         employee.setValidTo(request.validTo());
         employee.setRemark(trimToNull(request.remark()));
@@ -105,6 +106,7 @@ public class EmployeeService {
         employee.setDeptId(request.deptId());
         employee.setLeaderId(request.leaderId());
         employee.setTitle(trimToNull(request.title()));
+        employee.setPlateNo(request.plateNo());
         employee.setValidFrom(request.validFrom());
         employee.setValidTo(request.validTo());
         employee.setRemark(trimToNull(request.remark()));
@@ -197,7 +199,7 @@ public class EmployeeService {
 
     /**
      * 模板列（第 1 行为表头）：
-     * 工号 | 姓名 | 部门编码 | 职务 | 手机号 | 身份证号 | 有效期起 | 有效期止 | 备注
+     * 工号 | 姓名 | 部门编码 | 职务 | 手机号 | 身份证号 | 有效期起 | 有效期止 | 备注 | 车牌号
      */
     public ImportResult importExcel(InputStream in, Long operatorId) {
         List<ImportResult.RowError> errors = new ArrayList<>();
@@ -228,7 +230,8 @@ public class EmployeeService {
                             cell(row, 5, formatter),
                             parseDate(cell(row, 6, formatter)),
                             parseDate(cell(row, 7, formatter)),
-                            cell(row, 8, formatter)), operatorId);
+                            cell(row, 8, formatter),
+                            cell(row, 9, formatter)), operatorId);
                     success++;
                 } catch (BusinessException e) {
                     errors.add(new ImportResult.RowError(r + 1, e.getMessage()));

@@ -25,7 +25,8 @@ public class JdbcEmployeeRepository implements EmployeeRepository {
     private static final String SELECT = """
             SELECT e.id, e.person_no, e.emp_no, e.name, e.dept_id, d.dept_name, e.leader_id, e.title,
                    e.phone_enc, e.phone_hmac, e.phone_mask, e.id_card_enc, e.id_card_hmac, e.id_card_mask,
-                   e.status, e.valid_from, e.valid_to, e.face_status, e.remark, e.created_at, e.updated_at
+                   e.status, e.valid_from, e.valid_to, e.face_status, e.remark, e.plate_no,
+                   e.created_at, e.updated_at
             FROM employee e
             LEFT JOIN dept d ON d.id = e.dept_id
             """;
@@ -57,6 +58,7 @@ public class JdbcEmployeeRepository implements EmployeeRepository {
             e.setValidTo(to == null ? null : to.toLocalDate());
             e.setFaceStatus(rs.getInt("face_status"));
             e.setRemark(rs.getString("remark"));
+            e.setPlateNo(rs.getString("plate_no"));
             if (rs.getTimestamp("created_at") != null) {
                 e.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
             }
@@ -80,8 +82,8 @@ public class JdbcEmployeeRepository implements EmployeeRepository {
             PreparedStatement ps = connection.prepareStatement("""
                     INSERT INTO employee (person_no, emp_no, name, dept_id, leader_id, title,
                         phone_enc, phone_hmac, phone_mask, id_card_enc, id_card_hmac, id_card_mask,
-                        status, valid_from, valid_to, face_status, remark)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        status, valid_from, valid_to, face_status, remark, plate_no)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, Statement.RETURN_GENERATED_KEYS);
             int i = 1;
             ps.setString(i++, e.getPersonNo());
@@ -100,7 +102,8 @@ public class JdbcEmployeeRepository implements EmployeeRepository {
             setNullableDate(ps, i++, e.getValidFrom());
             setNullableDate(ps, i++, e.getValidTo());
             ps.setInt(i++, e.getFaceStatus());
-            ps.setString(i, e.getRemark());
+            ps.setString(i++, e.getRemark());
+            ps.setString(i, e.getPlateNo());
             return ps;
         }, keyHolder);
         Number key = keyHolder.getKey();
@@ -116,13 +119,14 @@ public class JdbcEmployeeRepository implements EmployeeRepository {
                         UPDATE employee SET name = ?, dept_id = ?, leader_id = ?, title = ?,
                             phone_enc = ?, phone_hmac = ?, phone_mask = ?,
                             id_card_enc = ?, id_card_hmac = ?, id_card_mask = ?,
-                            status = ?, valid_from = ?, valid_to = ?, remark = ?
+                            status = ?, valid_from = ?, valid_to = ?, remark = ?, plate_no = ?
                         WHERE id = ?
                         """,
                 e.getName(), e.getDeptId(), e.getLeaderId(), e.getTitle(),
                 e.getPhoneEnc(), e.getPhoneHmac(), e.getPhoneMask(),
                 e.getIdCardEnc(), e.getIdCardHmac(), e.getIdCardMask(),
-                e.getStatus(), e.getValidFrom(), e.getValidTo(), e.getRemark(), e.getId());
+                e.getStatus(), e.getValidFrom(), e.getValidTo(), e.getRemark(), e.getPlateNo(),
+                e.getId());
     }
 
     @Override

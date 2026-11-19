@@ -25,7 +25,8 @@ public record EmployeeView(
         int faceStatus,
         String faceStatusText,
         boolean canPassByFace,
-        String remark) {
+        String remark,
+        String plateNo) {
 
     private static final DateTimeFormatter D = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -47,7 +48,8 @@ public record EmployeeView(
                 e.getFaceStatus(),
                 faceStatusText(e.getFaceStatus()),
                 e.canPassByFace(LocalDate.now()),
-                e.getRemark());
+                e.getRemark(),
+                e.getPlateNo());
     }
 
     private static String statusText(int status) {

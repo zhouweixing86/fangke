@@ -27,6 +27,8 @@ public class Employee {
     private String deptName;
     private Long leaderId;
     private String title;
+    /** 车牌号（主车），二期车辆识别用（C-67）。 */
+    private String plateNo;
 
     /** 明文，仅在服务层使用，不序列化。 */
     private transient String phonePlain;
@@ -131,6 +133,22 @@ public class Employee {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+    public String getPlateNo() {
+        return plateNo;
+    }
+
+    public void setPlateNo(String plateNo) {
+        this.plateNo = normalizePlate(plateNo);
+    }
+
+    /** 车牌统一去空格转大写，方便二期车牌识别直接匹配。 */
+    private static String normalizePlate(String plate) {
+        if (plate == null) {
+            return null;
+        }
+        String trimmed = plate.replace(" ", "").replace("\t", "").trim().toUpperCase();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     public String getPhonePlain() {

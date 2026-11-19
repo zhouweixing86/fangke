@@ -22,6 +22,9 @@
       <el-table-column prop="empNo" label="工号" width="100" />
       <el-table-column prop="name" label="姓名" width="110" />
       <el-table-column prop="deptName" label="部门" width="110" />
+      <el-table-column label="车牌" width="110">
+        <template #default="{ row }">{{ row.plateNo || '-' }}</template>
+      </el-table-column>
       <el-table-column prop="title" label="职务" width="110" />
       <el-table-column prop="phoneMask" label="手机号" width="130" />
       <el-table-column prop="idCardMask" label="身份证" width="180" />
@@ -74,6 +77,9 @@
         </el-form-item>
         <el-form-item label="职务">
           <el-input v-model="form.title" />
+        </el-form-item>
+        <el-form-item label="车牌号">
+          <el-input v-model="form.plateNo" maxlength="16" placeholder="如 京A12345（二期车辆识别用）" />
         </el-form-item>
         <el-form-item label="手机号" prop="phone">
           <el-input v-model="form.phone" placeholder="11 位手机号，留空表示不修改" />
@@ -161,6 +167,7 @@ const form = reactive<Record<string, any>>({
   name: '',
   deptId: null,
   title: '',
+  plateNo: '',
   phone: '',
   idCard: '',
   remark: ''
@@ -197,7 +204,7 @@ function search() {
 }
 
 function openCreate() {
-  Object.assign(form, { id: null, empNo: '', name: '', deptId: null, title: '', phone: '', idCard: '', remark: '' })
+  Object.assign(form, { id: null, empNo: '', name: '', deptId: null, title: '', plateNo: '', phone: '', idCard: '', remark: '' })
   validRange.value = null
   formVisible.value = true
 }
@@ -209,6 +216,7 @@ function openEdit(row: EmployeeView) {
     name: row.name,
     deptId: row.deptId,
     title: row.title,
+    plateNo: row.plateNo,
     phone: '',
     idCard: '',
     remark: row.remark
@@ -230,7 +238,8 @@ async function save() {
     idCard: form.idCard || undefined,
     validFrom: validRange.value?.[0] ?? null,
     validTo: validRange.value?.[1] ?? null,
-    remark: form.remark
+    remark: form.remark,
+    plateNo: form.plateNo || undefined
   }
   saving.value = true
   try {
