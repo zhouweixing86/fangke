@@ -1,0 +1,191 @@
+{
+  "version": 1,
+  "tenant": "fangke",
+  "defaults": {
+    "maxWakesPerDay": 3,
+    "checkTimeoutSec": 1200,
+    "outputTailChars": 4000,
+    "wakeAgent": "copilot",
+    "wakeArgs": ["-p", "{prompt}", "--allow-all-tools", "--no-color"]
+  },
+  "tasks": [
+    {
+      "id": "T01",
+      "name": "后端单测与构建基线",
+      "area": "server",
+      "intervalDays": 1,
+      "priority": 10,
+      "wakePolicy": "fail",
+      "checks": [
+        {
+          "name": "Maven 全量单测",
+          "type": "command",
+          "cwd": "server",
+          "run": "mvn-test"
+        }
+      ],
+      "prompt": "你在 fenke 访客系统的【后端测试基线】任务中被唤醒。目标：让 server 模块单测全绿、构建可重复。步骤：1) 读最近一次 .autopilot/runs 报告里的失败用例；2) 定位根因（优先看断言过时、测试与实现口径不一致、事务/时序问题）；3) 修实现或修测试，但不得放宽产品规则（有效期、审批、下发、二维码 60 秒可复用等）；4) 重跑全量测试直到全绿；5) 若影响文档（docs/09 §10 进度、server/README 用例数），同步更新。约束：不要删除有价值用例，不要为了让测试过而改断言常量；改动后必须重跑一次全量测试。"
+    },
+    {
+      "id": "T02",
+      "name": "前端构建（web 管理端 + uniapp 三端）",
+      "area": "web",
+      "intervalDays": 1,
+      "priority": 20,
+      "wakePolicy": "fail",
+      "checks": [
+        { "name": "管理端 web 构建", "type": "command", "cwd": "web", "run": "npm run build" },
+        { "name": "uni-app H5 构建", "type": "command", "cwd": "uniapp", "run": "npm run build:h5" },
+        { "name": "uni-app 微信小程序构建", "type": "command", "cwd": "uniapp", "run": "npm run build:mp-weixin" },
+        { "name": "uni-app APP 资源构建", "type": "command", "cwd": "uniapp", "run": "npm run build:app" }
+      ],
+      "prompt": "你在【前端构建】任务中被唤醒。目标：web（管理端 Vue3+Element Plus）与 uniapp（移动端，一套代码出 H5/微信小程序/APP）都能通过编译。步骤：1) 从 .autopilot/runs 报告定位报错文件；2) uniapp 侧注意三端条件编译（#ifdef H5 / #ifndef H5）与 API 差异，不要用只在浏览器可用的 DOM/库；3) 二维码统一用后端返回的 PNG base64，不要引入前端 canvas 库；4) 修完重新构建三端与 web；5) 若新增页面，同步 src/pages.json 与 docs/13 的页面清单。"
+    },
+    {
+      "id": "T03",
+      "name": "数据库迁移与基线一致性",
+      "area": "db",
+      "intervalDays": 1,
+      "priority": 30,
+      "wakePolicy": "fail",
+      "checks": [
+        { "name": "迁移脚本扫描", "type": "scan", "scanner": "migration" }
+      ],
+      "prompt": "你在【数据库迁移一致性】任务中被唤醒。目标：Flyway 迁移序列连续、无重复版本、无“改了历史脚本”的风险，且 docs/10 表设计与实际迁移一致。步骤：1) 读报告里的版本序列与表数量；2) 若发现缺号/重号，补新迁移（禁止修改已执行过的 V*.sql）；3) 若 docs/10 与迁移不一致，以迁移为准更新 docs/10 并注明差异原因；4) 检查新增表是否补了索引与注释。约束：任何表结构变更必须新建 V{n}__xxx.sql，并保持可重复执行（IF NOT EXISTS / DROP 前加判断）。"
+    },
+    {
+      "id": "T04",
+      "name": "密钥与敏感数据扫描",
+      "area": "security",
+      "intervalDays": 1,
+      "priority": 5,
+      "wakePolicy": "fail",
+      "checks": [
+        { "name": "明文口令/密钥扫描", "type": "scan", "scanner": "secret" }
+      ],
+      "prompt": "你在【安全扫描】任务中被唤醒。目标：仓库内不得出现真实口令、AK/SK、私钥、内网真实 IP 与个人身份信息。步骤：1) 读报告列出的命中文件与行；2) 区分“占位符/文档示例”和“真实凭据”：真实凭据必须删除并改为环境变量；3) 检查 application.yml 所有敏感项都走 ${ENV:default} 且 default 是明显的 dev 占位；4) 检查日志里是否有明文身份证/手机号（应走 CryptoService 脱敏）；5) 修完重跑本扫描直到无高危命中。约束：不要为了让扫描过而把敏感词改成拼音绕开。"
+    },
+    {
+      "id": "T05",
+      "name": "接口契约一致性（docs/11 ↔ 控制器）",
+      "area": "api",
+      "intervalDays": 7,
+      "priority": 40,
+      "wakePolicy": "always",
+      "checks": [
+        { "name": "端点清点", "type": "scan", "scanner": "endpoint" }
+      ],
+      "prompt": "你在【接口契约一致性】任务中被唤醒。目标：docs/11-接口详细契约.md 与实际 Controller 端点一一对应。步骤：1) 读报告里的端点总数与按前缀分布；2) 抽样核对易漏项：/api/app/**（App token 鉴权）、/api/guard/**（GUARD/ADMIN）、/api/admin/job/**、/api/admin/notification、/api/app/notifications；3) 文档有、代码没有的端点：要么实现，要么在文档标注 ⬜ 待实现并写清依赖；4) 代码有、文档没有的：补文档（方法、路径、角色、请求/响应样例、错误码）；5) 检查错误码表是否包含新增码（如 4006）。约束：文档改动保持表格风格与现有编号体系。"
+    },
+    {
+      "id": "T06",
+      "name": "设备适配层与能力矩阵回归",
+      "area": "device",
+      "intervalDays": 1,
+      "priority": 15,
+      "wakePolicy": "fail",
+      "checks": [
+        { "name": "设备相关单测", "type": "command", "cwd": "server", "run": "mvn-device-tests" }
+      ],
+      "prompt": "你在【设备适配层回归】任务中被唤醒。目标：换设备后业务零改动的前提不被破坏。步骤：1) 确认 DeviceAdapter 接口方法与三种实现（LAN/CLOUD/MOCK）一致，新增能力必须有默认实现或显式声明；2) 能力矩阵（DeviceCapabilityService）的 disable/only 语义、4006 提示、缺能力时不抛 500 都要有测试；3) 设备日期格式（yyyy-MM-dd + 尾随空格）、usertype 差异、参数 read-modify-write 仍被测试锁住；3.1) 新终端 PULL 通道（docs/14）：签名 MD5 大写、data 不参与签名、心跳 action 优先级、开门下发后立即出队、记录幂等与证件号脱敏；4) 若新增能力位，同步 docs/12 能力矩阵表与 server/README；5) 不要为了通过测试而降低对真实固件怪癖的校验。"
+    },
+    {
+      "id": "T07",
+      "name": "审批流与授权下发回归",
+      "area": "approval",
+      "intervalDays": 7,
+      "priority": 50,
+      "wakePolicy": "always",
+      "checks": [
+        { "name": "审批/下发单测", "type": "command", "cwd": "server", "run": "mvn-approval-tests" }
+      ],
+      "prompt": "你在【审批与下发回归】任务中被唤醒。目标：审批状态机与授权下发在并发/异常下不丢单、不误发。步骤：1) 复核状态流转表（10 草稿/20 待一级/25 待二级/30 通过/35 可通行/40 已签到/50 已签离/60 驳回/70 过期/80 撤回/90 撤销）与代码一致；2) 重点检查 afterCommit 下发（防读旧状态）、重复点击幂等、转办/加签后旧任务失效、催办限流；3) 检查撤销授权是否联动作废未使用二维码票据；4) 补缺口测试（并发通过、下发部分失败后重试、撤销后再下发）；5) 不改变业务口径。"
+    },
+    {
+      "id": "T08",
+      "name": "动态二维码安全口径（BR-V-019/020/024）",
+      "area": "qr",
+      "intervalDays": 7,
+      "priority": 55,
+      "wakePolicy": "always",
+      "checks": [
+        { "name": "二维码单测", "type": "command", "cwd": "server", "run": "mvn-qr-tests" },
+        { "name": "明文码扫描", "type": "scan", "scanner": "qr" }
+      ],
+      "prompt": "你在【二维码安全】任务中被唤醒。目标：60 秒有效（BR-V-019）、有效期内可重复使用（BR-V-020）、失败必须留痕并区分原因（BR-V-024）、库里不存明文码。步骤：1) 读报告中的明文码扫描结果，确认 qr_ticket 只有 code_hash；2) 复核验签（HMAC8）、过期、撤销、无授权、不在时段、门点不符六类拒绝路径都有测试；3) 复核撤销授权/撤回预约时未使用票据被作废；4) 复核一次性误区：不得再次引入“用一次就失效”的逻辑；5) 若发现漏洞，补测试 + 修复 + 更新 docs/11 §5.10。"
+    },
+    {
+      "id": "T09",
+      "name": "通知中心与定时任务健康度",
+      "area": "notify",
+      "intervalDays": 7,
+      "priority": 60,
+      "wakePolicy": "always",
+      "checks": [
+        { "name": "通知/任务单测", "type": "command", "cwd": "server", "run": "mvn-notify-tests" },
+        { "name": "待实现标记清点", "type": "scan", "scanner": "todo" }
+      ],
+      "prompt": "你在【通知与定时任务】任务中被唤醒。目标：通知不重复、不丢、可重试；定时任务失败可发现、可手动补跑。步骤：1) 复核 dedup_key 去重（模板+接收人+业务号+通道）、失败重试上限 3、移动端只读 channel=1；2) 复核 8 个任务的 cron 与阈值可被 fangke.job.* 覆盖，且都经 JobRunner 记 job_run_log；3) 检查自动催办复用人工催办限流、不对过期预约发短信打扰；4) 读 todo 扫描结果，把相关 TODO 收敛成显式待办（写进 docs/09 §10 或用例注释）；5) 补测失败路径。"
+    },
+    {
+      "id": "T10",
+      "name": "访问控制与越权检查",
+      "area": "security",
+      "intervalDays": 7,
+      "priority": 25,
+      "wakePolicy": "always",
+      "checks": [
+        { "name": "鉴权端点清点", "type": "scan", "scanner": "authz" }
+      ],
+      "prompt": "你在【访问控制】任务中被唤醒。目标：三套身份（后台 JWT、保安 GUARD/ADMIN、移动端 App token APP_EMPLOYEE/APP_VISITOR）边界清晰，无越权。步骤：1) 核对 WebConfig 拦截器覆盖范围与公开白名单是否最小；2) 逐个检查 /api/app/** 的归属校验（访客只能看自己预约、员工只能看被访人是我）；3) 检查 /api/admin/** 中账号/审计/报表/任务/通知是否都 requireAdmin；4) 检查 X-Employee-Id 兜底逻辑是否会在生产造成越权（应有开关或明确注释）；5) 补越权测试用例。"
+    },
+    {
+      "id": "T11",
+      "name": "报表与审计口径复核",
+      "area": "report",
+      "intervalDays": 7,
+      "priority": 65,
+      "wakePolicy": "always",
+      "checks": [
+        { "name": "报表/审计单测", "type": "command", "cwd": "server", "run": "mvn-report-tests" }
+      ],
+      "prompt": "你在【报表与审计】任务中被唤醒。目标：统计口径可解释、审计可追责。步骤：1) 复核概览口径（预约按 start_time、通行按 event_time、到访按 checkin_at、平均审批时长按 approval_task.finished_at-created_at）；2) 检查是否存在会误导的比率（如分母含同行人导致 >100%），必要时改名或改算法；3) 确认审计写入带操作人（sub → user_name）、设备异常不会被吞成 5001；4) 检查报表区间上限（366 天）与空数据补 0；5) 更新 docs/11 口径说明。"
+    },
+    {
+      "id": "T12",
+      "name": "依赖与已知漏洞",
+      "area": "deps",
+      "intervalDays": 7,
+      "priority": 70,
+      "wakePolicy": "always",
+      "checks": [
+        { "name": "依赖清单扫描", "type": "scan", "scanner": "deps" }
+      ],
+      "prompt": "你在【依赖健康度】任务中被唤醒。目标：依赖版本集中、无已知高危、无不必要的大包。步骤：1) 读报告里的 Spring Boot / 前端依赖版本；2) 检查是否有重复或冲突版本、是否有 EOL 组件；3) 前端检查是否引入了体积很大的库（可考虑懒加载或替换）；4) 如果升级，必须跑完整单测 + 两端构建，并在 docs/09 §10 记录；5) 不要为了“更新”而大版本跳跃，优先补丁级。"
+    },
+    {
+      "id": "T13",
+      "name": "性能与索引审计",
+      "area": "perf",
+      "intervalDays": 30,
+      "priority": 80,
+      "wakePolicy": "always",
+      "checks": [
+        { "name": "索引与查询扫描", "type": "scan", "scanner": "index" }
+      ],
+      "prompt": "你在【性能与索引】任务中被唤醒。目标：门口等人场景（在线比对 P99 < 300ms）不被慢查询拖垮。步骤：1) 读报告里的缺失索引候选（按外键/时间字段/状态字段）；2) 重点看在线比对链路（JdbcGrantChecker）、签到签离、报表聚合、通知未读数；3) 给出索引建议并落成新迁移（V{n}__add_index.sql）；4) 检查是否有 N+1 查询（循环内查库）或全表扫描；5) 在 server/README 记录结论与验证方式（EXPLAIN 前后对比）。"
+    },
+    {
+      "id": "T14",
+      "name": "文档与实现一致性",
+      "area": "docs",
+      "intervalDays": 7,
+      "priority": 75,
+      "wakePolicy": "always",
+      "checks": [
+        { "name": "进度表扫描", "type": "scan", "scanner": "docprogress" }
+      ],
+      "prompt": "你在【文档一致性】任务中被唤醒。目标：docs/ 与代码不脱节。步骤：1) 读报告里的 ⬜ 待实现项与页面/用例数；2) 核对 docs/09 §10 进度表、docs/README 索引与版本号、server/README 用例数与页面数；3) 核对 docs/10 表清单与实际 Flyway 表数量；4) 核对 docs/11 中标注 ⬜ 的端点是否仍然未实现（已实现则去掉标记）；5) 更新版本号与变更摘要，保持表格风格。"
+    }
+  ]
+}

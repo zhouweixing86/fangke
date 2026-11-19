@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "description": "扫描器误报豁免清单。每条都要写清理由，禁止用豁免掩盖真实凭据。",
+  "secret": [
+    {
+      "path": "docs/",
+      "rule": "*",
+      "reason": "文档中的口令/密钥均为联调示例（设备出厂默认 123456、示例 curl），不是真实凭据"
+    },
+    {
+      "path": "tools/device-probe.ps1",
+      "rule": "*",
+      "reason": "联调脚本默认口令与设备出厂一致，运行时可用 -Password 覆盖"
+    },
+    {
+      "path": "server/src/main/java/com/fangke/visitor/config/AppProperties.java",
+      "rule": "硬编码口令赋值",
+      "reason": "设备出厂默认口令 123456（docs/06 已记录），仅用于首次建档，可用 DEVICE_DEFAULT_PASSWORD 覆盖"
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+spring:
+  application:
+    name: visitor-server
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:fangke}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:root}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 5000
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+logging:
+  level:
+    root: INFO
+    com.fangke: DEBUG
+
+fangke:
+  tenant-code: T01
+
+  # 首次启动且账号表为空时创建的管理员（生产用环境变量注入，首次登录后必须改密）
+  bootstrap:
+    admin-username: ${BOOTSTRAP_ADMIN_USERNAME:admin}
+    admin-password: ${BOOTSTRAP_ADMIN_PASSWORD:Admin@123456}
+
+  # 前端独立部署时的跨域来源（生产建议同域部署或由网关统一处理）
+  cors-allowed-origins:
+    - http://localhost:5173
+    - http://127.0.0.1:5173
+    - http://localhost:5174
+    - http://127.0.0.1:5174
+    - http://localhost:5175
+    - http://127.0.0.1:5175
+
+  jwt:
+    # 生产必须用环境变量注入，禁止把真实密钥写进配置文件
+    secret: ${JWT_SECRET:dev-only-change-me}
+    ttl: 8h
+
+  qr:
+    secret: ${QR_SECRET:dev-only-qr-secret}
+    ttl-seconds: 60
+
+  # 访客端/员工端（H5、小程序）
+  app:
+    # 开发模式：验证码直接回显；生产必须 false 并接入短信网关
+    sms-mock: ${APP_SMS_MOCK:true}
+    code-ttl-seconds: ${APP_CODE_TTL:300}
+    # 是否允许用 X-Employee-Id 头模拟员工身份（仅联调/自动化测试，生产必须 false）
+    allow-employee-header: ${APP_ALLOW_EMPLOYEE_HEADER:false}
+
+  crypto:
+    # 敏感字段加密：生产必须用环境变量注入，且两把密钥不同
+    aes-key: ${CRYPTO_AES_KEY:dev-only-aes-key-change-me}
+    hmac-key: ${CRYPTO_HMAC_KEY:dev-only-hmac-key-change-me}
+
+  device:
+    default-password: "${DEVICE_DEFAULT_PASSWORD:123456}"
+    default-port: 8091
+    connect-timeout: 3s
+    request-timeout: 10s
+    max-retry: 3
+    queue-backlog-limit: 200
+    # 设备回调来源白名单；为空表示不限制（仅限内网部署）。示例：192.168.10.0/24
+    callback-allowed-cidrs: []
+    callback-verify-password: true
+    # 实测 YC-P208 对 usertype=visitor 返回成功但不落库，用 white 才生效
+    visitor-user-type: ${DEVICE_VISITOR_USER_TYPE:white}
+
+    # 新终端（HTTP 客户端 / 轮询版）：设备主动来拉，平台只能通过心跳下发 action
+    # 签名 key 必须与设备侧「thirdHttpkey」一致，否则设备请求会被判签名错误
+    pull-sign-key: ${DEVICE_PULL_SIGN_KEY:fangke-pull-key}
+    # 联调期可临时置 false 抓包看报文；生产必须 true
+    pull-verify-sign: ${DEVICE_PULL_VERIFY_SIGN:true}
+    # 下发给设备的心跳间隔（秒）。越小远程开门越及时，但请求量越大
+    pull-heart-seconds: ${DEVICE_PULL_HEART_SECONDS:30}
+    # 指令下发后多久没回执就重新排队（秒）
+    pull-command-timeout-seconds: ${DEVICE_PULL_COMMAND_TIMEOUT:300}
+    # 平台对设备可达的根地址：下发给设备作为二维码推送地址（thirdQrUrl）前缀
+    # 例：http://192.168.10.50:8080 ；留空则不自动下发 thirdQrUrl
+    pull-public-base-url: ${DEVICE_PULL_PUBLIC_BASE_URL:}
+
+  storage:
+    # 照片存对象存储（S3 兼容）。默认指向内网 MinIO —— 照片不出园区。
+    # 换云 OSS/COS 只改这四项，业务代码不动。
+    endpoint: ${S3_ENDPOINT:http://127.0.0.1:9000}
+    bucket: ${S3_BUCKET:fangke}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
+    region: ${S3_REGION:us-east-1}
+    # MinIO 必须 path-style，否则预签名 URL 会拼成 bucket.host 而无法访问
+    path-style: true
+    auto-create-bucket: true
+    presign-ttl: 5m

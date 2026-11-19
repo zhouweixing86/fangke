@@ -1,0 +1,15 @@
+/**
+ * uni.scss：uni-app 会把这里的变量注入每个页面的 <style lang="scss">。
+ * 只放全局变量，不要写具体样式规则（会重复打包）。
+ */
+$brand: #1989fa;
+$brand-dark: #0a6ed1;
+$text-main: #1f2329;
+$text-sub: #646566;
+$text-muted: #969799;
+$bg-page: #f5f6f8;
+$card-bg: #ffffff;
+$border: #ebedf0;
+$danger: #ee0a24;
+$warn: #ff976a;
+$success: #07c160;

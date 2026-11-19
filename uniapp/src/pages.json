@@ -1,0 +1,24 @@
+{
+  "pages": [
+    { "path": "pages/login/login", "style": { "navigationBarTitleText": "登录" } },
+    { "path": "pages/visitor/index", "style": { "navigationBarTitleText": "我的预约", "enablePullDownRefresh": true } },
+    { "path": "pages/visitor/appointment", "style": { "navigationBarTitleText": "预约详情" } },
+    { "path": "pages/visitor/new", "style": { "navigationBarTitleText": "访客预约" } },
+    { "path": "pages/employee/todo", "style": { "navigationBarTitleText": "待我审批", "enablePullDownRefresh": true } },
+    { "path": "pages/employee/approval", "style": { "navigationBarTitleText": "审批详情" } },
+    { "path": "pages/common/messages", "style": { "navigationBarTitleText": "消息", "enablePullDownRefresh": true } },
+    { "path": "pages/common/profile", "style": { "navigationBarTitleText": "我的" } },
+    { "path": "pages/admin/workbench", "style": { "navigationBarTitleText": "工作台", "enablePullDownRefresh": true } },
+    { "path": "pages/admin/appointments", "style": { "navigationBarTitleText": "预约查询", "enablePullDownRefresh": true } },
+    { "path": "pages/admin/events", "style": { "navigationBarTitleText": "通行记录", "enablePullDownRefresh": true } },
+    { "path": "pages/admin/devices", "style": { "navigationBarTitleText": "设备", "enablePullDownRefresh": true } },
+    { "path": "pages/admin/blacklist", "style": { "navigationBarTitleText": "黑名单", "enablePullDownRefresh": true } },
+    { "path": "pages/admin/report", "style": { "navigationBarTitleText": "报表" } }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "访客通行",
+    "navigationBarBackgroundColor": "#1989fa",
+    "backgroundColor": "#f5f6f8"
+  }
+}
