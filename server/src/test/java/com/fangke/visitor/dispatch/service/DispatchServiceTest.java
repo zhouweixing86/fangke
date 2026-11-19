@@ -556,7 +556,7 @@ class DispatchServiceTest {
         east.setDeviceSn("EAST-1");
         east.setDeviceName("东门终端");
         east.setGateId(10L);
-        east.setChannel(Device.Channel.LAN);
+        east.setChannel(Device.Channel.PULL);
         east.setStatus(1);
         eastOnly.put(east);
 

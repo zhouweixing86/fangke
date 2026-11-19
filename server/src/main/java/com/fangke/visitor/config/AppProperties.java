@@ -193,25 +193,11 @@ public class AppProperties {
     /* ---------------- 设备 ---------------- */
 
     public static class Device {
-        /** 设备默认口令（出厂 123456），仅用于首次建档。 */
-        private String defaultPassword = "123456";
-        private int defaultPort = 8091;
-        private Duration connectTimeout = Duration.ofSeconds(3);
-        private Duration requestTimeout = Duration.ofSeconds(10);
         /** 指令失败重试次数（指数退避）。 */
         private int maxRetry = 3;
         /** 单台设备指令队列积压上限，超过判定 4004。 */
         private int queueBacklogLimit = 200;
-        /** 允许回调的来源网段（CIDR），为空表示不限制（仅限内网部署）。 */
-        private List<String> callbackAllowedCidrs = new ArrayList<>();
-        /** 设备回调口令校验开关；设备不带 password 字段时只能靠 IP 白名单。 */
-        private boolean callbackVerifyPassword = true;
-        /**
-         * 访客下发时使用的 usertype。
-         *
-         * <p>实测：YC-P208 固件对 {@code visitor} 返回“添加成功”但**不落库**，
-         * 用 {@code white} 才能生效，所以默认按白名单下发（见 docs/06 §0.3 第 6 条）。
-         */
+        /** 访客下发时使用的 usertype（设备侧分组，默认按白名单下发）。 */
         private String visitorUserType = "white";
 
         /* ---------------- 新终端：HTTP 客户端（轮询）通道 ---------------- */
@@ -224,6 +210,8 @@ public class AppProperties {
         private int pullHeartSeconds = 30;
         /** 指令回执超时（秒），超时重新排队。 */
         private int pullCommandTimeoutSeconds = 300;
+        /** 平台对设备可达的根地址（下发给设备当 thirdQrUrl 前缀），如 http://192.168.10.50:8080 */
+        private String pullPublicBaseUrl = "";
 
         public String getPullSignKey() {
             return pullSignKey;
@@ -253,8 +241,9 @@ public class AppProperties {
             return pullCommandTimeoutSeconds;
         }
 
-        /** 平台对设备可达的根地址（下发给设备当 thirdQrUrl 前缀），如 http://192.168.10.50:8080 */
-        private String pullPublicBaseUrl = "";
+        public void setPullCommandTimeoutSeconds(int pullCommandTimeoutSeconds) {
+            this.pullCommandTimeoutSeconds = pullCommandTimeoutSeconds;
+        }
 
         public String getPullPublicBaseUrl() {
             return pullPublicBaseUrl;
@@ -262,42 +251,6 @@ public class AppProperties {
 
         public void setPullPublicBaseUrl(String pullPublicBaseUrl) {
             this.pullPublicBaseUrl = pullPublicBaseUrl;
-        }
-
-        public void setPullCommandTimeoutSeconds(int pullCommandTimeoutSeconds) {
-            this.pullCommandTimeoutSeconds = pullCommandTimeoutSeconds;
-        }
-
-        public String getDefaultPassword() {
-            return defaultPassword;
-        }
-
-        public void setDefaultPassword(String defaultPassword) {
-            this.defaultPassword = defaultPassword;
-        }
-
-        public int getDefaultPort() {
-            return defaultPort;
-        }
-
-        public void setDefaultPort(int defaultPort) {
-            this.defaultPort = defaultPort;
-        }
-
-        public Duration getConnectTimeout() {
-            return connectTimeout;
-        }
-
-        public void setConnectTimeout(Duration connectTimeout) {
-            this.connectTimeout = connectTimeout;
-        }
-
-        public Duration getRequestTimeout() {
-            return requestTimeout;
-        }
-
-        public void setRequestTimeout(Duration requestTimeout) {
-            this.requestTimeout = requestTimeout;
         }
 
         public int getMaxRetry() {
@@ -316,22 +269,6 @@ public class AppProperties {
             this.queueBacklogLimit = queueBacklogLimit;
         }
 
-        public List<String> getCallbackAllowedCidrs() {
-            return callbackAllowedCidrs;
-        }
-
-        public void setCallbackAllowedCidrs(List<String> callbackAllowedCidrs) {
-            this.callbackAllowedCidrs = callbackAllowedCidrs;
-        }
-
-        public boolean isCallbackVerifyPassword() {
-            return callbackVerifyPassword;
-        }
-
-        public void setCallbackVerifyPassword(boolean callbackVerifyPassword) {
-            this.callbackVerifyPassword = callbackVerifyPassword;
-        }
-
         public String getVisitorUserType() {
             return visitorUserType;
         }
@@ -340,7 +277,6 @@ public class AppProperties {
             this.visitorUserType = visitorUserType;
         }
     }
-
     /* ---------------- 存储 ---------------- */
 
     public static class Storage {

@@ -2,7 +2,6 @@ package com.fangke.visitor.job.service;
 
 import com.fangke.visitor.common.BusinessException;
 import com.fangke.visitor.common.ErrorCode;
-import com.fangke.visitor.device.service.ReconcileJob;
 import com.fangke.visitor.dispatch.service.DispatchCleanupJob;
 import com.fangke.visitor.notify.service.NotifyService;
 import com.fangke.visitor.qr.service.QrTicketService;
@@ -25,7 +24,6 @@ public class JobScheduler {
     private final MaintenanceService maintenanceService;
     private final NotifyService notifyService;
     private final QrTicketService qrTicketService;
-    private final ReconcileJob reconcileJob;
     private final DispatchCleanupJob dispatchCleanupJob;
 
     @Value("${fangke.job.approval-remind-minutes:120}")
@@ -51,14 +49,13 @@ public class JobScheduler {
 
     public JobScheduler(JobRunner runner, ApprovalReminderService reminderService,
                         MaintenanceService maintenanceService, NotifyService notifyService,
-                        QrTicketService qrTicketService, ReconcileJob reconcileJob,
+                        QrTicketService qrTicketService,
                         DispatchCleanupJob dispatchCleanupJob) {
         this.runner = runner;
         this.reminderService = reminderService;
         this.maintenanceService = maintenanceService;
         this.notifyService = notifyService;
         this.qrTicketService = qrTicketService;
-        this.reconcileJob = reconcileJob;
         this.dispatchCleanupJob = dispatchCleanupJob;
     }
 
@@ -77,7 +74,6 @@ public class JobScheduler {
             case JobCodes.NOTIFICATION_RETRY -> runner.run(JobCodes.NOTIFICATION_RETRY,
                     () -> notifyService.retryFailed(50));
             case JobCodes.DATA_RETENTION -> runner.run(JobCodes.DATA_RETENTION, this::purgeAll);
-            case JobCodes.RECONCILE -> runner.run(JobCodes.RECONCILE, reconcileJob::reconcileAll);
             case JobCodes.GRANT_CLEANUP -> runner.run(JobCodes.GRANT_CLEANUP, dispatchCleanupJob::cleanupOnce);
             case JobCodes.QR_CLEANUP -> runner.run(JobCodes.QR_CLEANUP, qrTicketService::housekeeping);
             default -> throw new BusinessException(ErrorCode.PARAM_INVALID, "未知任务：" + jobCode);

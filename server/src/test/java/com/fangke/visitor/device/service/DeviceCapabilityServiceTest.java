@@ -35,7 +35,7 @@ class DeviceCapabilityServiceTest {
         d.setId(1L);
         d.setDeviceSn("NEW-DEVICE-001");
         d.setModel("YC-P208-NEW");
-        d.setChannel(Device.Channel.LAN);
+        d.setChannel(Device.Channel.PULL);
         d.setCapabilityJson(capabilityJson);
         return d;
     }
@@ -137,7 +137,7 @@ class DeviceCapabilityServiceTest {
 
         @Override
         public boolean supports(Device.Channel channel) {
-            return channel == Device.Channel.LAN;
+            return channel == Device.Channel.PULL;
         }
 
         @Override

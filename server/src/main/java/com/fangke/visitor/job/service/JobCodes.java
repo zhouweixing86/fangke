@@ -15,8 +15,6 @@ public final class JobCodes {
     public static final String NOTIFICATION_RETRY = "NOTIFICATION_RETRY";
     /** 数据保留期清理（心跳/已读通知/任务日志）。 */
     public static final String DATA_RETENTION = "DATA_RETENTION";
-    /** 每日名单对账（原有任务，纳入统一日志）。 */
-    public static final String RECONCILE = "RECONCILE";
     /** 过期授权清理（原有任务，纳入统一日志）。 */
     public static final String GRANT_CLEANUP = "GRANT_CLEANUP";
     /** 二维码票据清理（原有任务，纳入统一日志）。 */

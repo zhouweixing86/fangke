@@ -74,7 +74,6 @@ mvn spring-boot:run
 | 能力 | 位置 |
 |---|---|
 | 双通道适配接口（12 个语义方法） | `device/adapter/DeviceAdapter` |
-| 局域网 8091 实现 | `device/adapter/LanHttpAdapter` |
 | 云通道（P5 实现，显式抛错） | `device/adapter/CloudMqttAdapter` |
 | 按 `channel` 选适配器 | `device/adapter/DeviceAdapterFactory` |
 | 同设备指令**串行** + 指数退避重试 | `device/gateway/DeviceGateway` |
@@ -98,23 +97,25 @@ mvn spring-boot:run
 
 > 换设备只需新增一个 `DeviceAdapter` 实现并如实声明 `capabilities()`：能力不足的指令统一返回 **4006**（带型号与能力中文名），不会抛 500，也不需要改业务代码。完整流程见 [../docs/12-新设备接入指南.md](../docs/12-新设备接入指南.md)。
 
-#### 通道差异（三条都实现，按设备档案的 `channel` 选择）
+#### 通道（只剩两种）
 
-| | `LAN`（九鼎 YC-P208） | `PULL`（新采购终端，HTTP 客户端版） | `MOCK` |
-|---|---|---|---|
-| 谁主动 | 平台连设备 8091 | **设备连平台** `/openapi/v1/**` | 无 |
-| 下发名单 | 直接调用，实时 | 入 `device_cmd` 队列 → 心跳取 `action` → 设备回来拉详情 | 内存 |
-| 远程开门 | 实时 | 入队，延迟 = 心跳间隔（默认 30s） | 立即返回 |
-| 读设备参数/名单/版本 | ✅ | ❌ 协议不支持（返回 4006 并说明） | ✅ |
-| 二维码核验 | `/compare/online` 回调 | 设备推送 `qrCodePush`，平台回 `openGate` | ✅ |
-| 签名 | body 内 `password` | 顶层字段 MD5（`fangke.device.pull-sign-key`） | 无 |
+| | `PULL`（轮询式终端，唯一在用） | `MOCK`（自测） |
+|---|---|---|
+| 谁主动 | **设备连平台** `/openapi/v1/**` | 无 |
+| 下发名单 | 入 `device_cmd` 队列 → 心跳取 `action` → 设备回来拉详情 | 内存 |
+| 远程开门 | 入队，延迟 = 心跳间隔（默认 30s） | 立即返回 |
+| 读设备参数/名单/版本 | ❌ 协议不支持 | ✅ |
+| 二维码核验 | 设备推 `qrCodePush`，平台回 `openGate` | ✅ |
+| 签名 | 顶层字段 MD5（`fangke.device.pull-sign-key`） | 无 |
 
-> PULL 通道的设备**首次心跳会自动登记**到设备管理（mac 先占位 `PULL-<SN>`，设备上报后再绑定），
-> 现场不必手工建档。自动登记会落在「待分配」门点（`gate_type=9`），
+> **九鼎 YC-P208（局域网推送、8091 回调）已整体下线**：`LanHttpAdapter`、`DeviceCallbackController`、
+> 心跳/记录/在线比对服务、对账（`/resync`）、自检（`/selfcheck`）、参数读写、屏幕提示，
+> 以及 06/07/08 三份厂商文档全部移除。管理端设备页只保留「档案」和「开门」。
+>
+> PULL 通道的设备**首次心跳会自动登记**（mac 先占位 `PULL-<SN>`），落在「待分配」门点，
 > 必须用 `PUT /api/admin/device/{id}` 分配到真实门点，否则该门点的名单不会下发到它。
-> 对账（`/resync`）在 PULL 设备上会明确提示不支持，属协议限制。
-> 协议细节、13 个端点、字段映射与真机验收清单见 [../docs/14-设备协议-新终端HTTP轮询版.md](../docs/14-设备协议-新终端HTTP轮询版.md)。
-
+> 协议细节见 [../docs/14](../docs/14-设备协议-新终端HTTP轮询版.md)，接入步骤见
+> [../docs/12](../docs/12-新设备接入指南.md)。
 #### 多门点（厂区 4 个门）
 
 | 行为 | 实现 |
@@ -380,7 +381,7 @@ cd tools\autopilot
 mvn test
 ```
 
-当前 **265 个用例**，覆盖：
+当前 **218 个用例**，覆盖：
 
 | 用例 | 锁住的行为 |
 |---|---|

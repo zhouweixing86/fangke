@@ -71,16 +71,9 @@ fangke:
     hmac-key: ${CRYPTO_HMAC_KEY:dev-only-hmac-key-change-me}
 
   device:
-    default-password: "${DEVICE_DEFAULT_PASSWORD:123456}"
-    default-port: 8091
-    connect-timeout: 3s
-    request-timeout: 10s
     max-retry: 3
     queue-backlog-limit: 200
-    # 设备回调来源白名单；为空表示不限制（仅限内网部署）。示例：192.168.10.0/24
-    callback-allowed-cidrs: []
-    callback-verify-password: true
-    # 实测 YC-P208 对 usertype=visitor 返回成功但不落库，用 white 才生效
+    # 访客下发时使用的设备侧分组
     visitor-user-type: ${DEVICE_VISITOR_USER_TYPE:white}
 
     # 新终端（HTTP 客户端 / 轮询版）：设备主动来拉，平台只能通过心跳下发 action

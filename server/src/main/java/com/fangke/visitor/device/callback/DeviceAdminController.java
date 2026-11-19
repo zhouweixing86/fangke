@@ -12,8 +12,6 @@ import com.fangke.visitor.device.model.Device;
 import com.fangke.visitor.device.model.DeviceCapability;
 import com.fangke.visitor.device.service.DeviceCapabilityService;
 import com.fangke.visitor.device.service.DeviceRepository;
-import com.fangke.visitor.device.service.DeviceSelfCheckService;
-import com.fangke.visitor.device.service.ReconcileService;
 import com.fangke.visitor.gate.service.GateService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,7 +28,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 管理端设备接口（docs/11 §5.3，P1 只做只读 + 运维动作）。
+ * 管理端设备接口（docs/11 §5.3）：档案维护、远程开门、能力矩阵。
+ *
+ * <p>只保留轮询式终端（PULL）支持的动作；参数读写/对账/自检/屏幕提示属于已下线的
+ * 局域网推模式能力，随九鼎设备一起移除。
  */
 @RestController
 @RequestMapping("/api/admin/device")
@@ -41,24 +42,18 @@ public class DeviceAdminController {
     private final DeviceRepository deviceRepository;
     private final DeviceAdapterFactory adapterFactory;
     private final DeviceGateway gateway;
-    private final ReconcileService reconcileService;
     private final DeviceCapabilityService capabilityService;
-    private final DeviceSelfCheckService selfCheckService;
     private final GateService gateService;
 
     public DeviceAdminController(DeviceRepository deviceRepository,
                                  DeviceAdapterFactory adapterFactory,
                                  DeviceGateway gateway,
-                                 ReconcileService reconcileService,
                                  DeviceCapabilityService capabilityService,
-                                 DeviceSelfCheckService selfCheckService,
                                  GateService gateService) {
         this.deviceRepository = deviceRepository;
         this.adapterFactory = adapterFactory;
         this.gateway = gateway;
-        this.reconcileService = reconcileService;
         this.capabilityService = capabilityService;
-        this.selfCheckService = selfCheckService;
         this.gateService = gateService;
     }
 
@@ -116,33 +111,7 @@ public class DeviceAdminController {
         return ApiResponse.ok(toView(load(id)));
     }
 
-    /** 实时回读参数：以设备为准，不用本地缓存（docs/09 §1.1 开发要点 2）。 */
-    @PostMapping("/{id}/params/read")
-    public ApiResponse<JsonNode> readParams(@PathVariable Long id) {
-        Device device = load(id);
-        capabilityService.require(device, DeviceCapability.PARAM_READ, "读取参数");
-        DeviceAdapter adapter = adapterFactory.resolve(device);
-        JsonNode params = gateway.execute(device, "readParams", d -> adapter.readParams(d));
-        return ApiResponse.ok(params);
-    }
-
-    /** 部分参数下发：适配层内部走「取全量 → 合并 → 回写」。 */
-    @PostMapping("/{id}/params")
-    @AuditLog(module = "DEVICE", action = "WRITE_PARAMS")
-    public ApiResponse<Void> writeParams(@PathVariable Long id, @RequestBody Map<String, Object> partial) {
-        if (partial == null || partial.isEmpty()) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID, "参数不能为空");
-        }
-        Device device = load(id);
-        capabilityService.require(device, DeviceCapability.PARAM_WRITE, "下发参数");
-        DeviceAdapter adapter = adapterFactory.resolve(device);
-        gateway.execute(device, "writeParams", d -> {
-            adapter.writeParams(d, partial);
-            return null;
-        });
-        return ApiResponse.ok();
-    }
-
+    /** 远程开门：走设备指令（PULL 通道随下一次心跳下发）。 */
     @PostMapping("/{id}/door/open")
     @AuditLog(module = "DEVICE", action = "OPEN_DOOR")
     public ApiResponse<Map<String, Object>> openDoor(@PathVariable Long id) {
@@ -159,41 +128,10 @@ public class DeviceAdminController {
                 "openedAt", DATETIME.format(LocalDateTime.now())));
     }
 
-    @PostMapping("/{id}/message")
-    public ApiResponse<Void> showMessage(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        String message = body == null ? null : body.get("message");
-        if (message == null || message.isBlank() || message.length() > 14) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID, "屏幕提示需 1~14 个汉字");
-        }
-        Device device = load(id);
-        capabilityService.require(device, DeviceCapability.SCREEN_MESSAGE, "屏幕提示");
-        DeviceAdapter adapter = adapterFactory.resolve(device);
-        gateway.execute(device, "showMessage", d -> {
-            adapter.showMessage(d, message);
-            return null;
-        });
-        return ApiResponse.ok();
-    }
-
     /** 能力矩阵：换设备/交接时确认这台机器到底能做什么（docs/12 §2）。 */
     @GetMapping("/{id}/capabilities")
     public ApiResponse<List<Map<String, Object>>> capabilities(@PathVariable Long id) {
         return ApiResponse.ok(capabilityService.describe(load(id)));
-    }
-
-    /** 接入自检：逐项跑通道、版本、参数、名单，输出 OK/WARN/FAIL（docs/12 §3）。 */
-    @PostMapping("/{id}/selfcheck")
-    @AuditLog(module = "DEVICE", action = "SELF_CHECK")
-    public ApiResponse<Map<String, Object>> selfCheck(@PathVariable Long id) {
-        return ApiResponse.ok(selfCheckService.check(load(id)));
-    }
-
-    /** 手动触发对账（docs/11 §5.3），返回缺失/多余/已删除明细。 */
-    @PostMapping("/{id}/resync")
-    @AuditLog(module = "DEVICE", action = "RESYNC")
-    public ApiResponse<ReconcileService.Result> resync(@PathVariable Long id) {
-        load(id);
-        return ApiResponse.ok(reconcileService.reconcile(id));
     }
 
     private Device load(Long id) {
@@ -213,7 +151,7 @@ public class DeviceAdminController {
         view.put("directionText", Integer.valueOf(1).equals(d.getDirection()) ? "入口" : "出口");
         view.put("gateId", d.getGateId() == null ? 0L : d.getGateId());
         view.put("gateName", gateService.nameOf(d.getGateId()));
-        view.put("channel", d.getChannel() == null ? "LAN" : d.getChannel().name());
+        view.put("channel", d.getChannel() == null ? "PULL" : d.getChannel().name());
         view.put("ip", nullSafe(d.getIp()));
         view.put("online", d.isOnline());
         view.put("lastHeartbeat", d.getLastHeartbeat() == null ? "" : DATETIME.format(d.getLastHeartbeat()));

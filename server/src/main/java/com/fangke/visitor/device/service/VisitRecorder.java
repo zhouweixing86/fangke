@@ -5,7 +5,7 @@ import com.fangke.visitor.device.model.AccessEvent;
 /**
  * 通行事件 → 到访记录的后续处理（签到/签离）。
  *
- * <p>抽成接口是为了让 {@link AccessRecordService} 的单测不依赖数据库。
+ * <p>抽成接口是为了让设备记录入库逻辑的单测不依赖数据库。
  */
 public interface VisitRecorder {
 

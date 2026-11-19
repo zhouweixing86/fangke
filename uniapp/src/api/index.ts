@@ -22,7 +22,6 @@ import type {
   QrVerifyResult,
   ReportDaily,
   ReportOverview,
-  SelfCheckResult,
   TodoView
 } from './types'
 
@@ -149,10 +148,7 @@ export const listEventMedia = (eventId: number) =>
   get<EventMedia[]>('/admin/access/event/' + eventId + '/media')
 
 export const listDevices = () => get<DeviceView[]>('/admin/device')
-export const selfCheckDevice = (id: number) => post<SelfCheckResult>('/admin/device/' + id + '/selfcheck')
 export const openDeviceDoor = (id: number) => post<{ opened: boolean }>('/admin/device/' + id + '/door/open')
-export const showDeviceMessage = (id: number, message: string) =>
-  post<void>('/admin/device/' + id + '/message', { message })
 
 export const listBlacklist = (params: Record<string, unknown>) =>
   get<PageResult<BlacklistRow>>('/admin/blacklist', params)

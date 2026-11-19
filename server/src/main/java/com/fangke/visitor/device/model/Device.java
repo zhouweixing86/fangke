@@ -7,8 +7,15 @@ import java.time.LocalDateTime;
  */
 public class Device {
 
-    /** 通道类型：局域网 HTTP（推送，九鼎）/ 云 MQTT（备用）/ 内置模拟设备 / HTTP 客户端（轮询，新终端）。 */
-    public enum Channel { LAN, CLOUD, MOCK, PULL }
+    /**
+     * 通道类型：
+     * <ul>
+     *   <li>{@link #PULL}：HTTP 客户端（轮询）——设备主动来拉，当前唯一在用的真机通道；</li>
+     *   <li>{@link #MOCK}：内置模拟设备，无硬件时自测用；</li>
+     *   <li>{@link #CLOUD}：云 MQTT，占位未实现。</li>
+     * </ul>
+     */
+    public enum Channel { PULL, MOCK, CLOUD }
 
     private Long id;
     private String deviceSn;
@@ -19,7 +26,7 @@ public class Device {
     private Long gateId;
     /** 0 出口 / 1 入口，对应设备参数 inout。 */
     private Integer direction = 1;
-    private Channel channel = Channel.LAN;
+    private Channel channel = Channel.PULL;
     private String ip;
     private int port = 8091;
     private String apiPassword;

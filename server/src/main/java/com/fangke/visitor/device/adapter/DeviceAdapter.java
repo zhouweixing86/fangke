@@ -14,7 +14,7 @@ import java.util.Set;
  * 设备适配层统一语义接口（docs/09 §2.1）。
  *
  * <p>业务代码只依赖本接口，不直接调用 8091 或 MQTT。
- * 局域网实现：{@link LanHttpAdapter}；云实现：{@link CloudMqttAdapter}（P5 补齐）。
+ * 实现：{@link OpenApiPullAdapter}（轮询，在用）、{@link MockDeviceAdapter}（自测）、{@link CloudMqttAdapter}（占位）。
  */
 public interface DeviceAdapter {
 

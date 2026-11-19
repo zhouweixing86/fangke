@@ -21,7 +21,7 @@ public class DeviceAdapterFactory {
     }
 
     public DeviceAdapter resolve(Device device) {
-        Device.Channel channel = device.getChannel() == null ? Device.Channel.LAN : device.getChannel();
+        Device.Channel channel = device.getChannel() == null ? Device.Channel.PULL : device.getChannel();
         return adapters.stream()
                 .filter(a -> a.supports(channel))
                 .findFirst()

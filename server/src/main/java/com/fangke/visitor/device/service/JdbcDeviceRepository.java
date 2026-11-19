@@ -50,15 +50,15 @@ public class JdbcDeviceRepository implements DeviceRepository {
             return d;
         }
 
-        /** 通道值以库为准；新通道名还没发版时降级为 LAN，避免整表查询直接抛异常。 */
+        /** 通道值以库为准；历史 LAN 数据（九鼎已下线）一并降级为 PULL，避免整表查询抛异常。 */
         private static Device.Channel parseChannel(String raw) {
             if (raw == null || raw.isBlank()) {
-                return Device.Channel.LAN;
+                return Device.Channel.PULL;
             }
             try {
                 return Device.Channel.valueOf(raw.trim().toUpperCase());
             } catch (IllegalArgumentException e) {
-                return Device.Channel.LAN;
+                return Device.Channel.PULL;
             }
         }
     };

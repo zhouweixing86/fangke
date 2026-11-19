@@ -34,7 +34,6 @@ import type {
   ReportDailyResult,
   ReportOverview,
   RoleRow,
-  SelfCheckResult,
   SyncBatch,
   SyncBatchItem,
   VisitorReport
@@ -72,31 +71,13 @@ export const getDevice = (id: number) => get<DeviceView>(`/admin/device/${id}`)
 /** 补/改设备档案：名称、型号、出入口方向、所属门点、备注 */
 export const updateDevice = (id: number, data: Record<string, unknown>) =>
   put<DeviceView>(`/admin/device/${id}`, data)
-export const readDeviceParams = (id: number) => post<Record<string, unknown>>(`/admin/device/${id}/params/read`)
-export const writeDeviceParams = (id: number, params: Record<string, unknown>) =>
-  post<void>(`/admin/device/${id}/params`, params)
+
+/** 远程开门：指令随设备下一次心跳下发（通常 30 秒内） */
 export const openDeviceDoor = (id: number) => post<{ opened: boolean }>(`/admin/device/${id}/door/open`)
-export const showDeviceMessage = (id: number, message: string) =>
-  post<void>(`/admin/device/${id}/message`, { message })
-export const resyncDevice = (id: number) =>
-  post<{
-    deviceSn: string
-    expectedCount: number
-    actualCount: number
-    missingInDevice: string[]
-    extraInDevice: string[]
-    removed: number
-    failedRemoval: number
-    finishedAt: string
-  }>(`/admin/device/${id}/resync`)
 
 /** 能力矩阵：换设备/交接时确认这台机器能做什么 */
 export const getDeviceCapabilities = (id: number) =>
   get<DeviceCapabilityRow[]>(`/admin/device/${id}/capabilities`)
-
-/** 接入自检：通道、版本、参数、名单逐项 OK/WARN/FAIL */
-export const selfCheckDevice = (id: number) =>
-  post<SelfCheckResult>(`/admin/device/${id}/selfcheck`)
 
 /* ---------------- 员工 ---------------- */
 

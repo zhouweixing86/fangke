@@ -62,24 +62,6 @@ export interface DeviceCapabilityRow {
   byAdapter: boolean
 }
 
-export interface SelfCheckItem {
-  key: string
-  label: string
-  status: 'OK' | 'WARN' | 'FAIL'
-  detail: string
-}
-
-export interface SelfCheckResult {
-  deviceSn: string
-  model: string
-  firmware: string
-  channel: string
-  checkedAt: string
-  status: 'OK' | 'WARN' | 'FAIL'
-  capabilities: DeviceCapabilityRow[]
-  items: SelfCheckItem[]
-}
-
 export interface DeptView {
   id: number
   code: string

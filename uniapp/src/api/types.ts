@@ -193,23 +193,6 @@ export interface DeviceView {
   remark: string
 }
 
-export interface SelfCheckItem {
-  key: string
-  label: string
-  status: 'OK' | 'WARN' | 'FAIL'
-  detail: string
-}
-
-export interface SelfCheckResult {
-  deviceSn: string
-  model: string
-  firmware: string
-  channel: string
-  checkedAt: string
-  status: 'OK' | 'WARN' | 'FAIL'
-  items: SelfCheckItem[]
-}
-
 export interface EventRow {
   id: number
   eventTime: string

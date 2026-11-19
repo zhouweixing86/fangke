@@ -23,10 +23,10 @@
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 import TabBar from '@/components/TabBar.vue'
-import { listDevices, openDeviceDoor, selfCheckDevice, showDeviceMessage } from '@/api'
+import { listDevices, openDeviceDoor } from '@/api'
 import type { DeviceView } from '@/api/types'
 import { requireLogin } from '@/store/auth'
-import { alert, confirm, showToast } from '@/utils/ui'
+import { confirm, showToast } from '@/utils/ui'
 
 const tabbar = [
   { text: '工作台', path: '/pages/admin/workbench' },
@@ -42,35 +42,15 @@ async function load() {
 }
 
 function actions(device: DeviceView) {
-  const items = ['远程开门', '接入自检', '屏幕提示', '复制 SN']
+  const items = ['远程开门', '复制 SN']
   uni.showActionSheet({
     itemList: items,
     success: async (res) => {
       const picked = items[res.tapIndex]
       if (picked === '远程开门') {
-        if (!(await confirm('确认远程打开「' + device.deviceName + '」？', '开门'))) return
+        if (!(await confirm('确认远程打开「' + device.deviceName + '」？指令随下一次心跳生效。', '开门'))) return
         await openDeviceDoor(device.id)
-        showToast('开门指令已发送')
-      } else if (picked === '接入自检') {
-        const result = await selfCheckDevice(device.id)
-        const lines = result.items.map((i) => '[' + i.status + '] ' + i.label + '：' + i.detail)
-        await alert('结论：' + result.status + '\n' + lines.join('\n'), '自检结果')
-      } else if (picked === '屏幕提示') {
-        uni.showModal({
-          title: '屏幕提示（≤14 字）',
-          editable: true,
-          placeholderText: '如：请到前台登记',
-          success: async (modal) => {
-            const text = (modal.content || '').trim()
-            if (!text) return
-            if (text.length > 14) {
-              showToast('最多 14 个字')
-              return
-            }
-            await showDeviceMessage(device.id, text)
-            showToast('已发送')
-          }
-        })
+        showToast('开门指令已排队')
       } else {
         uni.setClipboardData({ data: device.deviceSn })
       }

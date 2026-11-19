@@ -62,8 +62,7 @@ public class AdminJobController {
                 code(JobCodes.VISIT_AUTO_CHECKOUT, "在访超时签离"),
                 code(JobCodes.NOTIFICATION_RETRY, "短信重试"),
                 code(JobCodes.DATA_RETENTION, "保留期清理"),
-                code(JobCodes.RECONCILE, "每日名单对账"),
-                code(JobCodes.GRANT_CLEANUP, "过期授权清理"),
+                    code(JobCodes.GRANT_CLEANUP, "过期授权清理"),
                 code(JobCodes.QR_CLEANUP, "二维码票据清理")));
     }
 
