@@ -289,3 +289,103 @@ $env:DEVICE_PULL_SIGN_KEY = '<与设备 thirdHttpkey 相同>'
 | 设备适配器（通道 `PULL`） | `server/.../device/adapter/OpenApiPullAdapter.java` |
 | 配置项 | `application.yml → fangke.device.pull-*` |
 | 单测 | `server/src/test/java/.../device/pull/`（签名 5 + 映射 6 + 服务 8） |
+
+---
+
+## 12. 真机联调实测（YC-P208，2026-11-20）
+
+### 12.1 设备档案
+
+| 项 | 值 |
+|---|---|
+| 型号 | YC-P208（RV1109 主板，C978GH 系列） |
+| 标签 SN | `T77R781116ZS`（仅贴在机器上，协议里**不用**它） |
+| **协议编号 `deviceno`** | `2608252243655`（= 设备 `cpuserial`，查询式终端唯一身份，也是 `device.device_sn`） |
+| 有线 MAC | `00:1C:BA:65:14:AD`（`getDeviceVersion.macaddr`） |
+| WiFi MAC | `54:01:4A:7A:E2:61`（另一张网卡，协议不上报） |
+| 固件 | `sysver 2.2.122.B61030001R` / `appver F708003M24F550-TR608` / 算法 `ALG_MG_55_3_V0_1` |
+| 人脸容量 | 50000 |
+| Web 后台 | `http://<设备IP>/home.html`，admin / 888888 |
+
+> 标签 SN 与协议编号是两套东西。设备管理里按协议编号建档；上表两个值都要记在备注，现场换机才认得出来。
+
+### 12.2 设备后台必填项（平台管理 → 第三方设备管理平台-HTTP）
+
+| 后台字段 | 配置项 | 值 |
+|---|---|---|
+| 启用第三方平台 | `thirdcloudflag` | 启用（1） |
+| 第三方平台地址 | `thirdupdateurl` | `http://<平台IP>:8080` ← **只填根地址，不要带 `/openapi/v1`** |
+| 第三方平台Key | `thirdupdatekey` | 与 `fangke.device.pull-sign-key` 一致；联调期平台侧 `pull-verify-sign=false` |
+| 设备开机是否同步名单 | `thirdcloudsynclist` | 启用（开机先拉一次全量名单） |
+
+> ⚠️ **最容易踩的坑**：地址填成 `http://192.168.0.103:8080/openapi/v1` 时，设备会在后面再拼一次 `/openapi/v1/heartBeat`，实际请求变成 `/openapi/v1/openapi/v1/heartBeat`。早期那一串 500 就是这个原因，不要怀疑网络。
+
+### 12.3 实测协议行为（与文档的差异）
+
+| 项 | 文档描述 | 真机实测 |
+|---|---|---|
+| 心跳请求体 | `ver/deviceno/timestamp/sign/action` | 一致：`{"action":"heartBeat","deviceno":"2608252243655","sign":"…","timestamp":"20261120201834213","ver":"v1.0"}` |
+| 心跳间隔 | 由平台响应 `heartTime` 决定 | 正常（200）时 **30 秒**一次；连续失败时 **6 秒**重试；恢复后自动回到 30 秒 |
+| 开机动作 | 未说明 | 先 `getAllDeviceWhiteList`，再进心跳循环 |
+| 名单下发 | 未细化时序 | `heartBeat`（响应带 action）→ `addDevicWhiteInfo`（批量）→ 逐人 `getDevicWhiteInfo` → `syncWhiteResult` 回执 |
+| `mac` | 心跳带 `mac` | **不带**。平台侧 `device.mac` 自动填占位符 `PULL-<deviceno>`，要真机 MAC 需人工补 |
+| 型号 / 固件 | — | 心跳不上报，平台侧需手工登记（或读设备 `/getDeviceVersion`） |
+
+实测时序（2026-11-20 20:21:06，一键同步员工名单之后）：
+
+```
+POST /openapi/v1/heartBeat          200  89B   ← 响应带 actionPara
+POST /openapi/v1/addDevicWhiteInfo  200 317B   ← 批量 6 人
+POST /openapi/v1/getDevicWhiteInfo  200 277B   ×6
+POST /openapi/v1/syncWhiteResult    200  36B   ×6
+POST /openapi/v1/heartBeat          200  76B   ← 已无指令
+```
+
+设备本体 `getDeviceVersion.curCount` 从 `0` 变成 `6`，确认名单真的写进终端，不是只在平台上"假成功"。
+
+### 12.4 现场排障口诀
+
+1. **先验平台对局域网是否可达**：手机浏览器打开 `http://<平台IP>:8080/health`，应返回 `{"code":0,…}`。这一步能立刻分清"平台不可达"和"设备不发"。
+2. **再看设备到底有没有发**：Tomcat access log 是唯一可靠手段（启动参数 `--server.tomcat.accesslog.enabled=true --server.tomcat.accesslog.buffered=false`），含 404/500 全量记录。没有日志 = 请求根本没到，别再去查代码。
+3. **未匹配路径必须返回 404**：之前根路径和未知路径都被兜底异常处理成 500，设备据此判定"平台故障"并停发心跳。这是本次卡了近一小时的隐藏原因。
+4. **心跳线程只在开机和"保存平台配置"时重建**：改完配置最好重启设备。
+5. 设备 Web 后台 API 速查（脚本化联调用）：
+   - `POST /deviceLogin` `{username, password: md5(明文)}` → `token`
+   - `POST /getconnectCloudflag` / `POST /setconnectCloudflag` `{token, data}`（`data` 为整份配置对象，改一个字段要回传全量）
+   - `POST /getDeviceVersion` `{token}` → `curCount`（本地人数）、`runInfo`（运行时长 / WiFi 信号 / IP）
+   - `POST /setDeviceReboot` `{token}` → 重启
+
+### 12.5 平台侧配套改动
+
+| 改动 | 位置 |
+|---|---|
+| 新增 `GET /` 与 `GET /health` 连通性探针（原来根路径会 500） | `server/.../common/PlatformRootController.java` |
+| `NoResourceFoundException` → 404、`HttpRequestMethodNotSupportedException` → 405，不再误报 500 | `server/.../common/GlobalExceptionHandler.java` |
+| 新增错误码 `1009 接口不存在` | `server/.../common/ErrorCode.java` |
+
+### 12.6 三套文档对应三种接入方式（不要混用）
+
+| 文档 | 模型 | 本项目的用法 |
+|---|---|---|
+| 桌面《HTTP 通讯协议，客户端版》 | **设备主动轮询平台**（`/openapi/v1/heartBeat`、`getAllDeviceWhiteList`、`uploadDetectRecord`…） | ✅ **本项目采用这一套**，`DeviceOpenApiController` 的 13 个端点 |
+| 桌面《MQTT 通讯协议版》 | 设备与平台走 MQTT（`openapi/mqtt/v1/{sn}` 上行 / `downapi/mqtt/v1/{sn}` 下行） | ❌ 未实现；设备后台有「第三方设备管理平台-MQTT」页签，可留作备选通道 |
+| 文档站 item 231「人脸-终端-HTTP-RV1109」 | **设备自身是服务端**（9090 端口）：设备把心跳/识别记录/二维码/密码开门**回调**给平台，平台反过来调设备的登录/参数/开闸/抓拍/重启等下行接口 | ⏸ 仅作补充手段。设备后台对应的是「第三方平台记录上传」页签（`updaterecord` / `hearturl` / `updateurl`）；现场需要远程抓拍、弹框、改网络时才会用到 |
+
+> 结论：让设备"接入访客系统"只需 12.2 那一页的配置；item 231 的下行接口属于增强能力，不影响通行链路。
+
+### 12.7 本机联调启动命令（供复现）
+
+```powershell
+cd D:\fangke\server
+$env:DB_USER='root'; $env:DB_PASSWORD='<本机 MySQL 口令>'
+$env:DEVICE_PULL_VERIFY_SIGN='false'          # 联调期跳过设备签名校验
+$env:DEVICE_PULL_SIGN_KEY='fangke-pull-key'   # 与设备「第三方平台Key」一致
+$env:DEVICE_PULL_PUBLIC_BASE_URL='http://192.168.0.103:8080'
+java -jar target\visitor-server-0.1.0-SNAPSHOT.jar `
+  --server.tomcat.accesslog.enabled=true --server.tomcat.accesslog.buffered=false `
+  --server.tomcat.accesslog.directory=D:/fangke/server/logs `
+  --server.tomcat.accesslog.prefix=access --server.tomcat.accesslog.suffix=.log `
+  --server.tomcat.accesslog.file-date-format= "--server.tomcat.accesslog.pattern=%t %a %m %U %s %b"
+```
+
+> Windows 上 `-Dserver.tomcat.accesslog.enabled=true` 这类参数会被 PowerShell 拆坏（报"找不到主类 .tomcat.accesslog.enabled=true"），改用 `--property=value` 形式。

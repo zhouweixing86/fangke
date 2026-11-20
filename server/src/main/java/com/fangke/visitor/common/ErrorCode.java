@@ -20,6 +20,7 @@ public enum ErrorCode {
     FILE_TOO_LARGE(1006, "文件过大"),
     IMAGE_RESOLUTION(1007, "图片分辨率不达标"),
     IMAGE_FACE_INVALID(1008, "图片未检测到人脸或多张人脸"),
+    NOT_FOUND(1009, "接口不存在"),
 
     // 2xxx 鉴权
     UNAUTHORIZED(2001, "未登录或 token 失效"),

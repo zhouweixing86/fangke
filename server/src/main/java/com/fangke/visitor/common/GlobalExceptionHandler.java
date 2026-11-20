@@ -55,6 +55,29 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(ErrorCode.PARAM_INVALID.code(), "请求体不是合法 JSON"));
     }
 
+    /**
+     * 未匹配到任何路由（含设备把地址配错导致的重复前缀，如 /openapi/v1/openapi/v1/heartBeat）。
+     * 这类请求本质是 404，却会被兜底分支变成 500 —— 设备侧看到 5xx 会判定平台故障并停发心跳，
+     * 现场极难定位，这里显式返回 404 并记录原始路径。
+     */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex, HttpServletRequest request) {
+        log.warn("接口不存在 uri={} method={} —— 检查设备/调用方配置的地址前缀是否重复",
+                request.getRequestURI(), request.getMethod());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.fail(ErrorCode.NOT_FOUND.code(), ErrorCode.NOT_FOUND.message()));
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(
+            org.springframework.web.HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+        log.warn("请求方法不支持 uri={} method={} 支持={}", request.getRequestURI(), request.getMethod(),
+                ex.getSupportedHttpMethods());
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(ApiResponse.fail(ErrorCode.PARAM_INVALID.code(), "请求方法不支持：" + request.getMethod()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex, HttpServletRequest request) {
         log.error("未处理异常 uri={}", request.getRequestURI(), ex);
