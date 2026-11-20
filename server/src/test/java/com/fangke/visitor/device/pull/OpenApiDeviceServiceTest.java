@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -102,14 +103,21 @@ class OpenApiDeviceServiceTest {
     }
 
     @Test
-    @DisplayName("有待下发名单：action=addDevicWhiteInfo，且指令进入执行中")
+    @DisplayName("有待下发名单：心跳只回 action，不抢先置执行中；设备来取名单时才置执行中")
     void addPersonAction() {
         cmdRepo.enqueue(1L, PullCommandRepository.TYPE_ADD_PERSON, 5, "{\"personNo\":\"V1\"}", null);
 
         Map<String, Object> data = service.heartbeat(device());
 
         assertEquals("addDevicWhiteInfo", data.get("action"));
-        assertTrue(cmdRepo.rows.get(0).dispatched());
+        assertFalse(cmdRepo.rows.get(0).dispatched(),
+                "心跳不能抢先领取名单指令，否则设备随后取名单会拿到空列表");
+
+        List<Map<String, Object>> list = service.claimPersonChanges(device(), PullCommandRepository.TYPE_ADD_PERSON);
+
+        assertEquals(1, list.size());
+        assertEquals("V1", list.get(0).get("idno"));
+        assertTrue(cmdRepo.rows.get(0).dispatched(), "设备真正取名单时才进入执行中");
     }
 
     @Test

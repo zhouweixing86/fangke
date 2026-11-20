@@ -160,13 +160,12 @@ public class OpenApiDeviceService {
             claim(device, PullCommandRepository.TYPE_PARAM_SYNC);
         } else if (commandRepository.hasPending(device.getId(), PullCommandRepository.TYPE_ADD_PERSON)) {
             action = "addDevicWhiteInfo";
-            claim(device, PullCommandRepository.TYPE_ADD_PERSON);
+            // 不在这里 claim：设备心跳后会立刻调用 addDevicWhiteInfo 取列表，
+            // 若心跳先把指令置为"执行中"，设备取到的就是空列表（2026-11-20 修复）
         } else if (commandRepository.hasPending(device.getId(), PullCommandRepository.TYPE_UPDATE_PERSON)) {
             action = "updateDeviceWhiteInfo";
-            claim(device, PullCommandRepository.TYPE_UPDATE_PERSON);
         } else if (commandRepository.hasPending(device.getId(), PullCommandRepository.TYPE_DEL_PERSON)) {
             action = "delDevicWhiteList";
-            claim(device, PullCommandRepository.TYPE_DEL_PERSON);
         }
 
         Map<String, Object> data = new LinkedHashMap<>();

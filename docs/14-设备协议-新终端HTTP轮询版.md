@@ -53,6 +53,24 @@
 响应统一：`{"code":0,"msg":"成功","data":{...}}`；`code!=0` 表示失败。
 **注意**：不能套平台的 `ApiResponse`（会被设备当失败重试）。
 
+### 2.1 名单回执字段取值（真机联调必看）
+
+`POST /syncWhiteResult` 的请求体：
+
+```json
+{ "deviceno": "T77R781116ZS", "data": { "idno": "1101...", "resulttype": 0, "resultcode": 0, "msg": "ok" } }
+```
+
+| 字段 | 取值 | 含义 |
+|---|---|---|
+| `idno` | 身份证号（无则 personNo） | 人员唯一键，平台据此反查 personNo |
+| `resulttype` | **0 = 新增 / 1 = 更新 / 2 = 删除** | 决定完成哪条队列指令；发错会「更新队列 0 条」 |
+| `resultcode` | **0 = 成功 / 非 0 = 失败** | 失败置为失败并记录 `msg`，超过重试上限不再下发 |
+| `msg` | 文本 | 失败原因，写入 `device_cmd.error_msg` 与日志 |
+
+> 若厂商文档的 `resulttype` 取值与此不同（例如 1=新增），必须在
+> `OpenApiDeviceService#syncWhiteResult` 的 `switch` 里做映射，否则回执对不上号。
+
 ---
 
 ## 3. 签名
