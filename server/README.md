@@ -219,6 +219,8 @@ mvn spring-boot:run
 | 人员类型筛选（`E` 前缀=员工 / `V`=访客）、通行方式筛选（行人/车辆） | 同上 |
 | 某人某天明细（识别方式 + 门点 + 设备点位 + 车牌 + 抓拍入口） | `AdminTrafficController#detail` |
 | `vehicle_event.person_no` 补齐与历史回填 | V17 / V18 |
+| 部门筛选（`deptId`）与部门列（LEFT JOIN employee/dept） | 同上 |
+| 详情人员画像：员工=部门/工号/职务/有效期/车牌；访客=单位/人脸/当天申请 + 审批轨迹 | `AdminTrafficController#personInfo` |
 
 > 只统计 `result_status=1` 的成功记录；被拒绝的尝试保留在原始表，可在车辆原始接口查。
 > 独立的「车辆记录」页已删除，管理端只保留一个「通行记录」页。

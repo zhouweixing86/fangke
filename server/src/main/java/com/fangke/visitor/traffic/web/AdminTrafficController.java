@@ -1,5 +1,6 @@
 package com.fangke.visitor.traffic.web;
 
+import com.fangke.visitor.appointment.model.Appointment;
 import com.fangke.visitor.common.ApiResponse;
 import com.fangke.visitor.common.PageResult;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -63,6 +65,8 @@ public class AdminTrafficController {
                 FROM vehicle_event v
                 WHERE v.result_status = 1 AND v.person_no IS NOT NULL AND v.person_no <> ''
             ) t
+            LEFT JOIN employee emp ON t.person_type = 'EMPLOYEE' AND emp.person_no = t.person_no
+            LEFT JOIN dept d ON d.id = emp.dept_id
             """;
 
     private final JdbcTemplate jdbc;
@@ -83,6 +87,7 @@ public class AdminTrafficController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) String personType,
             @RequestParam(required = false) String channel,
+            @RequestParam(required = false) Long deptId,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -97,7 +102,7 @@ public class AdminTrafficController {
         int safeSize = Math.min(Math.max(size, 1), 100);
 
         List<Object> args = new ArrayList<>();
-        String where = where(from, to, personType, channel, keyword, args);
+        String where = where(from, to, personType, channel, deptId, keyword, args);
 
         Long total = jdbc.queryForObject("SELECT COUNT(1) FROM (SELECT 1 " + SUMMARY_FROM + where
                 + " GROUP BY t.person_no, t.person_type, t.day) c", Long.class, args.toArray());
@@ -113,7 +118,8 @@ public class AdminTrafficController {
                                SUM(CASE WHEN t.direction = 0 THEN 1 ELSE 0 END) AS out_count,
                                COUNT(*) AS total_count,
                                MAX(CASE WHEN t.channel = 'VEHICLE' THEN 1 ELSE 0 END) AS has_vehicle,
-                               MAX(CASE WHEN t.channel = 'PEDESTRIAN' THEN 1 ELSE 0 END) AS has_pedestrian
+                               MAX(CASE WHEN t.channel = 'PEDESTRIAN' THEN 1 ELSE 0 END) AS has_pedestrian,
+                               MAX(d.dept_name) AS dept_name
                         """ + SUMMARY_FROM + where
                         + " GROUP BY t.person_no, t.person_type, t.day"
                         + " ORDER BY t.day DESC, first_in DESC LIMIT ? OFFSET ?",
@@ -135,6 +141,7 @@ public class AdminTrafficController {
                     row.put("totalCount", rs.getInt("total_count"));
                     row.put("channelText", channelText(rs.getInt("has_vehicle") == 1,
                             rs.getInt("has_pedestrian") == 1));
+                    row.put("deptName", rs.getString("dept_name") == null ? "" : rs.getString("dept_name"));
                     return row;
                 },
                 pageArgs.toArray());
@@ -201,14 +208,190 @@ public class AdminTrafficController {
                 .filter(name -> !name.isBlank())
                 .findFirst()
                 .orElse(""));
+        view.putAll(personInfo(personNo, date));
         view.put("records", records);
         return ApiResponse.ok(view);
+    }
+
+    /* ---------------- 人员档案（详情用） ---------------- */
+
+    /**
+     * 详情头部信息：
+     * <ul>
+     *   <li>员工：部门、职务、工号、手机（脱敏）、车牌、证件有效期；</li>
+     *   <li>访客：单位、手机（脱敏）、人脸采集状态 + **当天的申请信息与审批轨迹**。</li>
+     * </ul>
+     */
+    private Map<String, Object> personInfo(String personNo, LocalDate date) {
+        Map<String, Object> info = new LinkedHashMap<>();
+        boolean employee = personNo != null && personNo.startsWith("E");
+        info.put("personType", employee ? "EMPLOYEE" : "VISITOR");
+        info.put("personTypeText", employee ? "员工" : "访客");
+        if (employee) {
+            jdbc.query("""
+                            SELECT e.emp_no, e.title, e.phone_mask, e.plate_no, e.valid_from, e.valid_to,
+                                   e.status, d.dept_name
+                            FROM employee e
+                            LEFT JOIN dept d ON d.id = e.dept_id
+                            WHERE e.person_no = ? AND e.deleted_at IS NULL
+                            LIMIT 1
+                            """,
+                    (rs, i) -> {
+                        info.put("deptName", rs.getString("dept_name") == null ? "" : rs.getString("dept_name"));
+                        info.put("empNo", rs.getString("emp_no") == null ? "" : rs.getString("emp_no"));
+                        info.put("title", rs.getString("title") == null ? "" : rs.getString("title"));
+                        info.put("phoneMask", rs.getString("phone_mask") == null ? "" : rs.getString("phone_mask"));
+                        info.put("plateNo", rs.getString("plate_no") == null ? "" : rs.getString("plate_no"));
+                        Date from = rs.getDate("valid_from");
+                        Date to = rs.getDate("valid_to");
+                        info.put("validFrom", from == null ? "" : DATE.format(from.toLocalDate()));
+                        info.put("validTo", to == null ? "长期" : DATE.format(to.toLocalDate()));
+                        info.put("statusText", switch (rs.getInt("status")) {
+                            case 1 -> "在职";
+                            case 2 -> "待复核";
+                            case 3 -> "停用";
+                            default -> "未知";
+                        });
+                        return info;
+                    },
+                    personNo);
+            return info;
+        }
+
+        // 访客：档案 + 当天申请/审批
+        List<Map<String, Object>> visitors = jdbc.query("""
+                        SELECT id, company, phone_mask, face_status
+                        FROM visitor WHERE person_no = ? LIMIT 1
+                        """,
+                (rs, i) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getLong("id"));
+                    row.put("company", rs.getString("company") == null ? "" : rs.getString("company"));
+                    row.put("phoneMask", rs.getString("phone_mask") == null ? "" : rs.getString("phone_mask"));
+                    row.put("faceStatus", rs.getInt("face_status"));
+                    return row;
+                },
+                personNo);
+        if (visitors.isEmpty()) {
+            info.put("appointments", List.of());
+            return info;
+        }
+        Map<String, Object> visitor = visitors.get(0);
+        info.put("company", visitor.get("company"));
+        info.put("phoneMask", visitor.get("phoneMask"));
+        info.put("faceStatus", visitor.get("faceStatus"));
+        info.put("appointments", appointments((Long) visitor.get("id"), date));
+        return info;
+    }
+
+    /** 访客当天的预约单 + 审批轨迹（谁确认、谁复核、意见、门点）。 */
+    private List<Map<String, Object>> appointments(Long visitorId, LocalDate date) {
+        List<Map<String, Object>> list = jdbc.query("""
+                        SELECT a.id, a.appointment_no, a.status, a.purpose, a.visitor_type, a.plate_no,
+                               a.start_time, a.end_time, a.created_at, emp.name AS visit_employee_name,
+                               (SELECT GROUP_CONCAT(gt.gate_name ORDER BY gt.sort_no, gt.id SEPARATOR '/')
+                                  FROM appointment_gate ag JOIN gate gt ON gt.id = ag.gate_id
+                                 WHERE ag.appointment_id = a.id AND ag.stage = 2) AS approved_gates
+                        FROM appointment a
+                        LEFT JOIN employee emp ON emp.id = a.visit_employee_id
+                        WHERE a.visitor_id = ? AND a.start_time >= ? AND a.start_time < ?
+                        ORDER BY a.id DESC
+                        """,
+                (rs, i) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    long id = rs.getLong("id");
+                    int status = rs.getInt("status");
+                    row.put("id", id);
+                    row.put("appointmentNo", rs.getString("appointment_no"));
+                    row.put("status", status);
+                    row.put("statusText", Appointment.statusText(status));
+                    row.put("purpose", rs.getString("purpose") == null ? "" : rs.getString("purpose"));
+                    row.put("visitorType", rs.getString("visitor_type") == null ? "" : rs.getString("visitor_type"));
+                    row.put("plateNo", rs.getString("plate_no") == null ? "" : rs.getString("plate_no"));
+                    row.put("visitEmployeeName",
+                            rs.getString("visit_employee_name") == null ? "" : rs.getString("visit_employee_name"));
+                    row.put("approvedGates", rs.getString("approved_gates") == null
+                            ? "" : rs.getString("approved_gates"));
+                    row.put("startTime", DATETIME.format(rs.getTimestamp("start_time").toLocalDateTime()));
+                    row.put("endTime", DATETIME.format(rs.getTimestamp("end_time").toLocalDateTime()));
+                    row.put("createdAt", rs.getTimestamp("created_at") == null
+                            ? "" : DATETIME.format(rs.getTimestamp("created_at").toLocalDateTime()));
+                    return row;
+                },
+                visitorId, Timestamp.valueOf(date.atStartOfDay()), Timestamp.valueOf(date.plusDays(1).atStartOfDay()));
+
+        for (Map<String, Object> row : list) {
+            row.put("actions", actions((Long) row.get("id")));
+        }
+        return list;
+    }
+
+    /** 审批轨迹：一级（被访人确认）与二级（门卫复核）都在 approval_action 里。 */
+    private List<Map<String, Object>> actions(Long appointmentId) {
+        return jdbc.query("""
+                        SELECT aa.action, aa.operator_type, aa.comment, aa.gate_snapshot, aa.created_at,
+                               COALESCE(e.name, u.real_name, '') AS operator_name
+                        FROM approval_action aa
+                        LEFT JOIN employee e ON aa.operator_type = 1 AND e.id = aa.operator_id
+                        LEFT JOIN sys_user u ON aa.operator_type = 2 AND u.id = aa.operator_id
+                        WHERE aa.appointment_id = ?
+                        ORDER BY aa.id
+                        """,
+                (rs, i) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    int action = rs.getInt("action");
+                    int operatorType = rs.getInt("operator_type");
+                    row.put("action", action);
+                    row.put("actionText", actionText(action));
+                    row.put("operatorType", operatorType);
+                    row.put("operatorRole", operatorType == 2 ? "门卫" : "被访人");
+                    row.put("operatorName", rs.getString("operator_name") == null ? "" : rs.getString("operator_name"));
+                    row.put("comment", rs.getString("comment") == null ? "" : rs.getString("comment"));
+                    row.put("gates", gateNames(rs.getString("gate_snapshot")));
+                    row.put("at", rs.getTimestamp("created_at") == null
+                            ? "" : DATETIME.format(rs.getTimestamp("created_at").toLocalDateTime()));
+                    return row;
+                },
+                appointmentId);
+    }
+
+    private String actionText(int action) {
+        return switch (action) {
+            case 1 -> "通过";
+            case 2 -> "驳回";
+            case 3 -> "转办";
+            case 4 -> "加签";
+            case 5 -> "催办";
+            case 6 -> "系统跳过";
+            default -> "未知";
+        };
+    }
+
+    /** 审批动作里存的门点 ID 快照 → 门点名。 */
+    private List<String> gateNames(String snapshot) {
+        if (snapshot == null || snapshot.isBlank()) {
+            return List.of();
+        }
+        List<String> names = new ArrayList<>();
+        for (String id : snapshot.split(",")) {
+            String trimmed = id.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            try {
+                jdbc.query("SELECT gate_name FROM gate WHERE id = ?",
+                        (rs, i) -> names.add(rs.getString(1)), Long.parseLong(trimmed));
+            } catch (NumberFormatException ignored) {
+                // 非法快照直接跳过，不影响详情
+            }
+        }
+        return names;
     }
 
     /* ---------------- 内部 ---------------- */
 
     private String where(LocalDate from, LocalDate to, String personType, String channel,
-                         String keyword, List<Object> args) {
+                         Long deptId, String keyword, List<Object> args) {
         StringBuilder sql = new StringBuilder(" WHERE 1 = 1");
         if (from != null) {
             sql.append(" AND t.day >= ?");
@@ -225,6 +408,10 @@ public class AdminTrafficController {
         if (channel != null && !channel.isBlank()) {
             sql.append(" AND t.channel = ?");
             args.add(channel.trim().toUpperCase());
+        }
+        if (deptId != null) {
+            sql.append(" AND d.id = ?");
+            args.add(deptId);
         }
         if (keyword != null && !keyword.isBlank()) {
             sql.append(" AND (t.person_name LIKE ? OR t.person_no LIKE ?)");

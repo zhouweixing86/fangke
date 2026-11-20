@@ -506,6 +506,8 @@ export interface TrafficRow {
   outCount: number
   totalCount: number
   channelText: string
+  /** 员工所属部门（访客为空） */
+  deptName: string
 }
 
 /** 某人某天的进出明细 */
@@ -525,9 +527,54 @@ export interface TrafficRecord {
   eventId: number | null
 }
 
+/** 访客预约单的审批动作 */
+export interface TrafficApprovalAction {
+  action: number
+  actionText: string
+  operatorType: number
+  operatorRole: string
+  operatorName: string
+  comment: string
+  gates: string[]
+  at: string
+}
+
+/** 访客当天的申请单 */
+export interface TrafficAppointment {
+  id: number
+  appointmentNo: string
+  status: number
+  statusText: string
+  purpose: string
+  visitorType: string
+  plateNo: string
+  visitEmployeeName: string
+  approvedGates: string
+  startTime: string
+  endTime: string
+  createdAt: string
+  actions: TrafficApprovalAction[]
+}
+
 export interface TrafficDetail {
   personNo: string
   date: string
   personName: string
+  personType: 'EMPLOYEE' | 'VISITOR'
+  personTypeText: string
+  /** 员工字段 */
+  deptName?: string
+  empNo?: string
+  title?: string
+  validFrom?: string
+  validTo?: string
+  statusText?: string
+  /** 访客字段 */
+  company?: string
+  faceStatus?: number
+  appointments?: TrafficAppointment[]
+  /** 公共字段 */
+  phoneMask?: string
+  plateNo?: string
   records: TrafficRecord[]
 }

@@ -3,44 +3,53 @@
     <div class="toolbar">
       <el-date-picker v-model="query.range" type="daterange" value-format="YYYY-MM-DD"
         start-placeholder="开始日期" end-placeholder="结束日期" style="width: 240px" />
-      <el-select v-model="query.personType" placeholder="全部人员" clearable style="width: 130px">
+      <el-select v-model="query.personType" placeholder="全部人员" clearable style="width: 120px">
         <el-option label="员工" value="EMPLOYEE" />
         <el-option label="访客" value="VISITOR" />
       </el-select>
-      <el-select v-model="query.channel" placeholder="全部方式" clearable style="width: 130px">
+      <el-select v-model="query.deptId" placeholder="全部部门" clearable filterable
+        style="width: 150px" :disabled="query.personType === 'VISITOR'">
+        <el-option v-for="d in depts" :key="d.id" :value="d.id" :label="d.name" />
+      </el-select>
+      <el-select v-model="query.channel" placeholder="全部方式" clearable style="width: 120px">
         <el-option label="行人" value="PEDESTRIAN" />
         <el-option label="车辆" value="VEHICLE" />
       </el-select>
-      <el-input v-model="query.keyword" placeholder="姓名 / 人员编号" clearable style="width: 180px"
+      <el-input v-model="query.keyword" placeholder="姓名 / 人员编号" clearable style="width: 170px"
         @keyup.enter="search" />
       <el-button type="primary" @click="search">查询</el-button>
       <el-button :icon="Refresh" @click="load">刷新</el-button>
       <span class="spacer" />
-      <span class="text-muted">一人一天一行：最早进入 / 最晚出去，点「详情」看当天全部进出</span>
+      <span class="text-muted">一人一天一行：最早进入 / 最晚出去，点「详情」看当天全部进出与审批</span>
     </div>
 
     <el-table v-loading="loading" :data="rows" border stripe>
       <el-table-column prop="day" label="日期" width="110" />
       <el-table-column prop="personName" label="姓名" width="110" />
-      <el-table-column prop="personNo" label="人员编号" width="150" />
-      <el-table-column label="人员类型" width="100">
+      <el-table-column prop="personNo" label="人员编号" width="140" />
+      <el-table-column label="人员类型" width="95">
         <template #default="{ row }">
           <el-tag :type="row.personType === 'EMPLOYEE' ? 'primary' : 'success'" size="small">
             {{ row.personTypeText }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="firstIn" label="最早进入" width="170" />
-      <el-table-column prop="lastOut" label="最晚出去" width="170" />
-      <el-table-column label="进 / 出" width="100">
+      <el-table-column label="部门" width="120">
+        <template #default="{ row }">
+          <span :class="{ 'text-muted': !row.deptName }">{{ row.deptName || '-' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="firstIn" label="最早进入" width="165" />
+      <el-table-column prop="lastOut" label="最晚出去" width="165" />
+      <el-table-column label="进 / 出" width="90">
         <template #default="{ row }">
           <span :class="{ 'text-muted': row.inCount === 0 }">{{ row.inCount }}</span>
           <span class="text-muted"> / </span>
           <span :class="{ 'text-muted': row.outCount === 0 }">{{ row.outCount }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="channelText" label="通道" width="110" />
-      <el-table-column label="操作" width="100" fixed="right">
+      <el-table-column prop="channelText" label="通道" width="105" />
+      <el-table-column label="操作" width="90" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openDetail(row)">详情</el-button>
         </template>
@@ -52,15 +61,68 @@
         layout="total, prev, pager, next" @current-change="load" />
     </div>
 
-    <el-drawer v-model="detailVisible" :title="detailTitle" size="720px">
+    <el-drawer v-model="detailVisible" :title="detailTitle" size="820px">
       <template v-if="detail">
-        <el-descriptions :column="2" border size="small" style="margin-bottom: 12px">
+        <el-descriptions v-if="detail.personType === 'EMPLOYEE'" :column="3" border size="small">
           <el-descriptions-item label="姓名">{{ detail.personName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="工号">{{ detail.empNo || '-' }}</el-descriptions-item>
           <el-descriptions-item label="人员编号">{{ detail.personNo }}</el-descriptions-item>
-          <el-descriptions-item label="日期">{{ detail.date }}</el-descriptions-item>
-          <el-descriptions-item label="记录数">{{ detail.records.length }}</el-descriptions-item>
+          <el-descriptions-item label="部门">
+            <el-tag size="small" type="info">{{ detail.deptName || '未分配' }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="职务">{{ detail.title || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ detail.statusText || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="手机">{{ detail.phoneMask || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="车牌">{{ detail.plateNo || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="证件有效期">
+            {{ detail.validFrom || '-' }} ~ {{ detail.validTo || '-' }}
+          </el-descriptions-item>
         </el-descriptions>
 
+        <el-descriptions v-else :column="2" border size="small">
+          <el-descriptions-item label="姓名">{{ detail.personName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="人员编号">{{ detail.personNo }}</el-descriptions-item>
+          <el-descriptions-item label="单位">{{ detail.company || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="手机">{{ detail.phoneMask || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="人脸">
+            <el-tag size="small" :type="detail.faceStatus ? 'success' : 'info'">
+              {{ detail.faceStatus ? '已采集' : '未采集' }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="日期">{{ detail.date }}</el-descriptions-item>
+        </el-descriptions>
+
+        <template v-if="detail.personType === 'VISITOR'">
+          <div class="section-title">当天申请与审批</div>
+          <el-empty v-if="!detail.appointments || detail.appointments.length === 0"
+            description="当天没有预约单" :image-size="60" />
+          <div v-for="a in detail.appointments || []" :key="a.id" class="appt-card">
+            <div class="appt-head">
+              <span class="appt-no">{{ a.appointmentNo }}</span>
+              <el-tag size="small" type="warning">{{ a.statusText }}</el-tag>
+              <span class="text-muted">{{ a.startTime }} ~ {{ a.endTime }}</span>
+            </div>
+            <el-row :gutter="8" class="appt-meta">
+              <el-col :span="8"><span class="text-muted">事由：</span>{{ a.purpose || '-' }}</el-col>
+              <el-col :span="8"><span class="text-muted">访客类型：</span>{{ a.visitorType || '-' }}</el-col>
+              <el-col :span="8"><span class="text-muted">被访人：</span>{{ a.visitEmployeeName || '-' }}</el-col>
+              <el-col :span="8"><span class="text-muted">批准门点：</span>{{ a.approvedGates || '-' }}</el-col>
+              <el-col :span="8"><span class="text-muted">车牌：</span>{{ a.plateNo || '-' }}</el-col>
+              <el-col :span="8"><span class="text-muted">提交：</span>{{ a.createdAt || '-' }}</el-col>
+            </el-row>
+            <div class="text-muted" style="margin: 6px 0 2px">审批轨迹</div>
+            <el-empty v-if="a.actions.length === 0" description="暂无审批动作" :image-size="48" />
+            <div v-for="(act, i) in a.actions" :key="i" class="action-line">
+              <el-tag size="small" type="info">{{ act.actionText }}</el-tag>
+              <span>{{ act.operatorRole }} · {{ act.operatorName || '-' }}</span>
+              <span class="text-muted">{{ act.at }}</span>
+              <span v-if="act.comment">意见：{{ act.comment }}</span>
+              <span v-if="act.gates.length" class="text-muted">门点：{{ act.gates.join('、') }}</span>
+            </div>
+          </div>
+        </template>
+
+        <div class="section-title">进出明细（{{ detail.records.length }} 条）</div>
         <el-table :data="detail.records" border size="small">
           <el-table-column prop="eventTime" label="时间" width="160" />
           <el-table-column label="进出" width="70">
@@ -79,7 +141,7 @@
             </template>
           </el-table-column>
           <el-table-column prop="plateNo" label="车牌" width="110" />
-          <el-table-column label="照片" width="90">
+          <el-table-column label="照片" width="85">
             <template #default="{ row }">
               <el-button v-if="row.eventId" link type="primary" @click="showMedia(row)">查看</el-button>
               <span v-else class="text-muted">-</span>
@@ -104,21 +166,23 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
-import { listEventMedia, trafficDetail, trafficSummary } from '@/api'
-import type { EventMedia, TrafficDetail, TrafficRow } from '@/api/types'
+import { listDepts, listEventMedia, trafficDetail, trafficSummary } from '@/api'
+import type { DeptView, EventMedia, TrafficDetail, TrafficRow } from '@/api/types'
 
 const loading = ref(false)
 const rows = ref<TrafficRow[]>([])
 const total = ref(0)
 const page = ref(1)
 const size = ref(20)
+const depts = ref<DeptView[]>([])
 
 const query = reactive<{
   range: [string, string] | null
   personType: string | undefined
+  deptId: number | undefined
   channel: string | undefined
   keyword: string
-}>({ range: null, personType: undefined, channel: undefined, keyword: '' })
+}>({ range: null, personType: undefined, deptId: undefined, channel: undefined, keyword: '' })
 
 const detailVisible = ref(false)
 const detail = ref<TrafficDetail | null>(null)
@@ -137,6 +201,7 @@ async function load() {
       from: query.range?.[0],
       to: query.range?.[1],
       personType: query.personType,
+      deptId: query.personType === 'VISITOR' ? undefined : query.deptId,
       channel: query.channel,
       keyword: query.keyword || undefined,
       page: page.value,
@@ -164,10 +229,51 @@ async function showMedia(row: { eventId: number }) {
   mediaVisible.value = true
 }
 
-onMounted(load)
+onMounted(async () => {
+  depts.value = await listDepts().catch(() => [])
+  await load()
+})
 </script>
 
 <style scoped>
+.section-title {
+  margin: 18px 0 8px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.appt-card {
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.appt-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.appt-no {
+  font-weight: 600;
+}
+
+.appt-meta {
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.action-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 3px 0;
+}
+
 .media-grid {
   display: flex;
   flex-wrap: wrap;
