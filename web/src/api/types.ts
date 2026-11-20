@@ -472,3 +472,23 @@ export interface QrVerifyResult {
   validFrom: string | null
   validTo: string | null
 }
+
+/** 车辆通行记录（C-68 车牌识别一期） */
+export interface VehicleEventRow {
+  id: number
+  plateNo: string
+  gateId: number
+  gateName: string
+  direction: number
+  directionText: string
+  eventTime: string
+  confidence: number
+  matchedType: number | null
+  matchedTypeText: string
+  matchedName: string
+  result: number
+  resultText: string
+  failReason: string
+  photoKey: string
+  deviceSn: string
+}

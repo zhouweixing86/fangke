@@ -195,6 +195,21 @@ mvn spring-boot:run
 | 批次查询 / 手动重下 / 撤销 | `dispatch/web/DispatchAdminController` |
 | 访客 usertype 可配置（实测必须用 `white`） | `fangke.device.visitor-user-type` |
 
+### M19 车辆通行（C-68 车牌识别一期）
+
+| 能力 | 位置 |
+|---|---|
+| 车牌事件接入（兼容多种厂商字段别名，带 `sign` 可校验） | `vehicle/web/VehicleOpenApiController` |
+| 员工判定：车牌匹配 + 在岗 + 有效期 → 全部启用门点 | `vehicle/service/VehicleAccessService#judge` |
+| 访客判定：`appointment.plate_no` + 状态 35/40 + 当天 + **批准门点集合** | 同上 |
+| 未登记/门点无法确定 → **拒绝**（宁可拦下不误放） | 同上 |
+| 通行记录落库（幂等 event_uuid、抓拍存 MinIO） | `VehicleAccessService#record` |
+| 管理端记录查询 | `vehicle/web/AdminVehicleController`、管理端「车辆记录」页 |
+
+> 判定**不另建车牌授权表**：直接复用员工档案与访客预约（同一套门点、同一天有效期）。
+> 设备 `direction` 支持 **2=双向**（现场：一门 1 车闸 + 1 行闸，均双向）；双向设备不下发 `inout`，
+> 通行方向以设备上报的 `inout` 为准。
+
 ### M11 保安工作台
 
 | 能力 | 位置 |
@@ -381,7 +396,7 @@ cd tools\autopilot
 mvn test
 ```
 
-当前 **219 个用例**，覆盖：
+当前 **225 个用例**，覆盖：
 
 | 用例 | 锁住的行为 |
 |---|---|
@@ -419,6 +434,7 @@ mvn test
 | `OpenApiDeviceServiceTest` | 心跳 action 优先级、开门下发后立即出队（不重放）、自动登记与 mac 占位（**落「待分配」门点**）、名单索引/详情、回执出队 |
 | `EmployeeDispatchServiceTest` | 在岗员工按启用门点各建一条长期授权（排除待分配）、推送到有设备的门点、停用员工不推送只置撤销、停用清理从设备删除、全量同步覆盖在岗+停用 |
 | `DeptServiceTest` | 部门编码统一转大写且唯一、编码格式/名称必填、上级必须存在且不能是自己、有员工/有子部门的部门不能删、空部门可删 |
+| `VehicleAccessServiceTest` | 员工车牌在岗放行、过期拒绝但标出匹配人、访客车牌当天+门点命中放行、门点不符拒绝、未登记拒绝、车牌空/门点缺失拒绝 |
 | `GateServiceTest` | 「待分配」不能授权/不能停用/不能改类型、默认门点配置失效回落第一个可选门、停用门点不可选与不可挂设备、编码唯一与保留码、编码统一大写 |
 | `AppointmentGateServiceTest` | 申请「全部门点」展开成当时启用门点、多选校验去重、不许申请「待分配」、不传门点回落默认、审批可增可减且申请集合不动、不传则继承、清空被拒、历史单据兜底 |
 

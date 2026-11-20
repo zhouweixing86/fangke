@@ -37,4 +37,14 @@ public interface EmployeeRepository {
 
     /** 有效期到期前 N 天待复核的员工（JOB-07）。 */
     List<Employee> findExpiringBefore(java.time.LocalDate deadline);
+
+    /** 车辆通行（C-68）：按车牌找在岗员工（车牌是主车，可能多人相同则取最新一条）。 */
+    /**
+     * 车辆通行（C-68）：按车牌找在岗员工（车牌是主车，可能多人相同则取最新一条）。
+     *
+     * <p>默认返回空，方便测试替身只实现自己关心的方法；生产实现见 JdbcEmployeeRepository。
+     */
+    default java.util.Optional<Employee> findActiveByPlateNo(String plateNo) {
+        return java.util.Optional.empty();
+    }
 }

@@ -38,6 +38,16 @@ public interface AppointmentRepository {
     /** 当日最大单号（用于生成 A+yyyyMMdd+5位序号）。 */
     Optional<String> findMaxNoByPrefix(String prefix);
 
+    /** 车辆通行（C-68）：某车牌在指定日期已授权（可通行/已签到）的预约单。 */
+    /**
+     * 车辆通行（C-68）：某车牌在指定日期已授权（可通行/已签到）的预约单。
+     *
+     * <p>默认返回空，方便测试替身只实现自己关心的方法；生产实现见 JdbcAppointmentRepository。
+     */
+    default List<Appointment> findByPlateNoOnDate(String plateNo, java.time.LocalDate date) {
+        return List.of();
+    }
+
     /**
      * 到期未到访的预约（status ∈ {30 已通过, 35 可通行} 且 end_time 早于 before）。
      * 定时任务用：置为「已过期」并通知访客。

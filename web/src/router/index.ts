@@ -87,6 +87,12 @@ const router = createRouter({
           meta: { title: '通行记录', adminOnly: true }
         },
         {
+          path: 'vehicles',
+          name: 'vehicles',
+          component: () => import('@/views/VehicleView.vue'),
+          meta: { title: '车辆记录', adminOnly: true }
+        },
+        {
           path: 'batches',
           name: 'batches',
           component: () => import('@/views/SyncBatchView.vue'),

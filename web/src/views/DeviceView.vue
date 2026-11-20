@@ -66,6 +66,7 @@
           <el-radio-group v-model="editForm.direction">
             <el-radio :value="1">入口</el-radio>
             <el-radio :value="0">出口</el-radio>
+            <el-radio :value="2">双向（一门一台车闸/行闸时选这个）</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="型号">

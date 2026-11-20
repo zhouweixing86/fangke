@@ -92,8 +92,8 @@ public class DeviceAdminController {
             gateService.requireAssignable(gateId);
         }
         Integer direction = request.direction();
-        if (direction != null && direction != 0 && direction != 1) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID, "出入口方向只能是 0 出口 / 1 入口");
+        if (direction != null && direction != 0 && direction != 1 && direction != 2) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "出入口方向只能是 0 出口 / 1 入口 / 2 双向");
         }
         String deviceName = blankToNull(request.deviceName());
         if (deviceName != null && deviceName.length() > 64) {
@@ -147,8 +147,8 @@ public class DeviceAdminController {
         view.put("deviceName", nullSafe(d.getDeviceName()));
         view.put("model", nullSafe(d.getModel()));
         view.put("firmware", nullSafe(d.getFirmware()));
-        view.put("direction", d.getDirection() == null ? 0 : d.getDirection());
-        view.put("directionText", Integer.valueOf(1).equals(d.getDirection()) ? "入口" : "出口");
+        view.put("direction", d.getDirection() == null ? 1 : d.getDirection());
+        view.put("directionText", directionText(d.getDirection()));
         view.put("gateId", d.getGateId() == null ? 0L : d.getGateId());
         view.put("gateName", gateService.nameOf(d.getGateId()));
         view.put("channel", d.getChannel() == null ? "PULL" : d.getChannel().name());
@@ -167,6 +167,18 @@ public class DeviceAdminController {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /** 0 出口 / 1 入口 / 2 双向（一个门只有一台车闸或行闸时用双向）。 */
+    private String directionText(Integer direction) {
+        if (direction == null) {
+            return "入口";
+        }
+        return switch (direction) {
+            case 0 -> "出口";
+            case 2 -> "双向";
+            default -> "入口";
+        };
     }
 
     private String nullSafe(String value) {

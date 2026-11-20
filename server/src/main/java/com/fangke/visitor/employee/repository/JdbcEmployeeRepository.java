@@ -247,4 +247,15 @@ public class JdbcEmployeeRepository implements EmployeeRepository {
             ps.setDate(index, Date.valueOf(value));
         }
     }
+    @Override
+    public Optional<Employee> findActiveByPlateNo(String plateNo) {
+        if (plateNo == null || plateNo.isBlank()) {
+            return Optional.empty();
+        }
+        return jdbc.query(SELECT + " WHERE e.plate_no = ? AND e.status = 1 AND e.deleted_at IS NULL "
+                                + "ORDER BY e.id DESC LIMIT 1",
+                        MAPPER, plateNo.replace(" ", "").trim().toUpperCase())
+                .stream().findFirst();
+    }
+
 }

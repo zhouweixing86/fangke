@@ -14,6 +14,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -246,4 +247,16 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
             ps.setBytes(index, value);
         }
     }
+    @Override
+    public List<Appointment> findByPlateNoOnDate(String plateNo, LocalDate date) {
+        if (plateNo == null || plateNo.isBlank() || date == null) {
+            return List.of();
+        }
+        return jdbc.query(SELECT + " WHERE plate_no = ? AND status IN (35, 40) "
+                                + "AND start_time >= ? AND start_time < ? ORDER BY id",
+                MAPPER, plateNo.replace(" ", "").trim().toUpperCase(),
+                Timestamp.valueOf(date.atStartOfDay()),
+                Timestamp.valueOf(date.plusDays(1).atStartOfDay()));
+    }
+
 }

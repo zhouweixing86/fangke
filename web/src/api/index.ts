@@ -36,7 +36,8 @@ import type {
   RoleRow,
   SyncBatch,
   SyncBatchItem,
-  VisitorReport
+  VisitorReport,
+  VehicleEventRow
 } from './types'
 
 /** 响应拦截器已解包 ApiResponse，这里只做类型断言。 */
@@ -294,3 +295,8 @@ export const guardOpenDoor = (payload: {
 }) => post<{ opened: boolean; devices: number }>('/guard/door/open', payload)
 export const guardCheckout = (appointmentNo: string) =>
   post<void>(`/guard/visit/${appointmentNo}/checkout`)
+
+/* ---------------- 车辆记录（C-68） ---------------- */
+
+export const listVehicleEvents = (params: Record<string, unknown>) =>
+  get<PageResult<VehicleEventRow>>('/admin/vehicle/event', params)

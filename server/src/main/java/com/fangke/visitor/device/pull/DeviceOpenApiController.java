@@ -205,7 +205,13 @@ public class DeviceOpenApiController {
             service.completeSimpleCommand(device.getId(), PullCommandRepository.TYPE_PARAM_SYNC, "设备已拉取参数");
         }
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("inout", device == null || device.getDirection() == null ? 1 : device.getDirection());
+        // 双向设备（direction=2）不下发 inout：协议只有 0 出口 / 1 入口，双向由设备侧的模式决定；
+        // 通行方向以设备上报的记录 inout 为准（平台不推断）。
+        if (device == null) {
+            data.put("inout", 1);
+        } else if (device.getDirection() != null && device.getDirection() != 2) {
+            data.put("inout", device.getDirection());
+        }
         data.put("name", device == null ? "门禁终端" : device.getDeviceName());
         data.put("recogModeDB", 1);
         data.put("recogModeIC", 1);
