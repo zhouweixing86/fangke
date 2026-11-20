@@ -35,3 +35,6 @@ uniapp/*.tsbuildinfo
 
 # 自动驾驶台运行时（报告、状态、日志、提示词）
 .autopilot/
+
+# 私有凭据/服务器连接信息（含明文口令，永不入库）
+private/
