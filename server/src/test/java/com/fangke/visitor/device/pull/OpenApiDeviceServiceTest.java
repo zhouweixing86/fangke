@@ -10,8 +10,8 @@ import com.fangke.visitor.device.service.DeviceRepository;
 import com.fangke.visitor.device.service.VisitRecorder;
 import com.fangke.visitor.dispatch.model.AccessGrant;
 import com.fangke.visitor.dispatch.repository.AccessGrantRepository;
-import com.fangke.visitor.employee.repository.EmployeeFaceRepository;
-import com.fangke.visitor.employee.repository.EmployeeRepository;
+import com.fangke.visitor.employee.model.Employee;
+import com.fangke.visitor.employee.repository.EmployeeFaceRepository;import com.fangke.visitor.employee.repository.EmployeeRepository;
 import com.fangke.visitor.gate.repository.InMemoryGateRepository;
 import com.fangke.visitor.gate.service.GateService;
 import com.fangke.visitor.qr.service.QrTicketService;
@@ -118,6 +118,33 @@ class OpenApiDeviceServiceTest {
         assertEquals(1, list.size());
         assertEquals("V1", list.get(0).get("idno"));
         assertTrue(cmdRepo.rows.get(0).dispatched(), "设备真正取名单时才进入执行中");
+    }
+
+    @Test
+    @DisplayName("删除名单：授权已撤销也要按证件号告诉设备删谁")
+    void deleteUsesIdCardAfterRevoke() {
+        Employee employee = new Employee();
+        employee.setId(9L);
+        employee.setEmpNo("JS001");
+        employee.setPersonNo("E000001");
+        employee.setName("张三");
+        employee.setIdCardEnc(crypto.encrypt("342221199704020012"));
+
+        EmployeeRepository employeeRepo = mock(EmployeeRepository.class);
+        when(employeeRepo.findByPersonNo("E000001")).thenReturn(Optional.of(employee));
+        OpenApiDeviceService svc = new OpenApiDeviceService(deviceRepo, cmdRepo, grantRepo, visitorRepo,
+                employeeRepo, mock(EmployeeFaceRepository.class), mock(StorageService.class), crypto,
+                mock(AccessEventRepository.class), mock(VisitRecorder.class), mock(CaptureUploader.class),
+                mock(QrTicketService.class), gateService, props);
+
+        // 停用后该员工没有任何生效授权，build(personNo, device) 会返回 null
+        cmdRepo.enqueue(1L, PullCommandRepository.TYPE_DEL_PERSON, 5, "{\"personNo\":\"E000001\"}", null);
+
+        List<Map<String, Object>> list = svc.claimPersonChanges(device(), PullCommandRepository.TYPE_DEL_PERSON);
+
+        assertEquals(1, list.size());
+        assertEquals("342221199704020012", list.get(0).get("idno"),
+                "授权已撤销，必须走证件号删人；用品编号设备找不到这条名单");
     }
 
     @Test

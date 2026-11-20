@@ -94,6 +94,15 @@ public class EmployeeController {
         return ApiResponse.ok();
     }
 
+    /** 恢复在职：状态改回在职，并把授权与名单重新下发一遍（等价于重新新增）。 */
+    @PostMapping("/{id}/enable")
+    @AuditLog(module = "EMPLOYEE", action = "ENABLE")
+    public ApiResponse<EmployeeView> enable(@PathVariable Long id, HttpServletRequest http) {
+        var employee = service.enable(id, uid(http));
+        dispatchService.syncQuietly(employee);
+        return ApiResponse.ok(EmployeeView.of(employee));
+    }
+
     /** 手动同步单个员工名单（排查"员工刷不开"时用）。 */
     @PostMapping("/{id}/sync")
     @AuditLog(module = "EMPLOYEE", action = "SYNC")

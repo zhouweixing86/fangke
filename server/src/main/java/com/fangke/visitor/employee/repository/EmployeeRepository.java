@@ -18,6 +18,15 @@ public interface EmployeeRepository {
 
     Optional<Employee> findByEmpNo(String empNo);
 
+    /**
+     * 按人员编号找人。删除设备名单时用：授权已经撤销，不能再通过 access_grant 反查证件号。
+     *
+     * <p>默认返回空，方便测试替身只实现自己关心的方法。
+     */
+    default Optional<Employee> findByPersonNo(String personNo) {
+        return Optional.empty();
+    }
+
     /** 预约时按被访人手机号匹配员工（BR-A-002 / C-22）。 */
     Optional<Employee> findByPhoneHmac(String phoneHmac);
 

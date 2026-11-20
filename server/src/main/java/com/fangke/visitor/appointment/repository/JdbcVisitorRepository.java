@@ -70,6 +70,14 @@ public class JdbcVisitorRepository implements VisitorRepository {
     }
 
     @Override
+    public Optional<Visitor> findByPersonNo(String personNo) {
+        if (personNo == null || personNo.isBlank()) {
+            return Optional.empty();
+        }
+        return jdbc.query(SELECT + " WHERE person_no = ?", MAPPER, personNo).stream().findFirst();
+    }
+
+    @Override
     public Optional<Visitor> findByPhoneHmac(String phoneHmac) {
         return jdbc.query(SELECT + " WHERE phone_hmac = ? ORDER BY id DESC LIMIT 1", MAPPER, phoneHmac)
                 .stream().findFirst();

@@ -105,6 +105,9 @@ export const updateEmployee = (id: number, data: Record<string, unknown>) =>
 
 export const stopEmployee = (id: number) => del<void>(`/admin/employee/${id}`)
 
+/** 恢复在职：状态改回在职并把授权/名单重新下发（等价于重新新增一遍） */
+export const enableEmployee = (id: number) => post<EmployeeView>(`/admin/employee/${id}/enable`)
+
 /** 员工名单下发：入职即自动同步，这里是手动补偿（排查"员工刷不开"时用） */
 export const syncEmployee = (id: number) =>
   post<{ employees: number; grants: number; devices: number; success: number; fail: number; message: string }>(

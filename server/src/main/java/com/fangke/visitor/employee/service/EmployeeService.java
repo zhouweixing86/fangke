@@ -128,6 +128,23 @@ public class EmployeeService {
         return employee;
     }
 
+    /**
+     * 恢复在职：把状态改回在职，授权与设备名单由调用方重新下发。
+     *
+     * <p>停用会撤销授权并把该人从设备删除，恢复等价于「重新新增一遍」——
+     * {@code EmployeeDispatchService.sync} 会把已撤销的授权重新置为生效并重新推名单。
+     */
+    public Employee enable(Long id, Long operatorId) {
+        Employee employee = get(id);
+        if (employee.getStatus() == Employee.STATUS_ACTIVE) {
+            return employee;
+        }
+        repository.updateStatus(id, Employee.STATUS_ACTIVE);
+        employee.setStatus(Employee.STATUS_ACTIVE);
+        log.info("恢复在职 id={} empNo={} operator={}", id, employee.getEmpNo(), operatorId);
+        return employee;
+    }
+
     public Employee get(Long id) {
         return repository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_INVALID, "员工不存在：" + id));

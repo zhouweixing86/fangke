@@ -229,7 +229,9 @@ public class OpenApiDeviceService {
                 continue;
             }
             PersonView view = build(personNo, device);
-            String idno = view == null ? personNo : view.idno();
+            // 删除指令下发时授权已经撤销，build() 必然返回 null；此时必须回退到档案里查证件号，
+            // 否则拿 personNo（如 E000001）当 idno 告诉设备删人，设备找不到这条 → 人删不掉
+            String idno = view == null ? idnoOfPerson(personNo) : view.idno();
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("idno", idno);
             if (!PullCommandRepository.TYPE_DEL_PERSON.equals(cmdType)) {
@@ -355,6 +357,27 @@ public class OpenApiDeviceService {
             }
         }
         return null;
+    }
+
+    /**
+     * 按 personNo 反查下发用的 idno：有证件号用证件号，没有就用 personNo。
+     *
+     * <p>刻意不经过 access_grant —— 删除名单时授权已经撤销，按 grant 查不到人。
+     */
+    private String idnoOfPerson(String personNo) {
+        Optional<Employee> employee = employeeRepository.findByPersonNo(personNo);
+        if (employee.isPresent()) {
+            Employee e = employee.get();
+            String idCard = e.getIdCardEnc() == null ? null : crypto.decrypt(e.getIdCardEnc());
+            return idCard == null || idCard.isBlank() ? e.getPersonNo() : idCard;
+        }
+        Optional<Visitor> visitor = visitorRepository.findByPersonNo(personNo);
+        if (visitor.isPresent()) {
+            Visitor v = visitor.get();
+            String idCard = v.getIdCardEnc() == null ? null : crypto.decrypt(v.getIdCardEnc());
+            return idCard == null || idCard.isBlank() ? v.getPersonNo() : idCard;
+        }
+        return personNo;
     }
 
     private PersonView findByIdno(Device device, String idno) {

@@ -141,6 +141,16 @@ public class JdbcEmployeeRepository implements EmployeeRepository {
                 .stream().findFirst();
     }
 
+    /** 停用的员工也要能查到：删除设备名单时档案还在，只是状态变了。 */
+    @Override
+    public Optional<Employee> findByPersonNo(String personNo) {
+        if (personNo == null || personNo.isBlank()) {
+            return Optional.empty();
+        }
+        return jdbc.query(SELECT + " WHERE e.person_no = ? AND e.deleted_at IS NULL", MAPPER, personNo)
+                .stream().findFirst();
+    }
+
     @Override
     public Optional<Employee> findByPhoneHmac(String phoneHmac) {
         if (phoneHmac == null) {

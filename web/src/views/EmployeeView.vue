@@ -52,7 +52,8 @@
           <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
           <el-button link type="primary" @click="openFace(row)">照片</el-button>
           <el-button link type="primary" @click="syncOne(row)">下发</el-button>
-          <el-button link type="danger" :disabled="row.status === 3" @click="stop(row)">停用</el-button>
+          <el-button v-if="row.status === 3" link type="success" @click="enable(row)">恢复在职</el-button>
+          <el-button v-else link type="danger" @click="stop(row)">停用</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -146,6 +147,7 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules, type Upload
 import { Plus, Refresh, Upload, UploadFilled } from '@element-plus/icons-vue'
 import {
   createEmployee,
+  enableEmployee,
   importEmployees,
   listDepts,
   listEmployeeFaces,
@@ -278,6 +280,23 @@ async function stop(row: EmployeeView) {
   await stopEmployee(row.id)
   ElMessage.success('已停用')
   await load()
+}
+
+/** 恢复在职：等于重新新增一遍，授权与设备名单会重新下发 */
+async function enable(row: EmployeeView) {
+  await ElMessageBox.confirm(
+    `恢复后「${row.name}」会重新下发到设备，可再次刷脸通行。确认？`,
+    '恢复在职',
+    { type: 'info' }
+  )
+  try {
+    await enableEmployee(row.id)
+    ElMessage.success('已恢复在职，名单正在下发')
+    await load()
+  } catch (error) {
+    const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message
+    ElMessage.error(message || '恢复失败')
+  }
 }
 
 /** 单个员工重新下发（入职/换照片已自动下发，这里是补偿） */

@@ -27,6 +27,15 @@ public interface VisitorRepository {
     /** 微信小程序 openid 反查访客（一键登录）。 */
     Optional<Visitor> findByWxOpenid(String wxOpenid);
 
+    /**
+     * 按人员编号找访客。删除设备名单时用：授权已经撤销，不能再通过 access_grant 反查证件号。
+     *
+     * <p>默认返回空，方便测试替身只实现自己关心的方法。
+     */
+    default Optional<Visitor> findByPersonNo(String personNo) {
+        return Optional.empty();
+    }
+
     /** 绑定 openid（首次预约成功后写入，后续一键登录直接命中）。 */
     void bindWxOpenid(Long visitorId, String wxOpenid);
 }
