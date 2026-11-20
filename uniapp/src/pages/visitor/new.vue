@@ -40,11 +40,6 @@
         </view>
       </view>
 
-      <view v-if="mode === 'group'" class="row">
-        <text class="label required">总人数</text>
-        <input v-model="form.groupCount" class="input" type="number" placeholder="团体预约人数" />
-      </view>
-
       <view class="row">
         <text class="label required">被访人手机</text>
         <input v-model="form.visitPhone" class="input" type="number" maxlength="11"
@@ -70,8 +65,8 @@
       </view>
 
       <view class="row">
-        <text class="label required">身份证号</text>
-        <input v-model="form.idCard" class="input" maxlength="18" placeholder="用于门禁刷证核验" />
+        <text class="label">身份证号</text>
+        <input v-model="form.idCard" class="input" maxlength="18" placeholder="选填，用于门禁刷证核验" />
       </view>
 
       <view class="row">
@@ -91,29 +86,59 @@
         <input v-model="form.plateNo" class="input" maxlength="16" placeholder="请填写乘坐车辆牌照" />
       </view>
 
-      <picker :range="gateOptions" :value="gateIndex" @change="onGateScope">
-        <view class="row">
-          <text class="label">通行门点</text>
-          <view class="row-value">
-            <text>{{ gateOptions[gateIndex] }}</text>
-            <text class="arrow">›</text>
+      <!-- 只有多个门点时才让访客选；单个门点直接默认那一个 -->
+      <template v-if="gates.length > 1">
+        <picker :range="gateOptions" :value="gateIndex" @change="onGateScope">
+          <view class="row">
+            <text class="label">通行门点</text>
+            <view class="row-value">
+              <text>{{ gateOptions[gateIndex] }}</text>
+              <text class="arrow">›</text>
+            </view>
           </view>
-        </view>
-      </picker>
+        </picker>
 
-      <view v-if="gateScope === 1" class="gate-list">
-        <label v-for="g in gates" :key="g.id" class="gate-item">
-          <checkbox :value="String(g.id)" :checked="selectedGateIds.includes(g.id)" @click="toggleGate(g.id)" />
-          <text>{{ g.gateName }}</text>
-        </label>
-        <text v-if="!gates.length" class="ph">暂无可选门点，请联系管理员</text>
-      </view>
+        <view v-if="gateScope === 1" class="gate-list">
+          <label v-for="g in gates" :key="g.id" class="gate-item">
+            <checkbox :value="String(g.id)" :checked="selectedGateIds.includes(g.id)" @click="toggleGate(g.id)" />
+            <text>{{ g.gateName }}</text>
+          </label>
+        </view>
+      </template>
 
       <view class="purpose">
         <text class="label">具体事由</text>
         <textarea v-model="form.purpose" class="textarea" maxlength="50" placeholder="请输入具体事由" />
         <text class="counter">{{ form.purpose.length }} / 50</text>
       </view>
+    </view>
+
+    <!-- 团体预约：同行人放最下面，填总数后自动展开姓名 + 手机号 -->
+    <view v-if="mode === 'group'" class="sheet">
+      <view class="sheet-title">
+        <text class="dot" />
+        <text>同行人信息</text>
+      </view>
+
+      <view class="row">
+        <text class="label required">同行人总数</text>
+        <input v-model="mateTotal" class="input" type="number" maxlength="2"
+          placeholder="不含负责人，如 3" @blur="syncMates" />
+      </view>
+
+      <view v-for="(mate, index) in mates" :key="index" class="mate">
+        <text class="mate-index">同行人 {{ index + 1 }}</text>
+        <view class="mate-row">
+          <text class="mate-label">姓名</text>
+          <input v-model="mate.name" class="input" placeholder="请填写姓名" />
+        </view>
+        <view class="mate-row">
+          <text class="mate-label">手机号</text>
+          <input v-model="mate.phone" class="input" type="number" maxlength="11" placeholder="选填" />
+        </view>
+      </view>
+
+      <view v-if="mates.length === 0" class="ph tips">填写同行人总数后自动展开</view>
     </view>
 
     <button class="submit" :loading="submitting" @click="submit">提交</button>
@@ -129,6 +154,11 @@ import { alert, showToast } from '@/utils/ui'
 
 type Mode = 'personal' | 'group'
 
+interface Mate {
+  name: string
+  phone: string
+}
+
 const mode = ref<Mode>('personal')
 const visitTypes = ['商务', '施工', '送货']
 const typeIndex = ref(0)
@@ -142,7 +172,6 @@ const form = reactive({
   visitorType: '商务',
   date: '',
   period: 1,
-  groupCount: '',
   visitPhone: '',
   name: '',
   phone: '',
@@ -155,6 +184,8 @@ const form = reactive({
 
 const hostName = ref('')
 const submitting = ref(false)
+const mates = ref<Mate[]>([])
+const mateTotal = ref('')
 
 const gates = ref<GateOption[]>([])
 const gateOptions = ['全部门点', '指定门点']
@@ -174,8 +205,20 @@ const maxDate = future.getFullYear() + '-' + pad(future.getMonth() + 1) + '-' + 
 function switchMode(next: Mode) {
   mode.value = next
   if (next === 'personal') {
-    form.groupCount = ''
+    mates.value = []
+    mateTotal.value = ''
   }
+}
+
+/** 同行人总数 → 自动补齐/裁剪行 */
+function syncMates() {
+  const total = Math.max(0, Math.min(10, Number(mateTotal.value) || 0))
+  mateTotal.value = total ? String(total) : ''
+  const next: Mate[] = []
+  for (let i = 0; i < total; i++) {
+    next.push(mates.value[i] ?? { name: '', phone: '' })
+  }
+  mates.value = next
 }
 
 function onType(e: any) {
@@ -223,15 +266,22 @@ async function lookupHost() {
 async function submit() {
   if (!form.date) return showToast('请选择来访日期')
   if (!form.visitPhone) return showToast('请填写被访人手机号')
-  if (mode.value === 'group' && !form.groupCount) return showToast('请填写团体预约人数')
   if (!form.name) return showToast('请填写姓名')
   if (!/^1\d{10}$/.test(form.phone.trim())) return showToast('请填写正确的手机号')
-  if (!form.idCard.trim()) return showToast('请填写身份证号')
   if (!form.company.trim()) return showToast('请填写公司')
-  if (gateScope.value === 1 && selectedGateIds.value.length === 0) {
+  if (mode.value === 'group') {
+    if (mates.value.some((m) => !m.name.trim())) return showToast('请填写同行人姓名')
+  }
+  if (gates.value.length > 1 && gateScope.value === 1 && selectedGateIds.value.length === 0) {
     return showToast('请至少选择一个门点')
   }
+  // 身份证选填：填了才做 18 位格式初筛（校验位以后端为准）
+  const idCard = form.idCard.trim().toUpperCase()
+  if (idCard && !/^\d{17}[0-9X]$/.test(idCard)) {
+    return showToast('身份证号需为 18 位')
+  }
 
+  const useGates = gates.value.length > 1 && gateScope.value === 1
   submitting.value = true
   try {
     const result = await createAppointment({
@@ -242,18 +292,21 @@ async function submit() {
       company: form.company.trim(),
       position: form.position || undefined,
       period: form.period,
-      groupCount: mode.value === 'group' ? Number(form.groupCount) : undefined,
+      groupCount: mode.value === 'group' ? mates.value.length + 1 : undefined,
       startDate: form.date,
-      gateScope: gateScope.value,
-      gateId: gateScope.value === 1 ? selectedGateIds.value[0] : undefined,
-      gateIds: gateScope.value === 1 ? selectedGateIds.value : undefined,
+      gateScope: useGates ? 1 : gates.value.length === 1 ? 1 : 2,
+      gateId: useGates ? selectedGateIds.value[0] : gates.value[0]?.id,
+      gateIds: useGates ? selectedGateIds.value : undefined,
       visitor: {
         name: form.name.trim(),
-        idCard: form.idCard.trim().toUpperCase(),
+        idCard: idCard || undefined,
         phone: form.phone.trim(),
         company: form.company.trim(),
         position: form.position || undefined
       },
+      mates: mode.value === 'group'
+        ? mates.value.map((m) => ({ name: m.name.trim(), phone: m.phone.trim() || undefined }))
+        : undefined,
       consentVersion: 'v1.0'
     })
     await alert('预约单号：' + result.appointmentNo + '\n状态：' + result.statusText, '提交成功')
@@ -266,6 +319,7 @@ async function submit() {
 onShow(async () => {
   try {
     gates.value = await listAppGates()
+    // 只有一个门点时直接默认它，界面上不出现选门控件
     if (gates.value.length === 1) {
       selectedGateIds.value = [gates.value[0].id]
     }
@@ -279,7 +333,7 @@ onShow(async () => {
 .page {
   min-height: 100vh;
   background: #eef4fb;
-  padding-bottom: 40rpx;
+  padding-bottom: 60rpx;
 }
 
 .seg {
@@ -290,13 +344,13 @@ onShow(async () => {
 
 .seg-item {
   flex: 1;
-  height: 76rpx;
-  line-height: 76rpx;
+  height: 84rpx;
+  line-height: 84rpx;
   text-align: center;
   border-radius: 12rpx;
   background: #ffffff;
   color: #4a5160;
-  font-size: 30rpx;
+  font-size: 34rpx;
 }
 
 .seg-item.active {
@@ -306,25 +360,25 @@ onShow(async () => {
 }
 
 .sheet {
-  margin: 0 24rpx;
+  margin: 0 24rpx 20rpx;
   background: #ffffff;
   border-radius: 16rpx;
-  padding: 8rpx 28rpx 20rpx;
+  padding: 8rpx 30rpx 24rpx;
 }
 
 .sheet-title {
   display: flex;
   align-items: center;
   gap: 12rpx;
-  padding: 26rpx 0 10rpx;
-  font-size: 30rpx;
+  padding: 28rpx 0 12rpx;
+  font-size: 34rpx;
   font-weight: 600;
   color: #1f2329;
 }
 
 .dot {
-  width: 18rpx;
-  height: 18rpx;
+  width: 20rpx;
+  height: 20rpx;
   border-radius: 50%;
   border: 4rpx solid #1565e8;
 }
@@ -333,12 +387,12 @@ onShow(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 96rpx;
+  min-height: 104rpx;
   border-bottom: 1rpx solid #f0f2f5;
 }
 
 .label {
-  font-size: 30rpx;
+  font-size: 34rpx;
   color: #1f2329;
   flex-shrink: 0;
 }
@@ -352,18 +406,18 @@ onShow(async () => {
   display: flex;
   align-items: center;
   gap: 8rpx;
-  font-size: 30rpx;
+  font-size: 34rpx;
   color: #1f2329;
 }
 
 .arrow {
   color: #b7bcc4;
-  font-size: 34rpx;
+  font-size: 38rpx;
 }
 
 .ph {
   color: #b7bcc4;
-  font-size: 28rpx;
+  font-size: 32rpx;
 }
 
 .host {
@@ -373,27 +427,27 @@ onShow(async () => {
 .input {
   flex: 1;
   text-align: right;
-  font-size: 30rpx;
+  font-size: 34rpx;
   color: #1f2329;
 }
 
 .period {
   display: flex;
   align-items: center;
-  gap: 48rpx;
-  padding: 26rpx 0;
+  gap: 52rpx;
+  padding: 30rpx 0;
   border-bottom: 1rpx solid #f0f2f5;
 }
 
 .period-item {
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 14rpx;
 }
 
 .radio {
-  width: 38rpx;
-  height: 38rpx;
+  width: 44rpx;
+  height: 44rpx;
   border-radius: 50%;
   border: 2rpx solid #cfd4dc;
   display: flex;
@@ -408,20 +462,20 @@ onShow(async () => {
 
 .tick {
   color: #ffffff;
-  font-size: 24rpx;
+  font-size: 26rpx;
   line-height: 1;
 }
 
 .period-text {
-  font-size: 30rpx;
+  font-size: 34rpx;
   color: #1f2329;
 }
 
 .gate-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 20rpx;
-  padding: 20rpx 0;
+  gap: 24rpx;
+  padding: 24rpx 0;
   border-bottom: 1rpx solid #f0f2f5;
 }
 
@@ -429,37 +483,68 @@ onShow(async () => {
   display: flex;
   align-items: center;
   gap: 8rpx;
-  font-size: 28rpx;
+  font-size: 32rpx;
   color: #1f2329;
 }
 
 .purpose {
-  padding: 26rpx 0 6rpx;
+  padding: 30rpx 0 6rpx;
 }
 
 .textarea {
   width: 100%;
-  height: 150rpx;
-  margin-top: 14rpx;
-  font-size: 28rpx;
+  height: 170rpx;
+  margin-top: 16rpx;
+  font-size: 32rpx;
   color: #1f2329;
 }
 
 .counter {
   display: block;
   text-align: right;
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: #b7bcc4;
 }
 
+.mate {
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #f0f2f5;
+}
+
+.mate-index {
+  display: block;
+  font-size: 30rpx;
+  color: #1565e8;
+  margin-bottom: 6rpx;
+}
+
+.mate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 92rpx;
+}
+
+.mate-label {
+  font-size: 32rpx;
+  color: #4a5160;
+}
+
+.tips {
+  padding: 24rpx 0 8rpx;
+  text-align: center;
+}
+
+/* 提交不做通栏 bar：圆角按钮居中，视觉更干净 */
 .submit {
-  margin: 30rpx 24rpx 0;
-  height: 92rpx;
-  line-height: 92rpx;
-  border-radius: 10rpx;
+  width: 320rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  margin: 40rpx auto 0;
+  border-radius: 44rpx;
   background: #1565e8;
   color: #ffffff;
-  font-size: 32rpx;
+  font-size: 34rpx;
 }
 
 .submit::after {

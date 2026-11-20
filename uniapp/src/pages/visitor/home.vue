@@ -85,7 +85,7 @@ onShow(() => {
 
 .brand {
   margin-top: 36rpx;
-  font-size: 40rpx;
+  font-size: 46rpx;
   font-weight: 600;
   color: #1f2329;
   letter-spacing: 4rpx;
@@ -93,7 +93,7 @@ onShow(() => {
 
 .slogan {
   margin-top: 14rpx;
-  font-size: 26rpx;
+  font-size: 30rpx;
   color: #8a9099;
 }
 
@@ -107,13 +107,13 @@ onShow(() => {
 
 .pill {
   width: 460rpx;
-  height: 92rpx;
-  line-height: 92rpx;
-  border-radius: 46rpx;
+  height: 100rpx;
+  line-height: 100rpx;
+  border-radius: 50rpx;
   background: #ffffff;
   border: 2rpx solid #1989fa;
   color: #1f2329;
-  font-size: 32rpx;
+  font-size: 36rpx;
   font-weight: 500;
 }
 

@@ -89,7 +89,7 @@ public class JdbcVisitorRepository implements VisitorRepository {
             setNullableBytes(ps, 3, v.getPhoneEnc());
             ps.setString(4, v.getPhoneHmac());
             ps.setString(5, v.getPhoneMask());
-            ps.setBytes(6, v.getIdCardEnc());
+            setNullableBytes(ps, 6, v.getIdCardEnc());
             ps.setString(7, v.getIdCardHmac());
             ps.setString(8, v.getIdCardMask());
             ps.setString(9, v.getCompany());
@@ -106,10 +106,12 @@ public class JdbcVisitorRepository implements VisitorRepository {
     public void update(Visitor v) {
         jdbc.update("""
                         UPDATE visitor SET name = ?, phone_enc = ?, phone_hmac = ?, phone_mask = ?,
+                            id_card_enc = ?, id_card_hmac = ?, id_card_mask = ?,
                             company = ?, last_visit_at = ?, visit_count = ?
                         WHERE id = ?
                         """,
                 v.getName(), v.getPhoneEnc(), v.getPhoneHmac(), v.getPhoneMask(),
+                v.getIdCardEnc(), v.getIdCardHmac(), v.getIdCardMask(),
                 v.getCompany(),
                 v.getLastVisitAt() == null ? null : Timestamp.valueOf(v.getLastVisitAt()),
                 v.getVisitCount(), v.getId());

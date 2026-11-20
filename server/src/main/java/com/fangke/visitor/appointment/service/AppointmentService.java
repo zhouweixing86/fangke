@@ -247,10 +247,8 @@ public class AppointmentService {
             throw new BusinessException(ErrorCode.PARAM_MISSING, "访客信息不能为空");
         }
         String name = EmployeeValidator.requireText(request.visitor().name(), "访客姓名");
+        // 身份证选填：不填仍可预约（通行改走人脸/二维码），填了则校验校验位
         String idCard = EmployeeValidator.validateIdCard(request.visitor().idCard());
-        if (idCard == null) {
-            throw new BusinessException(ErrorCode.PARAM_MISSING, "身份证号不能为空");
-        }
         String visitorPhone = EmployeeValidator.validatePhone(request.visitor().phone());
         String visitPhone = EmployeeValidator.validatePhone(request.visitPhone());
         if (visitPhone == null) {
@@ -336,9 +334,10 @@ public class AppointmentService {
             normalizedMates.add(new AppointmentCreateRequest.MateInfo(mateName, mate.phone(), mateIdCard));
         }
 
-        // 黑名单：证件号与手机号都查（BR-B-002）
+        // 黑名单：证件号（填了才查）与手机号都查（BR-B-002）
         LocalDateTime nowCheck = LocalDateTime.now();
-        if (blacklistRepository.isBlacklisted(BlacklistRepository.TARGET_ID_CARD, crypto.hmac(idCard), nowCheck)
+        if ((idCard != null && blacklistRepository.isBlacklisted(
+                BlacklistRepository.TARGET_ID_CARD, crypto.hmac(idCard), nowCheck))
                 || (visitorPhone != null && blacklistRepository.isBlacklisted(
                 BlacklistRepository.TARGET_PHONE, crypto.hmac(visitorPhone), nowCheck))) {
             throw new BusinessException(ErrorCode.BLACKLISTED, "该人员已被列入黑名单，请联系门卫");

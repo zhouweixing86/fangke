@@ -130,7 +130,7 @@ onPullDownRefresh(async () => {
 .hint {
   text-align: center;
   color: #9aa1ad;
-  font-size: 28rpx;
+  font-size: 32rpx;
   padding-top: 160rpx;
 }
 
@@ -151,7 +151,7 @@ onPullDownRefresh(async () => {
 }
 
 .empty-text {
-  font-size: 34rpx;
+  font-size: 40rpx;
   color: #2b3a55;
   letter-spacing: 4rpx;
 }
@@ -164,7 +164,7 @@ onPullDownRefresh(async () => {
   border-radius: 44rpx;
   background: #1565e8;
   color: #ffffff;
-  font-size: 30rpx;
+  font-size: 34rpx;
 }
 
 .empty-btn::after {
@@ -183,7 +183,7 @@ onPullDownRefresh(async () => {
   border-radius: 28rpx;
   background: #ffffff;
   color: #646566;
-  font-size: 26rpx;
+  font-size: 30rpx;
   white-space: nowrap;
 }
 
@@ -207,13 +207,13 @@ onPullDownRefresh(async () => {
 }
 
 .name {
-  font-size: 32rpx;
+  font-size: 36rpx;
   font-weight: 600;
   color: #1f2329;
 }
 
 .tag {
-  font-size: 24rpx;
+  font-size: 26rpx;
   padding: 4rpx 14rpx;
   border-radius: 20rpx;
 }
@@ -239,7 +239,7 @@ onPullDownRefresh(async () => {
 }
 
 .line {
-  font-size: 26rpx;
+  font-size: 30rpx;
   color: #4a5160;
   line-height: 1.7;
 }

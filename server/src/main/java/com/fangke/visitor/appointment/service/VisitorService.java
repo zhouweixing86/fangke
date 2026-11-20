@@ -37,8 +37,12 @@ public class VisitorService {
      */
     @Transactional
     public Visitor resolveOrCreate(String name, String idCard, String phone, String company) {
-        String hmac = crypto.hmac(idCard);
-        Optional<Visitor> existing = repository.findByIdCardHmac(hmac);
+        // 身份证选填：没填时按手机号找人；填了仍以身份证为唯一键（同一人换手机号也能命中）
+        String hmac = idCard == null || idCard.isBlank() ? null : crypto.hmac(idCard);
+        Optional<Visitor> existing = hmac == null ? Optional.empty() : repository.findByIdCardHmac(hmac);
+        if (existing.isEmpty() && hmac == null && phone != null && !phone.isBlank()) {
+            existing = repository.findByPhoneHmac(crypto.hmac(phone));
+        }
         if (existing.isPresent()) {
             Visitor v = existing.get();
             boolean changed = false;
@@ -56,6 +60,13 @@ public class VisitorService {
                 v.setPhoneMask(CryptoService.maskPhone(phone));
                 changed = true;
             }
+            // 之前没填身份证，这次填了：补写证件三件套
+            if (hmac != null && v.getIdCardHmac() == null) {
+                v.setIdCardEnc(crypto.encrypt(idCard));
+                v.setIdCardHmac(hmac);
+                v.setIdCardMask(CryptoService.maskIdCard(idCard));
+                changed = true;
+            }
             if (changed) {
                 repository.update(v);
             }
@@ -65,9 +76,11 @@ public class VisitorService {
         Visitor visitor = new Visitor();
         visitor.setPersonNo(nextPersonNo());
         visitor.setName(name.trim());
-        visitor.setIdCardEnc(crypto.encrypt(idCard));
-        visitor.setIdCardHmac(hmac);
-        visitor.setIdCardMask(CryptoService.maskIdCard(idCard));
+        if (hmac != null) {
+            visitor.setIdCardEnc(crypto.encrypt(idCard));
+            visitor.setIdCardHmac(hmac);
+            visitor.setIdCardMask(CryptoService.maskIdCard(idCard));
+        }
         if (phone != null && !phone.isBlank()) {
             visitor.setPhoneEnc(crypto.encrypt(phone));
             visitor.setPhoneHmac(crypto.hmac(phone));
@@ -76,7 +89,8 @@ public class VisitorService {
         visitor.setCompany(company);
         long id = repository.insert(visitor);
         visitor.setId(id);
-        log.info("新建访客档案 personNo={} idCard={}", visitor.getPersonNo(), visitor.getIdCardMask());
+        log.info("新建访客档案 personNo={} idCard={} phone={}",
+                visitor.getPersonNo(), visitor.getIdCardMask(), visitor.getPhoneMask());
         return visitor;
     }
 
