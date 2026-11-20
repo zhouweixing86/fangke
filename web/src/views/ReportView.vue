@@ -115,7 +115,7 @@ import type { AccessReport, ReportDaily, ReportOverview, VisitorReport } from '@
 
 type Preset = '' | '7' | '30' | 'month'
 
-const preset = ref<Preset>('30')
+const preset = ref<Preset>('7')
 const dateRange = ref<[string, string] | null>(null)
 const data = ref<ReportOverview | null>(null)
 const daily = ref<ReportDaily[]>([])
@@ -171,7 +171,7 @@ function barWidth(count: number) {
   return `${Math.round((count / maxEvents.value) * 100)}%`
 }
 
-onMounted(() => applyPreset('30'))
+onMounted(() => applyPreset('7'))
 </script>
 
 <style scoped>

@@ -230,6 +230,7 @@ export interface SyncBatch {
   batchNo: string
   triggerType: number
   gateId: number
+  gateName: string
   totalCount: number
   successCount: number
   failCount: number
@@ -242,6 +243,7 @@ export interface SyncBatchItem {
   id: number
   batchId: number
   deviceId: number
+  deviceName: string
   personNo: string
   action: number
   status: number

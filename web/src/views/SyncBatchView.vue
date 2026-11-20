@@ -11,7 +11,7 @@
       <el-table-column label="触发" width="120">
         <template #default="{ row }">{{ triggerText(row.triggerType) }}</template>
       </el-table-column>
-      <el-table-column prop="gateId" label="通道" width="80" />
+      <el-table-column prop="gateName" label="通道" min-width="120" />
       <el-table-column prop="totalCount" label="总条数" width="90" />
       <el-table-column prop="successCount" label="成功" width="80" />
       <el-table-column prop="failCount" label="失败" width="80" />
@@ -36,7 +36,7 @@
 
     <el-dialog v-model="itemsVisible" :title="`批次明细 · ${currentBatch?.batchNo ?? ''}`" width="860px">
       <el-table v-loading="itemsLoading" :data="items" border stripe size="small" max-height="460">
-        <el-table-column prop="deviceId" label="设备ID" width="80" />
+        <el-table-column prop="deviceName" label="设备" min-width="220" />
         <el-table-column prop="personNo" label="人员编号" width="140" />
         <el-table-column label="动作" width="100">
           <template #default="{ row }">{{ row.action === 2 ? '删除' : '下发' }}</template>
