@@ -121,6 +121,12 @@ public class JdbcDeviceRepository implements DeviceRepository {
                 firmware, model, deviceSn);
     }
 
+    /** 只刷人数，不动心跳时间，避免伪造在线状态。 */
+    @Override
+    public void updatePersonCount(Long deviceId, int personCount) {
+        jdbc.update("UPDATE device SET person_count = ? WHERE id = ?", personCount, deviceId);
+    }
+
     @Override
     public long register(Device device) {
         // 不再默认落到 1 号门：多门点场景下误落会导致名单下发到错误的门。

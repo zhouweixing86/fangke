@@ -289,6 +289,11 @@ public class OpenApiDeviceService {
         int affected = commandRepository.markDoneByPerson(device.getId(), cmdType, personNo, status, msg);
         log.info("名单回执 device={} idno={} type={} code={} msg={} 更新队列 {} 条",
                 device.getDeviceSn(), idno, resultType, resultCode, msg, affected);
+        // 名单变了就回填「人数」：用该门点当前生效授权数作为期望值，
+        // 不然设备管理里的人数会一直是登记时的值（真机 1 人却显示 0）
+        if (status == 2) {
+            deviceRepository.updatePersonCount(device.getId(), activeGrants(device).size());
+        }
     }
 
     /* ---------------- 记录推送 ---------------- */

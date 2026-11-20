@@ -155,7 +155,7 @@ async function submitEdit() {
 
 async function openDoor(row: DeviceView) {
   await ElMessageBox.confirm(
-    `确认远程打开「${row.deviceName}」？指令随设备下一次心跳生效（通常 30 秒内）。`,
+    `确认远程打开「${row.deviceName}」？指令随设备下一次心跳生效（当前心跳间隔 5 秒，最长等一个间隔）。`,
     '远程开门',
     { type: 'warning' }
   )

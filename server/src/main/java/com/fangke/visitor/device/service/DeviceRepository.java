@@ -35,6 +35,14 @@ public interface DeviceRepository {
     void updateFirmware(String deviceSn, String firmware, String model);
 
     /**
+     * 只更新设备上的人数（名单变动回执后回填）。
+     *
+     * <p>默认空实现，方便测试替身只实现自己关心的方法。
+     */
+    default void updatePersonCount(Long deviceId, int personCount) {
+    }
+
+    /**
      * 自动登记新设备（轮询式终端首次心跳时调用，避免现场还要手工建档）。
      *
      * @return 新设备主键
