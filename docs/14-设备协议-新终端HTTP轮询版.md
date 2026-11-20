@@ -378,6 +378,8 @@ POST /openapi/v1/heartBeat          200  76B   ← 已无指令
 ```powershell
 cd D:\fangke\server
 $env:DB_USER='root'; $env:DB_PASSWORD='<本机 MySQL 口令>'
+$env:S3_ENDPOINT='http://127.0.0.1:9000'; $env:S3_BUCKET='fangke'   # 照片存储，不配则上传报 5003
+$env:S3_ACCESS_KEY='<MinIO AK>'; $env:S3_SECRET_KEY='<MinIO SK>'
 $env:DEVICE_PULL_VERIFY_SIGN='false'          # 联调期跳过设备签名校验
 $env:DEVICE_PULL_SIGN_KEY='fangke-pull-key'   # 与设备「第三方平台Key」一致
 $env:DEVICE_PULL_PUBLIC_BASE_URL='http://192.168.0.103:8080'

@@ -12,9 +12,10 @@ import com.fangke.visitor.security.CryptoService;
 import com.fangke.visitor.vehicle.model.VehicleEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -38,19 +39,25 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 演示数据重建：{@code fangke.demo.seed=reset} 时才启用，先清空业务表再写入一套自洽的演示数据。
+ * 演示数据维护：{@code fangke.demo.seed} 取两个值。
+ *
+ * <ul>
+ *   <li>{@code reset}：清空业务表后写入一套自洽的演示数据（演示/联调环境用）。</li>
+ *   <li>{@code clean}：只清空业务数据，<b>保留账号、角色、系统参数、审批配置、门点、设备</b>，
+ *       用于「演示数据换成真实数据」这一步——真机已经按 SN 建档并绑好了门点，清掉就得重新登记。</li>
+ * </ul>
  *
  * <p>为什么必须走 Java 而不是 SQL 脚本：手机号 / 证件号是 AES-GCM 密文 + HMAC 摘要，
  * 密文只能由 {@link CryptoService} 生成，否则页面解密会报错；另外预约 → 双审 → 授权 → 通行
  * 四个环节的数据要互相自洽（状态码、任务、授权门点、事件时间都要对得上）。
  *
  * <p>启动示例：
- * <pre>SEED_DEMO=reset DB_USER=root DB_PASSWORD=*** java -jar visitor-server.jar</pre>
+ * <pre>java -jar visitor-server.jar --fangke.demo.seed=clean</pre>
  *
- * <p><b>警告</b>：写入前会 DELETE 全部业务表（账号、审批配置、系统参数保留），生产环境不要打开。
+ * <p><b>警告</b>：两个模式都会 DELETE 业务表，生产环境不要打开。
  */
 @Component
-@ConditionalOnProperty(name = "fangke.demo.seed", havingValue = "reset")
+@ConditionalOnExpression("'${fangke.demo.seed:}' == 'reset' or '${fangke.demo.seed:}' == 'clean'")
 @Order(50)
 public class DemoDataSeeder implements ApplicationRunner {
 
@@ -71,6 +78,8 @@ public class DemoDataSeeder implements ApplicationRunner {
 
     private final JdbcTemplate jdbc;
     private final CryptoService crypto;
+    /** 运行模式：reset（清空 + 造数）/ clean（只清空）。 */
+    private final String mode;
 
     private final Map<String, Long> dept = new LinkedHashMap<>();
     private final Map<String, Long> gate = new LinkedHashMap<>();
@@ -94,15 +103,22 @@ public class DemoDataSeeder implements ApplicationRunner {
     private LocalDate today;
     private LocalDateTime now;
 
-    public DemoDataSeeder(JdbcTemplate jdbc, CryptoService crypto) {
+    public DemoDataSeeder(JdbcTemplate jdbc, CryptoService crypto,
+                          @Value("${fangke.demo.seed:}") String mode) {
         this.jdbc = jdbc;
         this.crypto = crypto;
+        this.mode = mode;
     }
 
     @Override
     public void run(ApplicationArguments args) {
         this.today = LocalDate.now();
         this.now = LocalDateTime.now().withSecond(0).withNano(0);
+
+        if ("clean".equals(mode)) {
+            clean();
+            return;
+        }
 
         log.warn("======================================================");
         log.warn(" 演示数据重建：清空业务表并写入演示数据（fangke.demo.seed=reset）");
@@ -121,6 +137,36 @@ public class DemoDataSeeder implements ApplicationRunner {
         log.warn(" 演示数据重建完成：部门 {}、门点 {}、设备 {}、员工 {}、访客 {}、通行记录 {} 条、车辆记录 {} 条，用时 {} ms",
                 dept.size(), gate.size(), dev.size(), emp.size(), vis.size(),
                 eventSeq, vehicleSeq, System.currentTimeMillis() - begin);
+    }
+
+    // ==================== 只清空（clean） ====================
+
+    /**
+     * 清空业务数据，但保留账号 / 角色 / 系统参数 / 审批配置 / 门点 / 设备。
+     *
+     * <p>设备必须保留：真机已经按 SN 建档、绑好门点，清掉就要重新等心跳登记再分配一次。
+     * 设备本地名单不在这里处理——清空后要么由设备后台「删除全部名单」重置，
+     * 要么由平台侧新的下发覆盖。
+     */
+    private void clean() {
+        log.warn("======================================================");
+        log.warn(" 清空业务数据（fangke.demo.seed=clean）：保留账号 / 门点 / 设备");
+        log.warn("======================================================");
+        long begin = System.currentTimeMillis();
+        int total = 0;
+        for (String table : WIPE_TABLES) {
+            if ("device".equals(table)) {
+                continue;
+            }
+            int rows = jdbc.update("DELETE FROM " + table);
+            total += rows;
+            jdbc.execute("ALTER TABLE " + table + " AUTO_INCREMENT = 1");
+        }
+        int depts = jdbc.update("DELETE FROM dept");
+        jdbc.execute("ALTER TABLE dept AUTO_INCREMENT = 1");
+        jdbc.update("UPDATE device SET person_count = 0");
+        log.warn(" 清空完成：业务表 {} 行 + 部门 {} 行，用时 {} ms。门点、设备、账号、系统参数未动。",
+                total, depts, System.currentTimeMillis() - begin);
     }
 
     // ==================== 清空 ====================
