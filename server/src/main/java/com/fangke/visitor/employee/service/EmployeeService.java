@@ -151,9 +151,11 @@ public class EmployeeService {
     @Transactional
     public EmployeeFace bindFace(Long id, String rawKey, byte[] data, Long operatorId) {
         Employee employee = get(id);
-        PhotoValidator.Info info = photoValidator.validate(data);
-        byte[] compressed = photoValidator.compressForDevice(data);
-        String sha = sha256(data);
+        PhotoValidator.Prepared prepared = photoValidator.prepare(data);
+        PhotoValidator.Info info = prepared.info();
+        byte[] upload = prepared.data();
+        byte[] compressed = photoValidator.compressForDevice(upload);
+        String sha = sha256(upload);
         String datePath = DATE_PATH.format(LocalDate.now());
 
         String stdKey = "emp-face-std/" + id + "/" + datePath + "/" + sha.substring(0, 16) + ".jpg";
@@ -162,7 +164,7 @@ public class EmployeeService {
         String ossKey = rawKey;
         if (ossKey == null || ossKey.isBlank()) {
             ossKey = "emp-face/" + id + "/" + datePath + "/" + sha.substring(0, 16) + ".jpg";
-            storage.putObject(ossKey, data, "image/jpeg");
+            storage.putObject(ossKey, upload, "image/jpeg");
         }
 
         faceRepository.deactivateOthers(id);

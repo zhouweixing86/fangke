@@ -41,7 +41,7 @@ class PhotoValidatorTest {
         return out.toByteArray();
     }
 
-    /** 无损 PNG 噪点图：体积远大于 JPEG，用于测 500KB 上限。 */
+    /** 无损 PNG 噪点图：体积远大于 JPEG，用于测 2MB 自动压缩。 */
     private byte[] pngNoise(int width, int height) throws IOException {
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         java.util.Random random = new java.util.Random(7);
@@ -75,22 +75,36 @@ class PhotoValidatorTest {
     }
 
     @Test
-    @DisplayName("分辨率过大被拒（1007）")
-    void tooLargeDimensions() throws IOException {
-        BusinessException e = assertThrows(BusinessException.class,
-                () -> validator.validate(jpeg(2000, 2000, false)));
-        assertEquals(ErrorCode.IMAGE_RESOLUTION.code(), e.getCode());
+    @DisplayName("分辨率过大不再拒绝，交给下发前缩放")
+    void largeDimensionsAccepted() throws IOException {
+        PhotoValidator.Info info = validator.validate(jpeg(2000, 2000, false));
+        assertEquals(2000, info.width());
+
+        byte[] compressed = validator.compressForDevice(jpeg(2000, 2000, false));
+        BufferedImage decoded = ImageIO.read(new ByteArrayInputStream(compressed));
+        assertTrue(decoded.getWidth() <= 1080 && decoded.getHeight() <= 1920);
     }
 
     @Test
-    @DisplayName("文件超过 500KB 被拒（1006）")
-    void tooLargeFile() throws IOException {
-        // 无损 PNG 噪点图必然超过 500KB
-        byte[] data = pngNoise(900, 900);
-        assertTrue(data.length > 500 * 1024, "测试素材应大于 500KB，实际 " + data.length);
+    @DisplayName("超过 2MB 自动压缩到 2MB 以内")
+    void oversizeAutoShrunk() throws IOException {
+        // 无损 PNG 噪点图必然超过 2MB
+        byte[] data = pngNoise(1000, 1000);
+        assertTrue(data.length > 2 * 1024 * 1024, "测试素材应大于 2MB，实际 " + data.length);
 
-        BusinessException e = assertThrows(BusinessException.class, () -> validator.validate(data));
-        assertEquals(ErrorCode.FILE_TOO_LARGE.code(), e.getCode());
+        PhotoValidator.Prepared prepared = validator.prepare(data);
+        assertTrue(prepared.data().length <= 2 * 1024 * 1024,
+                "压缩后应 ≤2MB，实际 " + prepared.data().length);
+        assertTrue(ImageIO.read(new ByteArrayInputStream(prepared.data())) != null);
+        assertEquals(prepared.data().length, prepared.info().sizeBytes());
+    }
+
+    @Test
+    @DisplayName("2MB 以内的照片原样保留，不重复压缩")
+    void smallPhotoKeptAsIs() throws IOException {
+        byte[] data = jpeg(500, 600, false);
+        PhotoValidator.Prepared prepared = validator.prepare(data);
+        assertTrue(prepared.data() == data, "未超限时不应重新编码");
     }
 
     @Test

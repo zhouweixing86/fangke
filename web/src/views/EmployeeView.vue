@@ -88,8 +88,13 @@
           <el-input v-model="form.idCard" placeholder="18 位，留空表示不修改" />
         </el-form-item>
         <el-form-item label="有效期">
-          <el-date-picker v-model="validRange" type="daterange" value-format="YYYY-MM-DD"
-            start-placeholder="开始日期" end-placeholder="结束日期" style="width: 100%" />
+          <div class="date-range">
+            <el-date-picker v-model="validFrom" type="date" value-format="YYYY-MM-DD"
+              placeholder="开始日期（可不填）" style="width: 46%" />
+            <span class="date-sep">至</span>
+            <el-date-picker v-model="validTo" type="date" value-format="YYYY-MM-DD"
+              placeholder="结束日期（可不填）" style="width: 46%" />
+          </div>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" />
@@ -103,12 +108,16 @@
 
     <el-dialog v-model="faceVisible" title="员工人脸照片" width="640px">
       <el-alert type="info" :closable="false" show-icon
-        title="要求：≤500KB、400×400 ~ 1080×1920、单人正面；上传即生效并进入待下发" style="margin-bottom: 12px" />
-      <el-upload drag :show-file-list="false" :auto-upload="false" accept="image/jpeg,image/png"
-        :on-change="onFaceFile">
+        title="≤2MB 直接上传；超过 2MB 自动压缩。分辨率不低于 400×400，单人正面。上传即生效并进入待下发"
+        style="margin-bottom: 12px" />
+      <div class="face-drop" :class="{ 'is-over': dragOver }"
+        @click="pickFaceFile" @dragover.prevent="dragOver = true"
+        @dragleave.prevent="dragOver = false" @drop.prevent="onFaceDrop">
         <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
         <div class="el-upload__text">将照片拖到此处，或<em>点击选择</em></div>
-      </el-upload>
+        <input ref="faceInput" type="file" accept="image/jpeg,image/png"
+          style="display: none" @change="onFacePicked" />
+      </div>
 
       <el-table :data="faces" border stripe style="margin-top: 16px" size="small">
         <el-table-column label="上传时间" width="160">
@@ -160,7 +169,8 @@ const depts = ref<DeptView[]>([])
 const formVisible = ref(false)
 const saving = ref(false)
 const formRef = ref<FormInstance>()
-const validRange = ref<[string, string] | null>(null)
+const validFrom = ref<string | null>(null)
+const validTo = ref<string | null>(null)
 const form = reactive<Record<string, any>>({
   id: null,
   empNo: '',
@@ -205,7 +215,8 @@ function search() {
 
 function openCreate() {
   Object.assign(form, { id: null, empNo: '', name: '', deptId: null, title: '', plateNo: '', phone: '', idCard: '', remark: '' })
-  validRange.value = null
+  validFrom.value = null
+  validTo.value = null
   formVisible.value = true
 }
 
@@ -221,7 +232,8 @@ function openEdit(row: EmployeeView) {
     idCard: '',
     remark: row.remark
   })
-  validRange.value = row.validFrom && row.validTo ? [row.validFrom, row.validTo] : null
+  validFrom.value = row.validFrom || null
+  validTo.value = row.validTo || null
   formVisible.value = true
 }
 
@@ -236,8 +248,8 @@ async function save() {
     title: form.title,
     phone: form.phone || undefined,
     idCard: form.idCard || undefined,
-    validFrom: validRange.value?.[0] ?? null,
-    validTo: validRange.value?.[1] ?? null,
+    validFrom: validFrom.value || null,
+    validTo: validTo.value || null,
     remark: form.remark,
     plateNo: form.plateNo || undefined
   }
@@ -310,13 +322,41 @@ async function openFace(row: EmployeeView) {
   faceVisible.value = true
 }
 
-function onFaceFile(file: UploadFile) {
-  if (!file.raw || !faceEmployee.value) return
-  uploadEmployeeFace(faceEmployee.value.id, file.raw as File).then(async () => {
+const faceInput = ref<HTMLInputElement | null>(null)
+const dragOver = ref(false)
+
+function pickFaceFile() {
+  faceInput.value?.click()
+}
+
+function onFacePicked(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // 允许连续选同一个文件
+  if (file) void uploadFaceFile(file)
+}
+
+function onFaceDrop(event: DragEvent) {
+  dragOver.value = false
+  const file = event.dataTransfer?.files?.[0]
+  if (file) void uploadFaceFile(file)
+}
+
+async function uploadFaceFile(file: File) {
+  if (!faceEmployee.value) return
+  if (!file.type.startsWith('image/')) {
+    ElMessage.warning('请选择图片文件（JPG / PNG）')
+    return
+  }
+  try {
+    await uploadEmployeeFace(faceEmployee.value.id, file)
     ElMessage.success('照片已上传，等待下发')
-    faces.value = await listEmployeeFaces(faceEmployee.value!.id)
+    faces.value = await listEmployeeFaces(faceEmployee.value.id)
     await load()
-  })
+  } catch (error) {
+    const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message
+    ElMessage.error(message || '照片上传失败')
+  }
 }
 
 onMounted(async () => {
@@ -324,3 +364,53 @@ onMounted(async () => {
   await load()
 })
 </script>
+
+<style scoped>
+.date-range {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.date-sep {
+  width: 8%;
+  text-align: center;
+  color: #909399;
+}
+
+.face-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 16px;
+  border: 1px dashed #c0c4cc;
+  border-radius: 6px;
+  background: #fafafa;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  user-select: none;
+}
+
+.face-drop:hover,
+.face-drop.is-over {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
+
+.face-drop .el-icon--upload {
+  font-size: 48px;
+  color: #a8abb2;
+  margin-bottom: 8px;
+}
+
+.face-drop .el-upload__text {
+  font-size: 14px;
+  color: #606266;
+}
+
+.face-drop .el-upload__text em {
+  color: #409eff;
+  font-style: normal;
+}
+</style>
