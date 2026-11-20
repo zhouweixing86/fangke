@@ -94,6 +94,10 @@ public class AppointmentService {
 
         Visitor visitor = visitorService.resolveOrCreate(v.visitorName, v.visitorIdCard, v.visitorPhone,
                 request.visitor().company());
+        // 微信一键登录：首次预约成功后把 openid 绑到访客档案，下次进小程序直接能看到「我的预约」
+        if (request.wxOpenid() != null && !request.wxOpenid().isBlank()) {
+            visitorRepository.bindWxOpenid(visitor.getId(), request.wxOpenid().trim());
+        }
         if (source == Appointment.SOURCE_SELF || source == Appointment.SOURCE_INVITE) {
             visitorService.agree(visitor.getId(), source == Appointment.SOURCE_INVITE ? 2 : 1,
                     v.consentVersion, ip, ua);
@@ -113,6 +117,9 @@ public class AppointmentService {
         appointment.setVisitPhoneMask(CryptoService.maskPhone(v.visitPhone));
         appointment.setVisitorType(v.visitorType);
         appointment.setPurpose(v.purpose);
+        appointment.setCompany(v.company);
+        appointment.setPosition(v.position);
+        appointment.setPeriod(v.period);
         appointment.setPlateNo(v.plateNo);
         appointment.setDepartment(trimToNull(request.department()));
         // 门点：支持多选或「全部门点」（C-64）；「全部」在这里展开成当时的启用门点
@@ -123,7 +130,12 @@ public class AppointmentService {
         appointment.setStartTime(start);
         appointment.setEndTime(end);
         appointment.setMateMode(v.mateMode);
-        appointment.setMateCount(v.mates.size());
+        // 团体预约：总人数（含负责人）换算成同行人数；同时保留实际录入的同行人数量
+        int mateCount = v.mates.size();
+        if (request.groupCount() != null && request.groupCount() > 1) {
+            mateCount = Math.max(mateCount, request.groupCount() - 1);
+        }
+        appointment.setMateCount(mateCount);
         appointment.setApprovalLevel(1);
         // 代邀：一级自动通过；其余进入待审批（审批任务由 M5 的 ApprovalStarter 创建）
         appointment.setStatus(source == Appointment.SOURCE_INVITE
@@ -172,7 +184,9 @@ public class AppointmentService {
                 request.visitPhone(), request.department(), request.visitorType(), request.purpose(),
                 request.plateNo(), now.toLocalDate(), startTime, endTime,
                 request.visitor(), request.mates(), request.mateMode(), request.consentVersion(),
-                request.gateId(), request.gateScope(), request.gateIds());
+                request.gateId(), request.gateScope(), request.gateIds(),
+                request.company(), request.position(), request.period(), request.groupCount(),
+                request.wxOpenid());
         return doCreate(normalized, Appointment.SOURCE_ONSITE, null, ip, ua);
     }
 
@@ -222,7 +236,8 @@ public class AppointmentService {
 
     private record Validated(String visitorName, String visitorIdCard, String visitorPhone,
                              String visitPhone, Long visitEmployeeId, String visitorType,
-                             String purpose, String plateNo, LocalDate date, LocalTime startTime,
+                             String purpose, String company, String position, int period, String plateNo,
+                             LocalDate date, LocalTime startTime,
                              LocalTime endTime, int mateMode, List<AppointmentCreateRequest.MateInfo> mates,
                              String consentVersion) {
     }
@@ -255,8 +270,34 @@ public class AppointmentService {
             throw new BusinessException(ErrorCode.PARAM_TOO_LONG, "车牌号最多 16 个字符");
         }
 
-        if (request.startDate() == null || request.startTime() == null || request.endTime() == null) {
-            throw new BusinessException(ErrorCode.PARAM_MISSING, "预约日期与时间不能为空");
+        if (request.startDate() == null) {
+            throw new BusinessException(ErrorCode.PARAM_MISSING, "预约日期不能为空");
+        }
+        // 访客端只选「全天/上午/下午」，由后端换算成时段；老调用（带 start/end）原样使用
+        int period = request.period() == null ? 0 : request.period();
+        LocalTime startTime = request.startTime();
+        LocalTime endTime = request.endTime();
+        if (period == Appointment.PERIOD_ALL_DAY || period == Appointment.PERIOD_MORNING
+                || period == Appointment.PERIOD_AFTERNOON) {
+            switch (period) {
+                case Appointment.PERIOD_MORNING -> {
+                    startTime = LocalTime.of(0, 0);
+                    endTime = LocalTime.of(12, 0);
+                }
+                case Appointment.PERIOD_AFTERNOON -> {
+                    startTime = LocalTime.of(12, 0);
+                    endTime = LocalTime.of(23, 59);
+                }
+                default -> {
+                    startTime = LocalTime.of(0, 0);
+                    endTime = LocalTime.of(23, 59);
+                }
+            }
+        } else {
+            period = Appointment.PERIOD_ALL_DAY;
+            if (startTime == null || endTime == null) {
+                throw new BusinessException(ErrorCode.PARAM_MISSING, "预约日期与时间不能为空");
+            }
         }
         LocalDate today = LocalDate.now();
         LocalDate date = request.startDate();
@@ -270,7 +311,7 @@ public class AppointmentService {
             throw new BusinessException(ErrorCode.INVITE_LIMIT_EXCEEDED,
                     "代邀有效期最长 " + INVITE_MAX_DAYS + " 天");
         }
-        if (!request.endTime().isAfter(request.startTime())) {
+        if (!endTime.isAfter(startTime)) {
             throw new BusinessException(ErrorCode.PARAM_INVALID,
                     "结束时间必须晚于开始时间（暂不支持跨天预约）");
         }
@@ -306,9 +347,20 @@ public class AppointmentService {
         Long visitEmployeeId = visitEmployeeResolver.resolveByPhoneHmac(crypto.hmac(visitPhone)).orElse(null);
 
         String consentVersion = request.consentVersion() == null ? "v1.0" : request.consentVersion();
+        // 公司/职务：优先取预约单顶层字段，其次取访客信息里的（老调用只传 visitor.company）
+        String company = trimToNull(request.company() != null ? request.company()
+                : request.visitor().company());
+        String position = trimToNull(request.position() != null ? request.position()
+                : request.visitor().position());
+        if (company != null && company.length() > 128) {
+            throw new BusinessException(ErrorCode.PARAM_TOO_LONG, "公司名称最多 128 字");
+        }
+        if (position != null && position.length() > 64) {
+            throw new BusinessException(ErrorCode.PARAM_TOO_LONG, "职务最多 64 字");
+        }
         return new Validated(name, idCard, visitorPhone, visitPhone, visitEmployeeId, visitorType,
-                trimToNull(purpose), trimToNull(plateNo), date, request.startTime(), request.endTime(),
-                mateMode, normalizedMates, consentVersion);
+                trimToNull(purpose), company, position, period, trimToNull(plateNo), date,
+                startTime, endTime, mateMode, normalizedMates, consentVersion);
     }
 
     private AppointmentView toView(Appointment a, Visitor visitor) {

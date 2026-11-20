@@ -1,131 +1,166 @@
 <template>
   <view class="page">
-    <view class="card">
-      <view class="card-title">访客信息</view>
-      <view class="field">
-        <text class="field-label">姓名</text>
-        <input v-model="form.name" class="field-input" placeholder="请输入姓名" />
+    <view class="seg">
+      <view class="seg-item" :class="{ active: mode === 'personal' }" @click="switchMode('personal')">个人预约</view>
+      <view class="seg-item" :class="{ active: mode === 'group' }" @click="switchMode('group')">团体预约</view>
+    </view>
+
+    <view class="sheet">
+      <view class="sheet-title">
+        <text class="dot" />
+        <text>{{ mode === 'group' ? '团体预约信息' : '来访人员信息' }}</text>
       </view>
-      <view class="field">
-        <text class="field-label">身份证号</text>
-        <input v-model="form.idCard" class="field-input" maxlength="18" placeholder="18 位身份证号" />
+
+      <picker :range="visitTypes" :value="typeIndex" @change="onType">
+        <view class="row">
+          <text class="label required">来访类型</text>
+          <view class="row-value">
+            <text :class="form.visitorType ? '' : 'ph'">{{ form.visitorType || '请选择' }}</text>
+            <text class="arrow">›</text>
+          </view>
+        </view>
+      </picker>
+
+      <picker mode="date" :value="form.date" :start="minDate" :end="maxDate" @change="onDate">
+        <view class="row">
+          <text class="label required">来访日期</text>
+          <view class="row-value">
+            <text :class="form.date ? '' : 'ph'">{{ form.date || '请选择' }}</text>
+            <text class="arrow">›</text>
+          </view>
+        </view>
+      </picker>
+
+      <view class="period">
+        <view v-for="p in periods" :key="p.value" class="period-item" @click="form.period = p.value">
+          <view class="radio" :class="{ checked: form.period === p.value }">
+            <text v-if="form.period === p.value" class="tick">✓</text>
+          </view>
+          <text class="period-text">{{ p.label }}</text>
+        </view>
       </view>
-      <view class="field">
-        <text class="field-label">手机号</text>
-        <input v-model="form.phone" class="field-input" type="number" maxlength="11" placeholder="用于查看预约进度" />
+
+      <view v-if="mode === 'group'" class="row">
+        <text class="label required">总人数</text>
+        <input v-model="form.groupCount" class="input" type="number" placeholder="团体预约人数" />
       </view>
-      <view class="field">
-        <text class="field-label">单位</text>
-        <input v-model="form.company" class="field-input" placeholder="选填" />
+
+      <view class="row">
+        <text class="label required">被访人手机</text>
+        <input v-model="form.visitPhone" class="input" type="number" maxlength="11"
+          placeholder="由被访人提供" @blur="lookupHost" />
+      </view>
+
+      <view class="row">
+        <text class="label required">被访人</text>
+        <view class="row-value">
+          <text :class="hostName ? 'host' : 'ph'">{{ hostName || '由手机号自动匹配' }}</text>
+        </view>
+      </view>
+
+      <view class="row">
+        <text class="label required">姓名</text>
+        <input v-model="form.name" class="input" :placeholder="mode === 'group' ? '预约负责人姓名' : '请填写您的姓名'" />
+      </view>
+
+      <view class="row">
+        <text class="label required">手机号</text>
+        <input v-model="form.phone" class="input" type="number" maxlength="11"
+          :placeholder="mode === 'group' ? '预约负责人手机号' : '请填写您的手机号'" />
+      </view>
+
+      <view class="row">
+        <text class="label required">身份证号</text>
+        <input v-model="form.idCard" class="input" maxlength="18" placeholder="用于门禁刷证核验" />
+      </view>
+
+      <view class="row">
+        <text class="label required">公司</text>
+        <input v-model="form.company" class="input"
+          :placeholder="mode === 'group' ? '预约负责人公司' : '请填写您的公司'" />
+      </view>
+
+      <view class="row">
+        <text class="label">职务</text>
+        <input v-model="form.position" class="input"
+          :placeholder="mode === 'group' ? '预约负责人职务' : '请填写您的职务'" />
+      </view>
+
+      <view class="row">
+        <text class="label">车牌号</text>
+        <input v-model="form.plateNo" class="input" maxlength="16" placeholder="请填写乘坐车辆牌照" />
+      </view>
+
+      <picker :range="gateOptions" :value="gateIndex" @change="onGateScope">
+        <view class="row">
+          <text class="label">通行门点</text>
+          <view class="row-value">
+            <text>{{ gateOptions[gateIndex] }}</text>
+            <text class="arrow">›</text>
+          </view>
+        </view>
+      </picker>
+
+      <view v-if="gateScope === 1" class="gate-list">
+        <label v-for="g in gates" :key="g.id" class="gate-item">
+          <checkbox :value="String(g.id)" :checked="selectedGateIds.includes(g.id)" @click="toggleGate(g.id)" />
+          <text>{{ g.gateName }}</text>
+        </label>
+        <text v-if="!gates.length" class="ph">暂无可选门点，请联系管理员</text>
+      </view>
+
+      <view class="purpose">
+        <text class="label">具体事由</text>
+        <textarea v-model="form.purpose" class="textarea" maxlength="50" placeholder="请输入具体事由" />
+        <text class="counter">{{ form.purpose.length }} / 50</text>
       </view>
     </view>
 
-    <view class="card">
-      <view class="card-title">走访信息</view>
-      <view class="field">
-        <text class="field-label">被访人手机</text>
-        <input v-model="form.visitPhone" class="field-input" type="number" maxlength="11" placeholder="被访员工手机号" />
-      </view>
-      <view class="field">
-        <text class="field-label">事由</text>
-        <input v-model="form.purpose" class="field-input" placeholder="如：商务洽谈 / 送货" />
-      </view>
-      <view class="field" style="flex-direction: column; align-items: flex-start; gap: 6px">
-        <text class="field-label">门点范围</text>
-        <radio-group style="display: flex; gap: 16px; padding: 4px 0" @change="onScope">
-          <label style="display: flex; align-items: center; gap: 4px">
-            <radio value="1" :checked="gateScope === 1" />
-            <text>指定门点</text>
-          </label>
-          <label style="display: flex; align-items: center; gap: 4px">
-            <radio value="2" :checked="gateScope === 2" />
-            <text>全部门点</text>
-          </label>
-        </radio-group>
-      </view>
-      <view v-if="gateScope === 1" class="field"
-        style="flex-direction: column; align-items: flex-start; gap: 6px">
-        <text class="field-label">选择门点（可多选）</text>
-        <checkbox-group style="display: flex; flex-wrap: wrap; gap: 12px; padding: 4px 0"
-          @change="onGates">
-          <label v-for="g in gates" :key="g.id" style="display: flex; align-items: center; gap: 4px">
-            <checkbox :value="String(g.id)" :checked="selectedGateIds.includes(g.id)" />
-            <text>{{ g.gateName }}</text>
-          </label>
-        </checkbox-group>
-        <text v-if="gates.length === 0" class="muted">暂无可选门点，请联系管理员</text>
-      </view>
-      <view v-if="gateScope === 2" class="muted" style="padding: 0 4px 8px">
-        申请全部门点后，由被访员工审批时确认最终开放范围
-      </view>
-      <view class="field">
-        <text class="field-label">到访日期</text>
-        <picker mode="date" :value="form.date" :start="minDate" :end="maxDate" @change="onDate">
-          <view class="field-value">{{ form.date || '请选择' }}</view>
-        </picker>
-      </view>
-      <view class="field">
-        <text class="field-label">开始时间</text>
-        <picker mode="time" :value="form.start" @change="onStart">
-          <view class="field-value">{{ form.start }}</view>
-        </picker>
-      </view>
-      <view class="field">
-        <text class="field-label">结束时间</text>
-        <picker mode="time" :value="form.end" @change="onEnd">
-          <view class="field-value">{{ form.end }}</view>
-        </picker>
-      </view>
-    </view>
-
-    <view class="card" style="display: flex; align-items: flex-start; gap: 8px">
-      <checkbox :checked="agreed" @click="agreed = !agreed" />
-      <text class="muted" @click="agreed = !agreed">
-        我已阅读并同意《访客隐私告知》，同意为门禁核验留存身份信息与通行记录
-      </text>
-    </view>
-
-    <button class="btn btn--primary btn--block" :loading="submitting" @click="submit">提交预约</button>
-    <view class="muted" style="text-align: center; margin-top: 10px">
-      提交后由被访员工审批，通过后可在「我的预约」出示通行码
-    </view>
-
-    <TabBar :items="tabbar" />
+    <button class="submit" :loading="submitting" @click="submit">提交</button>
   </view>
 </template>
 
 <script setup lang="ts">
 import { onShow } from '@dcloudio/uni-app'
-import { reactive, ref } from 'vue'
-import TabBar from '@/components/TabBar.vue'
-import { createAppointment, listAppGates, unreadCount } from '@/api'
+import { computed, reactive, ref } from 'vue'
+import { createAppointment, listAppGates, lookupEmployee } from '@/api'
 import type { GateOption } from '@/api/types'
-import { auth } from '@/store/auth'
 import { alert, showToast } from '@/utils/ui'
 
-const tabbar = ref([
-  { text: '我的预约', path: '/pages/visitor/index' },
-  { text: '访客预约', path: '/pages/visitor/new' },
-  { text: '消息', path: '/pages/common/messages', badge: 0 },
-  { text: '我的', path: '/pages/common/profile' }
-])
+type Mode = 'personal' | 'group'
 
-const form = reactive({ name: '', idCard: '', phone: '', company: '', visitPhone: '', purpose: '', date: '', start: '09:00', end: '18:00' })
-const agreed = ref(false)
+const mode = ref<Mode>('personal')
+const visitTypes = ['商务', '施工', '送货']
+const typeIndex = ref(0)
+const periods = [
+  { value: 1, label: '全天' },
+  { value: 2, label: '上午' },
+  { value: 3, label: '下午' }
+]
+
+const form = reactive({
+  visitorType: '商务',
+  date: '',
+  period: 1,
+  groupCount: '',
+  visitPhone: '',
+  name: '',
+  phone: '',
+  idCard: '',
+  company: '',
+  position: '',
+  plateNo: '',
+  purpose: ''
+})
+
+const hostName = ref('')
 const submitting = ref(false)
 
-/** 门点：可指定多个，也可直接申请全部门点（审批时可增可减） */
 const gates = ref<GateOption[]>([])
-const gateScope = ref(1)
+const gateOptions = ['全部门点', '指定门点']
+const gateIndex = ref(0)
+const gateScope = computed(() => (gateIndex.value === 0 ? 2 : 1))
 const selectedGateIds = ref<number[]>([])
-
-function onScope(e: any) {
-  gateScope.value = Number(e.detail.value) || 1
-}
-
-function onGates(e: any) {
-  selectedGateIds.value = ((e.detail.value as string[]) || []).map((v) => Number(v))
-}
 
 function pad(n: number) {
   return String(n).padStart(2, '0')
@@ -136,90 +171,298 @@ const minDate = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pa
 const future = new Date(today.getTime() + 30 * 86400000)
 const maxDate = future.getFullYear() + '-' + pad(future.getMonth() + 1) + '-' + pad(future.getDate())
 
+function switchMode(next: Mode) {
+  mode.value = next
+  if (next === 'personal') {
+    form.groupCount = ''
+  }
+}
+
+function onType(e: any) {
+  typeIndex.value = Number(e.detail.value) || 0
+  form.visitorType = visitTypes[typeIndex.value]
+}
+
 function onDate(e: any) {
   form.date = e.detail.value
 }
-function onStart(e: any) {
-  form.start = e.detail.value
+
+function onGateScope(e: any) {
+  gateIndex.value = Number(e.detail.value) || 0
 }
-function onEnd(e: any) {
-  form.end = e.detail.value
+
+function toggleGate(id: number) {
+  const index = selectedGateIds.value.indexOf(id)
+  if (index >= 0) {
+    selectedGateIds.value.splice(index, 1)
+  } else {
+    selectedGateIds.value.push(id)
+  }
+}
+
+/** 被访人手机号 → 自动匹配被访人（失焦即查，避免每次输入都打接口） */
+async function lookupHost() {
+  const phone = form.visitPhone.trim()
+  if (!/^1\d{10}$/.test(phone)) {
+    hostName.value = ''
+    return
+  }
+  try {
+    const result = await lookupEmployee(phone)
+    hostName.value = result.matched
+      ? result.name + (result.deptName ? '（' + result.deptName + '）' : '')
+      : ''
+    if (!result.matched && result.message) {
+      showToast(result.message)
+    }
+  } catch {
+    hostName.value = ''
+  }
 }
 
 async function submit() {
-  if (!form.name || !form.idCard || !form.phone) {
-    showToast('请填写访客姓名、身份证号和手机号')
-    return
-  }
-  if (!form.visitPhone || !form.purpose) {
-    showToast('请填写被访人手机号和事由')
-    return
-  }
-  if (!form.date) {
-    showToast('请选择到访日期')
-    return
-  }
-  if (gates.value.length === 0) {
-    showToast('暂无可用门点，请联系管理员')
-    return
-  }
+  if (!form.date) return showToast('请选择来访日期')
+  if (!form.visitPhone) return showToast('请填写被访人手机号')
+  if (mode.value === 'group' && !form.groupCount) return showToast('请填写团体预约人数')
+  if (!form.name) return showToast('请填写姓名')
+  if (!/^1\d{10}$/.test(form.phone.trim())) return showToast('请填写正确的手机号')
+  if (!form.idCard.trim()) return showToast('请填写身份证号')
+  if (!form.company.trim()) return showToast('请填写公司')
   if (gateScope.value === 1 && selectedGateIds.value.length === 0) {
-    showToast('请选择至少一个门点，或直接申请全部门点')
-    return
+    return showToast('请至少选择一个门点')
   }
-  if (form.start >= form.end) {
-    showToast('结束时间需晚于开始时间')
-    return
-  }
-  if (!agreed.value) {
-    showToast('请先同意隐私告知')
-    return
-  }
+
   submitting.value = true
   try {
     const result = await createAppointment({
-      visitPhone: form.visitPhone,
-      visitorType: '商务',
-      purpose: form.purpose,
+      visitPhone: form.visitPhone.trim(),
+      visitorType: form.visitorType,
+      purpose: form.purpose || undefined,
+      plateNo: form.plateNo || undefined,
+      company: form.company.trim(),
+      position: form.position || undefined,
+      period: form.period,
+      groupCount: mode.value === 'group' ? Number(form.groupCount) : undefined,
       startDate: form.date,
-      startTime: form.start,
-      endTime: form.end,
-      gateId: selectedGateIds.value[0],
       gateScope: gateScope.value,
+      gateId: gateScope.value === 1 ? selectedGateIds.value[0] : undefined,
       gateIds: gateScope.value === 1 ? selectedGateIds.value : undefined,
       visitor: {
-        name: form.name,
-        idCard: form.idCard.toUpperCase(),
-        phone: form.phone,
-        company: form.company || undefined
+        name: form.name.trim(),
+        idCard: form.idCard.trim().toUpperCase(),
+        phone: form.phone.trim(),
+        company: form.company.trim(),
+        position: form.position || undefined
       },
       consentVersion: 'v1.0'
     })
-    await alert('预约单号：' + result.appointmentNo + '\n状态：' + result.statusText + '\n审批通过后可在「我的预约」查看通行码。', '预约已提交')
-    uni.reLaunch({ url: auth.token ? '/pages/visitor/index' : '/pages/login/login' })
+    await alert('预约单号：' + result.appointmentNo + '\n状态：' + result.statusText, '提交成功')
+    uni.redirectTo({ url: '/pages/visitor/index' })
   } finally {
     submitting.value = false
   }
 }
 
 onShow(async () => {
-  // 首次来访可在**未登录**状态提交预约（后端 POST /api/app/appointment 是公开接口），
-  // 提交后再登录查看进度；这里不再强制跳登录页，否则新访客永远进不来。
   try {
     gates.value = await listAppGates()
-    if (gates.value.length > 0 && selectedGateIds.value.length === 0) {
+    if (gates.value.length === 1) {
       selectedGateIds.value = [gates.value[0].id]
     }
   } catch {
-    // 门点拉取失败不阻塞页面，提交时会提示
-  }
-  if (!auth.token) {
-    return
-  }
-  try {
-    tabbar.value[2].badge = (await unreadCount()).unread
-  } catch {
-    // 忽略
+    // 门点拉取失败不阻塞页面，提交时再提示
   }
 })
 </script>
+
+<style scoped>
+.page {
+  min-height: 100vh;
+  background: #eef4fb;
+  padding-bottom: 40rpx;
+}
+
+.seg {
+  display: flex;
+  gap: 16rpx;
+  padding: 20rpx 24rpx;
+}
+
+.seg-item {
+  flex: 1;
+  height: 76rpx;
+  line-height: 76rpx;
+  text-align: center;
+  border-radius: 12rpx;
+  background: #ffffff;
+  color: #4a5160;
+  font-size: 30rpx;
+}
+
+.seg-item.active {
+  background: #1565e8;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.sheet {
+  margin: 0 24rpx;
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 8rpx 28rpx 20rpx;
+}
+
+.sheet-title {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 26rpx 0 10rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1f2329;
+}
+
+.dot {
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 50%;
+  border: 4rpx solid #1565e8;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 96rpx;
+  border-bottom: 1rpx solid #f0f2f5;
+}
+
+.label {
+  font-size: 30rpx;
+  color: #1f2329;
+  flex-shrink: 0;
+}
+
+.label.required::after {
+  content: ' *';
+  color: #f5222d;
+}
+
+.row-value {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 30rpx;
+  color: #1f2329;
+}
+
+.arrow {
+  color: #b7bcc4;
+  font-size: 34rpx;
+}
+
+.ph {
+  color: #b7bcc4;
+  font-size: 28rpx;
+}
+
+.host {
+  color: #1565e8;
+}
+
+.input {
+  flex: 1;
+  text-align: right;
+  font-size: 30rpx;
+  color: #1f2329;
+}
+
+.period {
+  display: flex;
+  align-items: center;
+  gap: 48rpx;
+  padding: 26rpx 0;
+  border-bottom: 1rpx solid #f0f2f5;
+}
+
+.period-item {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.radio {
+  width: 38rpx;
+  height: 38rpx;
+  border-radius: 50%;
+  border: 2rpx solid #cfd4dc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.radio.checked {
+  background: #1565e8;
+  border-color: #1565e8;
+}
+
+.tick {
+  color: #ffffff;
+  font-size: 24rpx;
+  line-height: 1;
+}
+
+.period-text {
+  font-size: 30rpx;
+  color: #1f2329;
+}
+
+.gate-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #f0f2f5;
+}
+
+.gate-item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 28rpx;
+  color: #1f2329;
+}
+
+.purpose {
+  padding: 26rpx 0 6rpx;
+}
+
+.textarea {
+  width: 100%;
+  height: 150rpx;
+  margin-top: 14rpx;
+  font-size: 28rpx;
+  color: #1f2329;
+}
+
+.counter {
+  display: block;
+  text-align: right;
+  font-size: 24rpx;
+  color: #b7bcc4;
+}
+
+.submit {
+  margin: 30rpx 24rpx 0;
+  height: 92rpx;
+  line-height: 92rpx;
+  border-radius: 10rpx;
+  background: #1565e8;
+  color: #ffffff;
+  font-size: 32rpx;
+}
+
+.submit::after {
+  border: none;
+}
+</style>

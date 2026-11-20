@@ -135,6 +135,25 @@ public class JdbcVisitorRepository implements VisitorRepository {
         return list.stream().filter(java.util.Objects::nonNull).findFirst();
     }
 
+    @Override
+    public Optional<Visitor> findByWxOpenid(String wxOpenid) {
+        if (wxOpenid == null || wxOpenid.isBlank()) {
+            return Optional.empty();
+        }
+        return jdbc.query(SELECT + " WHERE wx_openid = ? LIMIT 1", MAPPER, wxOpenid).stream().findFirst();
+    }
+
+    @Override
+    public void bindWxOpenid(Long visitorId, String wxOpenid) {
+        if (visitorId == null || wxOpenid == null || wxOpenid.isBlank()) {
+            return;
+        }
+        // 一个 openid 只绑一个访客：先解绑可能存在的旧记录，避免唯一键冲突
+        jdbc.update("UPDATE visitor SET wx_openid = NULL WHERE wx_openid = ? AND id <> ?",
+                wxOpenid, visitorId);
+        jdbc.update("UPDATE visitor SET wx_openid = ? WHERE id = ?", wxOpenid, visitorId);
+    }
+
     private void setNullableBytes(PreparedStatement ps, int index, byte[] value) throws SQLException {
         if (value == null) {
             ps.setNull(index, Types.VARBINARY);

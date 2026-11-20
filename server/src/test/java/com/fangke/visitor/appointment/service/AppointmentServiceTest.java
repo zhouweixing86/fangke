@@ -76,6 +76,16 @@ class AppointmentServiceTest {
         }
 
         @Override
+        public Optional<Visitor> findByWxOpenid(String wxOpenid) {
+            return Optional.empty();
+        }
+
+        @Override
+        public void bindWxOpenid(Long visitorId, String wxOpenid) {
+            // 单测不校验 openid 绑定
+        }
+
+        @Override
         public void updateFace(Long visitorId, String ossKey, int status) {
         }
         @Override
@@ -214,7 +224,7 @@ class AppointmentServiceTest {
                 VISIT_PHONE, "行政部", visitorType, "技术交流", "",
                 date, LocalTime.of(9, 0), LocalTime.of(11, 0),
                 new AppointmentCreateRequest.VisitorInfo("张三", VISITOR_ID, "13900139000", "某某科技"),
-                mates, mateMode, "v1.0", null, null, null);
+                mates, mateMode, "v1.0", null, null, null, null, null, null, null, null);
     }
 
     private AppointmentCreateRequest validRequest() {
@@ -283,7 +293,7 @@ class AppointmentServiceTest {
                 VISIT_PHONE, null, "商务", null, null,
                 LocalDate.now().plusDays(1), LocalTime.of(11, 0), LocalTime.of(9, 0),
                 new AppointmentCreateRequest.VisitorInfo("张三", VISITOR_ID, null, null),
-                List.of(), 0, "v1.0", null, null, null);
+                List.of(), 0, "v1.0", null, null, null, null, null, null, null, null);
         BusinessException e = assertThrows(BusinessException.class,
                 () -> service.create(bad, Appointment.SOURCE_SELF, "ip", "ua"));
         assertEquals(ErrorCode.PARAM_INVALID.code(), e.getCode());
@@ -360,7 +370,7 @@ class AppointmentServiceTest {
                 VISIT_PHONE, null, "施工", null, null,
                 null, null, null,
                 new AppointmentCreateRequest.VisitorInfo("王五", VISITOR_ID, null, null),
-                List.of(), 0, "v1.0", null, null, null);
+                List.of(), 0, "v1.0", null, null, null, null, null, null, null, null);
 
         AppointmentView view = service.createOnsite(noTime, "ip", "ua");
 

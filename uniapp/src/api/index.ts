@@ -36,6 +36,25 @@ export const appSendCode = (phone: string) =>
 export const appLogin = (phone: string, code: string) =>
   post<AppLoginResult>('/app/auth/login', { phone, code })
 
+/** 微信小程序一键登录：wx.login 拿到的 code 直接换 token（不用注册/验证码） */
+export const wxLogin = (code: string) =>
+  post<{
+    token: string
+    role: string
+    subjectId: number
+    name: string
+    openid: string
+    bound: boolean
+    expiresInSeconds: number
+  }>('/app/auth/wx-login', { code })
+
+/** 被访人手机号 → 自动匹配被访人（访客预约表单） */
+export const lookupEmployee = (phone: string) =>
+  get<{ matched: boolean; name?: string; title?: string; deptName?: string; message?: string }>(
+    '/app/employee/lookup',
+    { phone }
+  )
+
 export const appMe = () => get<AppMe>('/app/me')
 
 /**

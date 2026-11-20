@@ -21,6 +21,7 @@ public class AppProperties {
     private final Gate gate = new Gate();
     private final Bootstrap bootstrap = new Bootstrap();
     private final App app = new App();
+    private final Wx wx = new Wx();
     private List<String> corsAllowedOrigins = new ArrayList<>(
             List.of("http://localhost:5173", "http://127.0.0.1:5173"));
 
@@ -62,6 +63,10 @@ public class AppProperties {
 
     public App getApp() {
         return app;
+    }
+
+    public Wx getWx() {
+        return wx;
     }
 
     public List<String> getCorsAllowedOrigins() {
@@ -396,6 +401,42 @@ public class AppProperties {
 
         public void setAllowEmployeeHeader(boolean allowEmployeeHeader) {
             this.allowEmployeeHeader = allowEmployeeHeader;
+        }
+    }
+
+    /**
+     * 微信小程序一键登录（访客端）。
+     *
+     * <p>mock=true 时不调用微信接口，直接把 code 当作 openid（仅开发/联调用）；
+     * 生产必须配置 app-id / secret 并把 mock 关掉。
+     */
+    public static class Wx {
+        private String appId = "";
+        private String secret = "";
+        private boolean mock = true;
+
+        public String getAppId() {
+            return appId;
+        }
+
+        public void setAppId(String appId) {
+            this.appId = appId;
+        }
+
+        public String getSecret() {
+            return secret;
+        }
+
+        public void setSecret(String secret) {
+            this.secret = secret;
+        }
+
+        public boolean isMock() {
+            return mock;
+        }
+
+        public void setMock(boolean mock) {
+            this.mock = mock;
         }
     }
 }

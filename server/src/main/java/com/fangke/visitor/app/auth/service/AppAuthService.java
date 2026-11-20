@@ -47,6 +47,11 @@ public class AppAuthService {
                               String phoneMask, long expiresInSeconds) {
     }
 
+    /** 微信一键登录结果：bound=false 表示该微信还没绑定访客档案（首次预约后自动绑定）。 */
+    public record WxLoginResult(String token, String role, Long subjectId, String name,
+                                String openid, boolean bound, long expiresInSeconds) {
+    }
+
     private record CodeEntry(String code, Instant createdAt, Instant expireAt, int attempts) {
     }
 
@@ -148,6 +153,65 @@ public class AppAuthService {
         String token = jwtService.issue(subjectId, phoneMask, List.of(role));
         log.info("App 登录成功 role={} subjectId={} phone={}", role, subjectId, phoneMask);
         return new LoginResult(token, role, subjectId, name, phoneMask, jwtService.ttlSeconds());
+    }
+
+    /**
+     * 微信小程序一键登录：wx.login 拿到的 code → openid → 反查访客档案。
+     *
+     * <p>未绑定（首次使用）时仍然发 token，但 {@code subjectId=0}：
+     * 访客可以先走公开的预约提交接口，预约成功后平台把 openid 绑到该访客，
+     * 下次进入即可直接看到「我的预约」。
+     */
+    public WxLoginResult wxLogin(String code) {
+        String openid = resolveOpenid(code);
+        var visitor = visitorRepository.findByWxOpenid(openid);
+        if (visitor.isPresent()) {
+            Visitor v = visitor.get();
+            String token = jwtService.issue(v.getId(), v.getPhoneMask(), List.of(ROLE_VISITOR));
+            log.info("微信一键登录（已绑定） openid={} visitorId={} name={}", openid, v.getId(), v.getName());
+            return new WxLoginResult(token, ROLE_VISITOR, v.getId(), v.getName(), openid, true,
+                    jwtService.ttlSeconds());
+        }
+        String token = jwtService.issue(0L, "微信用户", List.of(ROLE_VISITOR));
+        log.info("微信一键登录（未绑定，待首次预约） openid={}", openid);
+        return new WxLoginResult(token, ROLE_VISITOR, 0L, "微信访客", openid, false,
+                jwtService.ttlSeconds());
+    }
+
+    /** mock 模式把 code 当 openid，方便没有小程序账号时联调。 */
+    private String resolveOpenid(String code) {
+        String value = EmployeeValidator.requireText(code, "微信登录凭证");
+        AppProperties.Wx wx = props.getWx();
+        if (wx.isMock()) {
+            return "mock-" + value;
+        }
+        if (wx.getAppId() == null || wx.getAppId().isBlank()
+                || wx.getSecret() == null || wx.getSecret().isBlank()) {
+            throw new BusinessException(ErrorCode.THIRD_PARTY_ERROR,
+                    "微信小程序 appid/secret 未配置（WX_APP_ID / WX_SECRET）");
+        }
+        try {
+            String url = "https://api.weixin.qq.com/sns/jscode2session?appid=" + wx.getAppId()
+                    + "&secret=" + wx.getSecret() + "&js_code=" + value
+                    + "&grant_type=authorization_code";
+            java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(5)).build();
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(url)).timeout(java.time.Duration.ofSeconds(8)).GET().build();
+            String body = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString()).body();
+            com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(body);
+            String openid = node.path("openid").asText("");
+            if (openid.isBlank()) {
+                throw new BusinessException(ErrorCode.THIRD_PARTY_ERROR,
+                        "微信登录失败：" + node.path("errmsg").asText(body));
+            }
+            return openid;
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.THIRD_PARTY_ERROR, "微信登录失败：" + e.getMessage());
+        }
     }
 
     private void purgeExpired(Instant now) {

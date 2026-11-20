@@ -23,4 +23,11 @@ public interface VisitorRepository {
 
     /** 当日最大访客编号（用于生成 V+yyyyMMdd+4位序号）。 */
     Optional<String> findMaxPersonNoByPrefix(String prefix);
+
+    /** 微信小程序 openid 反查访客（一键登录）。 */
+    Optional<Visitor> findByWxOpenid(String wxOpenid);
+
+    /** 绑定 openid（首次预约成功后写入，后续一键登录直接命中）。 */
+    void bindWxOpenid(Long visitorId, String wxOpenid);
 }
+

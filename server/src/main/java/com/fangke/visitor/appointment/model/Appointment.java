@@ -32,6 +32,11 @@ public class Appointment {
     public static final int GATE_SCOPE_SPECIFIED = 1;
     public static final int GATE_SCOPE_ALL = 2;
 
+    /** 来访时段：访客端只选全天/上午/下午，由后端换算 start/end。 */
+    public static final int PERIOD_ALL_DAY = 1;
+    public static final int PERIOD_MORNING = 2;
+    public static final int PERIOD_AFTERNOON = 3;
+
     private Long id;
     private String appointmentNo;
     private int source;
@@ -41,6 +46,12 @@ public class Appointment {
     private String visitPhoneMask;
     private String visitorType;
     private String purpose;
+    /** 来访公司（团体预约时为负责人公司） */
+    private String company;
+    /** 来访人职务 */
+    private String position;
+    /** 时段：1 全天 / 2 上午 / 3 下午 */
+    private int period = PERIOD_ALL_DAY;
     private String plateNo;
     private String department;
     /** 预约门点（主门点）；null 表示沿用 fangke.gate.default-id（兼容历史单据与单门部署）。 */
@@ -152,6 +163,38 @@ public class Appointment {
 
     public void setPurpose(String purpose) {
         this.purpose = purpose;
+    }
+
+    public String getCompany() {
+        return company;
+    }
+
+    public void setCompany(String company) {
+        this.company = company;
+    }
+
+    public String getPosition() {
+        return position;
+    }
+
+    public void setPosition(String position) {
+        this.position = position;
+    }
+
+    public int getPeriod() {
+        return period;
+    }
+
+    public void setPeriod(int period) {
+        this.period = period;
+    }
+
+    public static String periodText(int period) {
+        return switch (period) {
+            case PERIOD_MORNING -> "上午";
+            case PERIOD_AFTERNOON -> "下午";
+            default -> "全天";
+        };
     }
 
     public String getPlateNo() {

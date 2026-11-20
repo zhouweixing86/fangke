@@ -3,15 +3,21 @@ import { onLaunch } from '@dcloudio/uni-app'
 import { auth } from '@/store/auth'
 
 /** 未登录也能进的页面：登录页、首次来访预约页（后端预约接口是公开的） */
-const PUBLIC_PAGES = ['pages/login/', 'pages/visitor/new']
+const PUBLIC_PAGES = ['pages/login/', 'pages/visitor/']
 
 onLaunch(() => {
-  // 启动时校验登录态：无 token 直接进登录页（各页也有守卫）
+  // #ifdef MP-WEIXIN
+  // 访客端：无登录页，进小程序即静默一键登录（各页自行调用 wx-login），这里不做跳转
+  return
+  // #endif
+  // #ifndef MP-WEIXIN
+  // 管理端 H5：无 token 直接进登录页（各页也有守卫）
   const pages = getCurrentPages()
   const current = pages.length ? pages[pages.length - 1].route : ''
   if (!auth.token && current && !PUBLIC_PAGES.some((p) => current.startsWith(p))) {
     uni.reLaunch({ url: '/pages/login/login' })
   }
+  // #endif
 })
 </script>
 

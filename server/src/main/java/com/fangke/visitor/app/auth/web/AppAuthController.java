@@ -23,6 +23,9 @@ public class AppAuthController {
     public record LoginRequest(String phone, String code) {
     }
 
+    public record WxLoginRequest(String code) {
+    }
+
     private final AppAuthService service;
 
     public AppAuthController(AppAuthService service) {
@@ -51,6 +54,21 @@ public class AppAuthController {
         view.put("subjectId", result.subjectId());
         view.put("name", result.name());
         view.put("phoneMask", result.phoneMask());
+        view.put("expiresInSeconds", result.expiresInSeconds());
+        return ApiResponse.ok(view);
+    }
+
+    /** 微信小程序一键登录（访客端）：前端 wx.login 拿 code 直接换 token。 */
+    @PostMapping("/wx-login")
+    public ApiResponse<Map<String, Object>> wxLogin(@RequestBody WxLoginRequest body) {
+        AppAuthService.WxLoginResult result = service.wxLogin(body == null ? null : body.code());
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("token", result.token());
+        view.put("role", result.role());
+        view.put("subjectId", result.subjectId());
+        view.put("name", result.name());
+        view.put("openid", result.openid());
+        view.put("bound", result.bound());
         view.put("expiresInSeconds", result.expiresInSeconds());
         return ApiResponse.ok(view);
     }

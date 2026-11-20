@@ -266,6 +266,16 @@ class ApprovalServiceTest {
         }
 
         @Override
+        public Optional<Visitor> findByWxOpenid(String wxOpenid) {
+            return Optional.empty();
+        }
+
+        @Override
+        public void bindWxOpenid(Long visitorId, String wxOpenid) {
+            // 单测不校验 openid 绑定
+        }
+
+        @Override
         public void updateFace(Long visitorId, String ossKey, int status) {
         }
         @Override

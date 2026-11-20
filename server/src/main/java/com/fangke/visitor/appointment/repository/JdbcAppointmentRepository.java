@@ -24,7 +24,8 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
 
     private static final String SELECT = """
             SELECT id, appointment_no, source, visitor_id, visit_employee_id, visit_phone_enc, visit_phone_mask,
-                   visitor_type, purpose, plate_no, department, gate_id, gate_scope, start_time, end_time,
+                   visitor_type, purpose, company, position, period, plate_no, department, gate_id, gate_scope,
+                   start_time, end_time,
                    mate_mode, mate_count, approval_level, status, reject_reason, cancel_reason,
                    current_task_id, granted_at, created_at
             FROM appointment
@@ -44,6 +45,9 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
             a.setVisitPhoneMask(rs.getString("visit_phone_mask"));
             a.setVisitorType(rs.getString("visitor_type"));
             a.setPurpose(rs.getString("purpose"));
+            a.setCompany(rs.getString("company"));
+            a.setPosition(rs.getString("position"));
+            a.setPeriod(rs.getInt("period"));
             a.setPlateNo(rs.getString("plate_no"));
             a.setDepartment(rs.getString("department"));
             long gateId = rs.getLong("gate_id");
@@ -81,9 +85,10 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
         jdbc.update(connection -> {
             PreparedStatement ps = connection.prepareStatement("""
                     INSERT INTO appointment (appointment_no, source, visitor_id, visit_employee_id,
-                        visit_phone_enc, visit_phone_mask, visitor_type, purpose, plate_no, department,
+                    visit_phone_enc, visit_phone_mask, visitor_type, purpose, company, position, period,
+                    plate_no, department,
                         gate_id, gate_scope, start_time, end_time, mate_mode, mate_count, approval_level, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, Statement.RETURN_GENERATED_KEYS);
             int i = 1;
             ps.setString(i++, a.getAppointmentNo());
@@ -94,6 +99,9 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
             ps.setString(i++, a.getVisitPhoneMask());
             ps.setString(i++, a.getVisitorType());
             ps.setString(i++, a.getPurpose());
+            ps.setString(i++, a.getCompany());
+            ps.setString(i++, a.getPosition());
+            ps.setInt(i++, a.getPeriod());
             ps.setString(i++, a.getPlateNo());
             ps.setString(i++, a.getDepartment());
             setNullableLong(ps, i++, a.getGateId());
@@ -117,14 +125,16 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
     public void update(Appointment a) {
         jdbc.update("""
                         UPDATE appointment SET visit_employee_id = ?, visit_phone_enc = ?, visit_phone_mask = ?,
-                            visitor_type = ?, purpose = ?, plate_no = ?, department = ?,
+                            visitor_type = ?, purpose = ?, company = ?, position = ?, period = ?,
+                            plate_no = ?, department = ?,
                             start_time = ?, end_time = ?, mate_mode = ?, mate_count = ?,
                             approval_level = ?, status = ?, reject_reason = ?, cancel_reason = ?,
                             current_task_id = ?, granted_at = ?
                         WHERE id = ?
                         """,
                 a.getVisitEmployeeId(), a.getVisitPhoneEnc(), a.getVisitPhoneMask(),
-                a.getVisitorType(), a.getPurpose(), a.getPlateNo(), a.getDepartment(),
+                a.getVisitorType(), a.getPurpose(), a.getCompany(), a.getPosition(), a.getPeriod(),
+                a.getPlateNo(), a.getDepartment(),
                 Timestamp.valueOf(a.getStartTime()), Timestamp.valueOf(a.getEndTime()),
                 a.getMateMode(), a.getMateCount(), a.getApprovalLevel(), a.getStatus(),
                 a.getRejectReason(), a.getCancelReason(), a.getCurrentTaskId(),

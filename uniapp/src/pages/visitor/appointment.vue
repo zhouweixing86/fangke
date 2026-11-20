@@ -47,7 +47,6 @@ import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { computed, ref } from 'vue'
 import { appointmentDetail, cancelAppointment, issueQr } from '@/api'
 import type { AppointmentView, QrIssueResult } from '@/api/types'
-import { requireLogin } from '@/store/auth'
 import { confirm, showToast } from '@/utils/ui'
 
 const no = ref('')
@@ -132,7 +131,7 @@ async function onCancel() {
 }
 
 onLoad((options) => {
-  if (!requireLogin('APP')) return
+  // 访客端没有登录页：token 由首页/列表静默 wx-login 获取，这里只校验单号
   no.value = (options as Record<string, string>)?.no ?? ''
   if (!no.value) {
     showToast('缺少预约单号')

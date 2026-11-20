@@ -94,8 +94,6 @@ onShow(async () => {
         { text: '我的', path: '/pages/common/profile' }
       ]
     : [
-        { text: '我的预约', path: '/pages/visitor/index' },
-        { text: '访客预约', path: '/pages/visitor/new' },
         { text: '消息', path: '/pages/common/messages' },
         { text: '我的', path: '/pages/common/profile' }
       ]

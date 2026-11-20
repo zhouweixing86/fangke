@@ -12,7 +12,10 @@ import com.fangke.visitor.common.BusinessException;
 import com.fangke.visitor.common.ErrorCode;
 import com.fangke.visitor.common.PageResult;
 import com.fangke.visitor.employee.service.EmployeeValidator;
+import com.fangke.visitor.employee.repository.EmployeeRepository;
+import com.fangke.visitor.employee.service.DeptService;
 import com.fangke.visitor.security.AppAuthInterceptor;
+import com.fangke.visitor.security.CryptoService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,12 +45,62 @@ public class AppVisitorController {
     private final AppointmentService appointmentService;
     private final VisitorService visitorService;
     private final AppointmentRepository appointmentRepository;
+    private final EmployeeRepository employeeRepository;
+    private final DeptService deptService;
+    private final CryptoService crypto;
 
     public AppVisitorController(AppointmentService appointmentService, VisitorService visitorService,
-                                AppointmentRepository appointmentRepository) {
+                                AppointmentRepository appointmentRepository,
+                                EmployeeRepository employeeRepository, DeptService deptService,
+                                CryptoService crypto) {
         this.appointmentService = appointmentService;
         this.visitorService = visitorService;
         this.appointmentRepository = appointmentRepository;
+        this.employeeRepository = employeeRepository;
+        this.deptService = deptService;
+        this.crypto = crypto;
+    }
+
+    /**
+     * 被访人手机号 → 自动匹配被访人（访客预约表单里「被访人」只读，由手机号带出）。
+     *
+     * <p>公开接口：只返回姓名/职务/部门，不返回任何可回溯的手机号或证件号。
+     */
+    @GetMapping("/employee/lookup")
+    public ApiResponse<Map<String, Object>> lookupEmployee(@RequestParam String phone) {
+        String normalized = EmployeeValidator.validatePhone(phone);
+        if (normalized == null) {
+            throw new BusinessException(ErrorCode.PHONE_INVALID, "手机号格式不正确");
+        }
+        Map<String, Object> view = new java.util.LinkedHashMap<>();
+        var employee = employeeRepository.findByPhoneHmac(crypto.hmac(normalized));
+        if (employee.isEmpty()) {
+            view.put("matched", false);
+            view.put("message", "该手机号不是本厂员工，请向被访人确认");
+            return ApiResponse.ok(view);
+        }
+        var e = employee.get();
+        if (e.getStatus() != com.fangke.visitor.employee.model.Employee.STATUS_ACTIVE) {
+            view.put("matched", false);
+            view.put("message", "该员工当前不在岗，无法接待来访");
+            return ApiResponse.ok(view);
+        }
+        view.put("matched", true);
+        view.put("name", e.getName());
+        view.put("title", e.getTitle() == null ? "" : e.getTitle());
+        view.put("deptName", deptName(e.getDeptId()));
+        return ApiResponse.ok(view);
+    }
+
+    private String deptName(Long deptId) {
+        if (deptId == null) {
+            return "";
+        }
+        try {
+            return deptService.require(deptId).name();
+        } catch (RuntimeException e) {
+            return "";
+        }
     }
 
     /** 隐私告知同意（首次使用必须单独同意）。 */

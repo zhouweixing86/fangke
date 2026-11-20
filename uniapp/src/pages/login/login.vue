@@ -7,8 +7,8 @@
 
     <view class="card">
       <view class="seg">
-        <view class="seg-item" :class="{ active: mode === 'app' }" @click="mode = 'app'">访客/员工</view>
         <view class="seg-item" :class="{ active: mode === 'admin' }" @click="mode = 'admin'">管理端</view>
+        <view class="seg-item" :class="{ active: mode === 'app' }" @click="mode = 'app'">员工</view>
       </view>
 
       <template v-if="mode === 'app'">
@@ -39,11 +39,11 @@
       <button class="btn btn--primary" :loading="loading" style="margin-top: 18px" @click="submit">登录</button>
 
       <view v-if="mode === 'app'" class="muted" style="margin-top: 14px; text-align: center">
-        <text style="color: #1989fa" @click="goBooking">首次来访？先去提交预约 →</text>
+        员工手机号需与员工档案一致；访客请使用微信小程序预约
       </view>
 
       <view class="muted" style="margin-top: 12px; text-align: center">
-        访客/员工手机号需与档案或预约登记一致；首次来访请先在「访客预约」提交
+        管理端账号由系统管理员分配；访客端为微信小程序，无需在此登录
       </view>
     </view>
   </view>
@@ -56,7 +56,7 @@ import { adminLogin, appLogin, appSendCode } from '@/api'
 import { applyAdminLogin, applyAppLogin, homePath } from '@/store/auth'
 import { alert, showToast } from '@/utils/ui'
 
-const mode = ref<'app' | 'admin'>('app')
+const mode = ref<'app' | 'admin'>('admin')
 const phone = ref('')
 const code = ref('')
 const username = ref('')
@@ -65,11 +65,6 @@ const loading = ref(false)
 const counting = ref(false)
 const countdown = ref(0)
 let timer: ReturnType<typeof setInterval> | null = null
-
-/** 首次来访：未登录也能提交预约（后端预约接口公开） */
-function goBooking() {
-  uni.navigateTo({ url: '/pages/visitor/new' })
-}
 
 async function sendCode() {
   if (counting.value) return
@@ -105,7 +100,13 @@ async function submit() {
     }
     loading.value = true
     try {
-      applyAppLogin(await appLogin(phone.value, code.value))
+      const result = await appLogin(phone.value, code.value)
+      // 管理端 H5 只服务员工/保安：访客走微信小程序，避免登录后无页面可进
+      if (result.role === 'APP_VISITOR') {
+        showToast('访客请使用微信小程序预约与查看通行码')
+        return
+      }
+      applyAppLogin(result)
       uni.reLaunch({ url: homePath() })
     } finally {
       loading.value = false

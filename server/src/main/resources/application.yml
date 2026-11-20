@@ -65,6 +65,12 @@ fangke:
     # 是否允许用 X-Employee-Id 头模拟员工身份（仅联调/自动化测试，生产必须 false）
     allow-employee-header: ${APP_ALLOW_EMPLOYEE_HEADER:false}
 
+  # 微信小程序一键登录（访客端）：mock=true 时直接把 code 当 openid，仅供开发联调
+  wx:
+    app-id: ${WX_APP_ID:}
+    secret: ${WX_SECRET:}
+    mock: ${WX_MOCK:true}
+
   crypto:
     # 敏感字段加密：生产必须用环境变量注入，且两把密钥不同
     aes-key: ${CRYPTO_AES_KEY:dev-only-aes-key-change-me}

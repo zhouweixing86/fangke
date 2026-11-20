@@ -76,6 +76,12 @@ export interface AppointmentView {
   mates: AppointmentMate[]
   canCancel: boolean
   createdAt: string
+  /** 来访公司 / 职务 / 时段文案 / 车牌 / 同行人数（V19 起返回） */
+  company?: string
+  position?: string
+  periodText?: string
+  plateNo?: string
+  mateCount?: number
 }
 
 export interface QrIssueResult {

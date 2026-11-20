@@ -56,6 +56,17 @@ export function applyAppLogin(result: AppLoginResult) {
   })
 }
 
+export function applyWxLogin(result: { token: string; role: string; subjectId: number; name: string }) {
+  persist(result.token, {
+    kind: 'APP',
+    name: result.name,
+    role: result.role,
+    roles: [result.role],
+    subjectId: result.subjectId,
+    phoneMask: ''
+  })
+}
+
 export function applyAdminLogin(result: AdminLoginResult) {
   const roles = result.roles ?? []
   persist(result.token, {
@@ -91,8 +102,8 @@ export const isGuardOrAdmin = () => auth.roles.indexOf('GUARD') >= 0 || isAdmin(
 
 /** 登录后落到哪个首页 */
 export function homePath(): string {
-  if (isAdminUser()) return isGuardOrAdmin() ? '/pages/admin/workbench' : '/pages/admin/workbench'
-  return isVisitor() ? '/pages/visitor/index' : '/pages/employee/todo'
+  if (isAdminUser()) return '/pages/admin/workbench'
+  return isVisitor() ? '/pages/visitor/home' : '/pages/employee/todo'
 }
 
 /** 页面守卫：未登录/角色不符时跳走 */

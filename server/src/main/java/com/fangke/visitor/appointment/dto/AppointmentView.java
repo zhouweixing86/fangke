@@ -34,7 +34,12 @@ public record AppointmentView(
         String mateModeText,
         List<Mate> mates,
         boolean canCancel,
-        LocalDateTime createdAt) {
+        LocalDateTime createdAt,
+        String company,
+        String position,
+        String periodText,
+        String plateNo,
+        int mateCount) {
 
     private static final DateTimeFormatter DATETIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -73,6 +78,11 @@ public record AppointmentView(
                 a.getMateMode() == Appointment.MATE_TOGETHER ? "随行一次放行" : "各自刷证",
                 mateViews,
                 a.getStatus() == Appointment.PENDING_L1 || a.getStatus() == Appointment.PENDING_L2,
-                a.getCreatedAt());
+                a.getCreatedAt(),
+                a.getCompany(),
+                a.getPosition(),
+                Appointment.periodText(a.getPeriod()),
+                a.getPlateNo(),
+                a.getMateCount());
     }
 }
