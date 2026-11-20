@@ -38,3 +38,6 @@ uniapp/*.tsbuildinfo
 
 # 私有凭据/服务器连接信息（含明文口令，永不入库）
 private/
+
+# 本机开发配置（含真实口令），入库的是 application-dev.yml.example
+server/src/main/resources/application-dev.yml

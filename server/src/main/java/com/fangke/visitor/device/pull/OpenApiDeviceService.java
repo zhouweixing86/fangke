@@ -255,8 +255,8 @@ public class OpenApiDeviceService {
         data.put("usertype", "white");
         data.put("name", view.name());
         data.put("idno", view.idno());
-        data.put("peoplestartdate", view.validFrom() == null ? null : DATETIME.format(view.validFrom()));
-        data.put("peopleenddate", view.validTo() == null ? null : DATETIME.format(view.validTo()));
+        data.put("peoplestartdate", DATETIME.format(deviceValidFrom(view.validFrom())));
+        data.put("peopleenddate", DATETIME.format(deviceValidTo(view.validTo())));
         data.put("timegroupid", 0);
         data.put("group", "访客系统");
         data.put("groupSuffix", view.subjectType() == AccessGrant.SUBJECT_EMPLOYEE ? "员工" : "访客");
@@ -479,6 +479,25 @@ public class OpenApiDeviceService {
     public record PersonView(String personNo, String idno, String name,
                              LocalDateTime validFrom, LocalDateTime validTo,
                              int subjectType, int personVer, String photoBase64) {
+    }
+
+    /**
+     * 下发给设备的有效期上限。
+     *
+     * <p>平台内部用 {@code 9999-12-31} 表示"永久有效"，但设备端按 32 位时间戳换算有效期，
+     * 9999 年会被截断成负数，机器上直接显示"已过期"（2026-11-20 真机实测踩到）。
+     * 统一切到 2037-12-31（仍在 32 位有符号时间戳范围内），对业务等同于永久。
+     */
+    static final LocalDateTime DEVICE_MAX_VALID_TO = LocalDateTime.of(2037, 12, 31, 23, 59, 59);
+
+    /** 起始日期为空按"很久以前"下发，避免设备把空值当成"未生效"。 */
+    private static LocalDateTime deviceValidFrom(LocalDateTime from) {
+        return from == null ? LocalDateTime.of(2000, 1, 1, 0, 0) : from;
+    }
+
+    /** 结束日期为空或超过上限时统一截断，原因见 {@link #DEVICE_MAX_VALID_TO}。 */
+    static LocalDateTime deviceValidTo(LocalDateTime to) {
+        return to == null || to.isAfter(DEVICE_MAX_VALID_TO) ? DEVICE_MAX_VALID_TO : to;
     }
 
     /** 供控制器判断是否需要补 mac/型号。 */

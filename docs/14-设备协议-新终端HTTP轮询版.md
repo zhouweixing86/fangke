@@ -375,19 +375,16 @@ POST /openapi/v1/heartBeat          200  76B   ← 已无指令
 
 ### 12.7 本机联调启动命令（供复现）
 
+配置已按环境拆成 `application-dev.yml` / `application-prod.yml`，**默认就是 dev，明文写在 yml 里，不需要设任何环境变量**：
+
 ```powershell
 cd D:\fangke\server
-$env:DB_USER='root'; $env:DB_PASSWORD='<本机 MySQL 口令>'
-$env:S3_ENDPOINT='http://127.0.0.1:9000'; $env:S3_BUCKET='fangke'   # 照片存储，不配则上传报 5003
-$env:S3_ACCESS_KEY='<MinIO AK>'; $env:S3_SECRET_KEY='<MinIO SK>'
-$env:DEVICE_PULL_VERIFY_SIGN='false'          # 联调期跳过设备签名校验
-$env:DEVICE_PULL_SIGN_KEY='fangke-pull-key'   # 与设备「第三方平台Key」一致
-$env:DEVICE_PULL_PUBLIC_BASE_URL='http://192.168.0.103:8080'
-java -jar target\visitor-server-0.1.0-SNAPSHOT.jar `
-  --server.tomcat.accesslog.enabled=true --server.tomcat.accesslog.buffered=false `
-  --server.tomcat.accesslog.directory=D:/fangke/server/logs `
-  --server.tomcat.accesslog.prefix=access --server.tomcat.accesslog.suffix=.log `
-  --server.tomcat.accesslog.file-date-format= "--server.tomcat.accesslog.pattern=%t %a %m %U %s %b"
+java -jar target\visitor-server-0.1.0-SNAPSHOT.jar          # 默认 dev
+java -jar target\visitor-server-0.1.0-SNAPSHOT.jar --spring.profiles.active=prod
 ```
 
-> Windows 上 `-Dserver.tomcat.accesslog.enabled=true` 这类参数会被 PowerShell 拆坏（报"找不到主类 .tomcat.accesslog.enabled=true"），改用 `--property=value` 形式。
+`application-dev.yml` 里已包含：MySQL 账号口令、MinIO AK/SK、`pull-verify-sign=false`、
+`pull-sign-key`、`pull-public-base-url`、Tomcat 全量访问日志。
+
+> `application-dev.yml` 含真实口令，已加入 `.gitignore`；仓库里入库的是
+> `application-dev.yml.example`，新机器复制改名即可。

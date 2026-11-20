@@ -5,6 +5,9 @@ server:
 spring:
   application:
     name: visitor-server
+  # 默认 dev（本机开发 / 真机联调）；上线用 --spring.profiles.active=prod 或环境变量切换
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   servlet:
     multipart:
       max-file-size: 10MB
