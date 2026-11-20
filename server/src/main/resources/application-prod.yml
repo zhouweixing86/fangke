@@ -31,7 +31,7 @@ fangke:
     # 生产必须校验设备签名
     pull-verify-sign: true
     pull-sign-key: CHANGE_ME
-    pull-heart-seconds: 30
+    pull-heart-seconds: 5
     pull-command-timeout-seconds: 300
     # 设备可达的平台根地址（设备会自己拼 /openapi/v1/...），不要带 /openapi/v1
     pull-public-base-url: http://<现场平台IP>:8081

@@ -19,7 +19,7 @@
 | 谁主动 | **平台**连设备的 8091 端口 | **设备**连平台的 HTTP 接口 |
 | 下发名单 | 平台直接 POST `addDeviceWhiteList` | 平台**入队**，设备心跳来取 `action`，再回来拉详情 |
 | 读设备状态 | 平台可随时读参数/名单 | **做不到**（协议里没有"平台问设备"的接口） |
-| 远程开门 | 平台直接调接口，实时 | 入队 → 下一个心跳生效（默认 30 秒，可配） |
+| 远程开门 | 平台直接调接口，实时 | 入队 → 下一个心跳生效（默认 30 秒，现网配 5 秒，可配） |
 | 通行记录 | 设备 POST 给平台 | 设备 POST 给平台（一样） |
 | 二维码核验 | 设备回调 `/compare/online` | 设备把码推给平台（`thirdQrUrl`），平台回 `openGate` |
 | 签名 | body 里带 `password` | 顶层字段 MD5 签名（`sign`） |
@@ -236,7 +236,7 @@ sign = MD5( 除 data/sign 外所有顶层字段按字段名ASCII升序拼 key=va
 | 平台地址 `thirdHttpUrl` | `http://<平台IP>:8080/openapi/v1` |
 | 平台 key `thirdHttpkey` | 与 `DEVICE_PULL_SIGN_KEY` 一致 |
 | 二维码开门 | 关闭"本地判断"（`thirdOpenDoorLocal=0`），地址指向 `/openapi/v1/qrCodePush` |
-| 心跳间隔 | 30 秒（平台会在 `heartTime` 里再次下发） |
+| 心跳间隔 | 5 秒（`fangke.device.pull-heart-seconds`，平台会在 `heartTime` 里再次下发） |
 | 记录推送地址 | `http://<平台IP>:8080/openapi/v1/uploadDetectRecord` |
 
 ### 10.2 平台侧
@@ -325,7 +325,7 @@ $env:DEVICE_PULL_SIGN_KEY = '<与设备 thirdHttpkey 相同>'
 | 项 | 文档描述 | 真机实测 |
 |---|---|---|
 | 心跳请求体 | `ver/deviceno/timestamp/sign/action` | 一致：`{"action":"heartBeat","deviceno":"2608252243655","sign":"…","timestamp":"20261120201834213","ver":"v1.0"}` |
-| 心跳间隔 | 由平台响应 `heartTime` 决定 | 正常（200）时 **30 秒**一次；连续失败时 **6 秒**重试；恢复后自动回到 30 秒 |
+| 心跳间隔 | 由平台响应 `heartTime` 决定 | 实测按平台下发的间隔走：配 30 秒就 30 秒一次、配 5 秒就 5 秒一次；失败时按 6 秒重试 |
 | 开机动作 | 未说明 | 先 `getAllDeviceWhiteList`，再进心跳循环 |
 | 名单下发 | 未细化时序 | `heartBeat`（响应带 action）→ `addDevicWhiteInfo`（批量）→ 逐人 `getDevicWhiteInfo` → `syncWhiteResult` 回执 |
 | `mac` | 心跳带 `mac` | **不带**。平台侧 `device.mac` 自动填占位符 `PULL-<deviceno>`，要真机 MAC 需人工补 |

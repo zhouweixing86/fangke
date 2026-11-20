@@ -30,7 +30,7 @@ fangke:
   device:
     pull-verify-sign: false
     pull-sign-key: fangke-pull-key
-    pull-heart-seconds: 30
+    pull-heart-seconds: 5
     pull-public-base-url: http://<本机局域网IP>:8080
 
   storage:
