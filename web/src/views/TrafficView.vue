@@ -99,26 +99,36 @@
           <div v-for="a in detail.appointments || []" :key="a.id" class="appt-card">
             <div class="appt-head">
               <span class="appt-no">{{ a.appointmentNo }}</span>
-              <el-tag size="small" type="warning">{{ a.statusText }}</el-tag>
-              <span class="text-muted">{{ a.startTime }} ~ {{ a.endTime }}</span>
+              <el-tag size="small" :type="statusTagType(a.status)">{{ a.statusText }}</el-tag>
+              <span class="spacer" />
+              <span class="appt-range">{{ shortTime(a.startTime) }} ~ {{ shortTime(a.endTime) }}</span>
             </div>
-            <el-row :gutter="8" class="appt-meta">
-              <el-col :span="8"><span class="text-muted">事由：</span>{{ a.purpose || '-' }}</el-col>
-              <el-col :span="8"><span class="text-muted">访客类型：</span>{{ a.visitorType || '-' }}</el-col>
-              <el-col :span="8"><span class="text-muted">被访人：</span>{{ a.visitEmployeeName || '-' }}</el-col>
-              <el-col :span="8"><span class="text-muted">批准门点：</span>{{ a.approvedGates || '-' }}</el-col>
-              <el-col :span="8"><span class="text-muted">车牌：</span>{{ a.plateNo || '-' }}</el-col>
-              <el-col :span="8"><span class="text-muted">提交：</span>{{ a.createdAt || '-' }}</el-col>
-            </el-row>
-            <div class="text-muted" style="margin: 6px 0 2px">审批轨迹</div>
-            <el-empty v-if="a.actions.length === 0" description="暂无审批动作" :image-size="48" />
-            <div v-for="(act, i) in a.actions" :key="i" class="action-line">
-              <el-tag size="small" type="info">{{ act.actionText }}</el-tag>
-              <span>{{ act.operatorRole }} · {{ act.operatorName || '-' }}</span>
-              <span class="text-muted">{{ act.at }}</span>
-              <span v-if="act.comment">意见：{{ act.comment }}</span>
-              <span v-if="act.gates.length" class="text-muted">门点：{{ act.gates.join('、') }}</span>
-            </div>
+
+            <el-descriptions :column="2" size="small" border>
+              <el-descriptions-item label="事由" :span="2">{{ a.purpose || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="访客类型">{{ a.visitorType || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="被访人">{{ a.visitEmployeeName || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="批准门点">{{ a.approvedGates || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="车牌">{{ a.plateNo || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="提交时间" :span="2">{{ shortTime(a.createdAt) }}</el-descriptions-item>
+            </el-descriptions>
+
+            <div class="appt-sub">审批轨迹</div>
+            <el-timeline v-if="a.actions.length" class="appt-timeline">
+              <el-timeline-item v-for="(act, i) in a.actions" :key="i"
+                :timestamp="shortTime(act.at)" placement="top"
+                :type="act.action === 2 ? 'danger' : 'success'">
+                <div class="act-head">
+                  <el-tag size="small" :type="act.action === 2 ? 'danger' : 'success'" effect="plain">
+                    {{ act.actionText }}
+                  </el-tag>
+                  <span>{{ act.operatorRole }} · {{ act.operatorName || '-' }}</span>
+                  <span v-if="act.gates.length" class="text-muted">门点：{{ act.gates.join('、') }}</span>
+                </div>
+                <div v-if="act.comment" class="act-comment">意见：{{ act.comment }}</div>
+              </el-timeline-item>
+            </el-timeline>
+            <div v-else class="text-muted appt-noaction">暂无审批动作</div>
           </div>
         </template>
 
@@ -219,6 +229,24 @@ function search() {
   load()
 }
 
+/** 详情里时间压缩展示：与详情同一天只显示时间部分，跨天显示「MM-dd HH:mm」。 */
+function shortTime(value?: string) {
+  if (!value) return '-'
+  const day = detail.value?.date
+  if (day && value.startsWith(day + ' ')) return value.slice(day.length + 1)
+  if (day && value.startsWith(day)) return value.slice(day.length).trim() || value
+  const matched = value.match(/^\d{4}-(\d{2}-\d{2}) (.+)$/)
+  return matched ? `${matched[1]} ${matched[2]}` : value
+}
+
+/** 预约状态配色：通过/可通行/已签到绿，待审批黄，驳回/撤销红，其余灰。 */
+function statusTagType(status: number) {
+  if (status === 30 || status === 35 || status === 40) return 'success'
+  if (status === 20 || status === 25) return 'warning'
+  if (status === 60 || status === 90) return 'danger'
+  return 'info'
+}
+
 async function openDetail(row: TrafficRow) {
   detail.value = await trafficDetail(row.personNo, row.day)
   detailVisible.value = true
@@ -252,26 +280,53 @@ onMounted(async () => {
 .appt-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
 .appt-no {
   font-weight: 600;
 }
 
-.appt-meta {
-  font-size: 13px;
-  line-height: 1.9;
+.appt-range {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
-.action-line {
+.spacer {
+  flex: 1;
+}
+
+.appt-sub {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.appt-timeline {
+  padding-left: 2px;
+  margin-top: 2px;
+}
+
+.act-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  padding: 3px 0;
+}
+
+.act-comment {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+}
+
+.appt-noaction {
+  font-size: 13px;
+  padding: 2px 0 4px;
 }
 
 .media-grid {
