@@ -450,13 +450,30 @@ public class OpenApiDeviceService {
         }
     }
 
+    /**
+     * 设备回传的证件号 → 平台人员编号。
+     *
+     * <p>必须员工优先：之前只查访客表，导致员工刷脸/刷证的记录 person_no 全为空，
+     * 「通行记录」按人汇总（traffic/summary 要求 person_no 非空）就一条都查不出来。
+     * 证件号大小写规范化规则员工和访客不一定一致，两种都试一次。
+     */
     private String resolvePersonNo(String idCard) {
         if (idCard == null || idCard.isBlank()) {
             return null;
         }
-        return visitorRepository.findByIdCardHmac(crypto.hmac(idCard.trim().toUpperCase()))
-                .map(Visitor::getPersonNo)
-                .orElse(null);
+        String raw = idCard.trim();
+        for (String candidate : new String[]{raw, raw.toUpperCase()}) {
+            String hmac = crypto.hmac(candidate);
+            Optional<Employee> employee = employeeRepository.findByIdCardHmac(hmac);
+            if (employee.isPresent()) {
+                return employee.get().getPersonNo();
+            }
+            Optional<Visitor> visitor = visitorRepository.findByIdCardHmac(hmac);
+            if (visitor.isPresent()) {
+                return visitor.get().getPersonNo();
+            }
+        }
+        return null;
     }
 
     private String personNoOf(String payload) {

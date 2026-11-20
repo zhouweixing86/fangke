@@ -170,6 +170,17 @@ public class JdbcEmployeeRepository implements EmployeeRepository {
                 .stream().findFirst();
     }
 
+    /** 通行记录解析归属人：停用的员工也要能查到（历史记录还要展示人名）。 */
+    @Override
+    public Optional<Employee> findByIdCardHmac(String idCardHmac) {
+        if (idCardHmac == null || idCardHmac.isBlank()) {
+            return Optional.empty();
+        }
+        return jdbc.query(SELECT + " WHERE e.id_card_hmac = ? AND e.deleted_at IS NULL ORDER BY e.id DESC LIMIT 1",
+                        MAPPER, idCardHmac)
+                .stream().findFirst();
+    }
+
     @Override
     public boolean existsEmpNo(String empNo, Long excludeId) {
         return countWhere("emp_no = ?", empNo, excludeId) > 0;

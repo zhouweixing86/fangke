@@ -46,6 +46,15 @@ public interface EmployeeRepository {
 
     boolean existsIdCardHmac(String idCardHmac, Long excludeId);
 
+    /**
+     * 按证件号 HMAC 查员工：设备回传通行记录时用它解析归属人。
+     *
+     * <p>默认返回空，方便测试替身只实现自己关心的方法。
+     */
+    default Optional<Employee> findByIdCardHmac(String idCardHmac) {
+        return Optional.empty();
+    }
+
     List<Employee> search(String keyword, Integer status, int offset, int limit);
 
     long count(String keyword, Integer status);
