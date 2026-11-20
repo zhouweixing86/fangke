@@ -161,6 +161,16 @@ public class JdbcEmployeeRepository implements EmployeeRepository {
     }
 
     @Override
+    public Optional<Employee> findByPhoneHmacAnyStatus(String phoneHmac) {
+        if (phoneHmac == null) {
+            return Optional.empty();
+        }
+        return jdbc.query(SELECT + " WHERE e.phone_hmac = ? AND e.deleted_at IS NULL ORDER BY e.id DESC LIMIT 1",
+                        MAPPER, phoneHmac)
+                .stream().findFirst();
+    }
+
+    @Override
     public boolean existsEmpNo(String empNo, Long excludeId) {
         return countWhere("emp_no = ?", empNo, excludeId) > 0;
     }

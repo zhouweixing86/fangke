@@ -30,6 +30,16 @@ public interface EmployeeRepository {
     /** 预约时按被访人手机号匹配员工（BR-A-002 / C-22）。 */
     Optional<Employee> findByPhoneHmac(String phoneHmac);
 
+    /**
+     * 手机号查员工，**不过滤状态**。
+     *
+     * <p>App 登录要能区分「已停用」和「未登记」，{@link #findByPhoneHmac} 只查在岗会把停用员工
+     * 误报成"该手机号还没有登记记录"。
+     */
+    default Optional<Employee> findByPhoneHmacAnyStatus(String phoneHmac) {
+        return findByPhoneHmac(phoneHmac);
+    }
+
     boolean existsEmpNo(String empNo, Long excludeId);
 
     boolean existsPhoneHmac(String phoneHmac, Long excludeId);

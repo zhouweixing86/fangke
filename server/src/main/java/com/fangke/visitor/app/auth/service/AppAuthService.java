@@ -132,7 +132,7 @@ public class AppAuthService {
         codes.remove(normalized);
 
         String hmac = crypto.hmac(normalized);
-        var employee = employeeRepository.findByPhoneHmac(hmac);
+        var employee = employeeRepository.findByPhoneHmacAnyStatus(hmac);
         if (employee.isPresent()) {
             Employee e = employee.get();
             if (e.getStatus() != Employee.STATUS_ACTIVE) {

@@ -368,7 +368,8 @@ class ApprovalServiceTest {
         appointment.setVisitEmployeeId(null);
         service.start(appointment);
 
-        assertTrue(taskRepo.store.isEmpty());
+        // 被访人未匹配时兜底给保安角色，否则预约停在待审批却没有任何任务（死单）
+        assertEquals(1, taskRepo.store.size());
         assertEquals(Appointment.PENDING_L1, appointment.getStatus());
     }
 

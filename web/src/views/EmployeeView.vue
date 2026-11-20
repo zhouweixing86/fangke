@@ -111,14 +111,13 @@
       <el-alert type="info" :closable="false" show-icon
         title="≤2MB 直接上传；超过 2MB 自动压缩。分辨率不低于 400×400，单人正面。上传即生效并进入待下发"
         style="margin-bottom: 12px" />
-      <div class="face-drop" :class="{ 'is-over': dragOver }"
-        @click="pickFaceFile" @dragover.prevent="dragOver = true"
-        @dragleave.prevent="dragOver = false" @drop.prevent="onFaceDrop">
+      <label class="face-drop" :class="{ 'is-over': dragOver }" for="face-file-input"
+        @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="onFaceDrop">
         <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
         <div class="el-upload__text">将照片拖到此处，或<em>点击选择</em></div>
-        <input ref="faceInput" type="file" accept="image/jpeg,image/png"
-          style="display: none" @change="onFacePicked" />
-      </div>
+      </label>
+      <input id="face-file-input" ref="faceInput" class="face-file-input" type="file"
+        accept="image/jpeg,image/png" @change="onFacePicked" />
 
       <el-table :data="faces" border stripe style="margin-top: 16px" size="small">
         <el-table-column label="上传时间" width="160">
@@ -344,10 +343,6 @@ async function openFace(row: EmployeeView) {
 const faceInput = ref<HTMLInputElement | null>(null)
 const dragOver = ref(false)
 
-function pickFaceFile() {
-  faceInput.value?.click()
-}
-
 function onFacePicked(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
@@ -431,5 +426,17 @@ onMounted(async () => {
 .face-drop .el-upload__text em {
   color: #409eff;
   font-style: normal;
+}
+
+/* 视觉隐藏但仍可被 label 触发；不要用 display:none，个别浏览器会拦截 */
+.face-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
 }
 </style>

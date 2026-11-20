@@ -116,8 +116,16 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         Long assignee = appointment.getVisitEmployeeId() != null
                 ? appointment.getVisitEmployeeId() : config.defaultL1User();
         if (assignee == null) {
-            // 没有可指派的审批人：保留在待审批，由管理员在后台处理
-            log.warn("预约 {} 无法解析一级审批人（被访人未匹配且未配置默认审批人）", appointment.getAppointmentNo());
+            // 被访人手机号填错 / 被访人已停用，且没配默认一级审批人时的兜底：
+            // 交给保安角色处理。否则预约会停在"待审批"却没有任何审批任务，谁都处理不了（死单）。
+            String fallbackRole = config.l2Role() == null || config.l2Role().isBlank() ? "GUARD" : config.l2Role();
+            long fallbackTaskId = taskRepository.insert(
+                    ApprovalTask.roleTask(appointment.getId(), 1, fallbackRole));
+            appointment.setStatus(Appointment.PENDING_L1);
+            appointment.setCurrentTaskId(fallbackTaskId);
+            appointmentRepository.update(appointment);
+            log.warn("预约 {} 未匹配到被访人，一级审批兜底给角色 {}（task={}）",
+                    appointment.getAppointmentNo(), fallbackRole, fallbackTaskId);
             return;
         }
         long taskId = taskRepository.insert(ApprovalTask.employeeTask(appointment.getId(), 1, assignee));

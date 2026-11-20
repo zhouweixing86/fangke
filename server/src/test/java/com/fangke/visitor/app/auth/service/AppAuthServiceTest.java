@@ -110,7 +110,7 @@ class AppAuthServiceTest {
         employee.setId(7L);
         employee.setName("张主管");
         employee.setStatus(Employee.STATUS_ACTIVE);
-        when(employeeRepo.findByPhoneHmac(phoneHmac)).thenReturn(Optional.of(employee));
+        when(employeeRepo.findByPhoneHmacAnyStatus(phoneHmac)).thenReturn(Optional.of(employee));
 
         String mock = code();
         AppAuthService.LoginResult result = service.login(PHONE, mock);
@@ -129,7 +129,7 @@ class AppAuthServiceTest {
         employee.setId(7L);
         employee.setName("已离职");
         employee.setStatus(3);
-        when(employeeRepo.findByPhoneHmac(phoneHmac)).thenReturn(Optional.of(employee));
+        when(employeeRepo.findByPhoneHmacAnyStatus(phoneHmac)).thenReturn(Optional.of(employee));
 
         String mock = code();
         assertEquals(ErrorCode.ACCOUNT_DISABLED.code(), assertThrows(BusinessException.class,
@@ -139,7 +139,7 @@ class AppAuthServiceTest {
     @Test
     @DisplayName("访客手机号登录：角色 APP_VISITOR")
     void loginAsVisitor() {
-        when(employeeRepo.findByPhoneHmac(anyString())).thenReturn(Optional.empty());
+        when(employeeRepo.findByPhoneHmacAnyStatus(anyString())).thenReturn(Optional.empty());
         Visitor visitor = new Visitor();
         visitor.setId(9L);
         visitor.setName("访客甲");
@@ -155,7 +155,7 @@ class AppAuthServiceTest {
     @Test
     @DisplayName("手机号未登记：提示先完成预约登记")
     void loginUnknownPhone() {
-        when(employeeRepo.findByPhoneHmac(anyString())).thenReturn(Optional.empty());
+        when(employeeRepo.findByPhoneHmacAnyStatus(anyString())).thenReturn(Optional.empty());
         when(visitorRepo.findByPhoneHmac(anyString())).thenReturn(Optional.empty());
 
         String mock = code();
@@ -170,7 +170,7 @@ class AppAuthServiceTest {
         employee.setId(7L);
         employee.setName("张主管");
         employee.setStatus(Employee.STATUS_ACTIVE);
-        when(employeeRepo.findByPhoneHmac(phoneHmac)).thenReturn(Optional.of(employee));
+        when(employeeRepo.findByPhoneHmacAnyStatus(phoneHmac)).thenReturn(Optional.of(employee));
 
         String mock = code();
         assertNotNull(service.login(PHONE, mock).token());
