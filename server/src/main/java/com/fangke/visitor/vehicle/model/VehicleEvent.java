@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
  *
  * @param direction    0 出 / 1 进，取设备上报
  * @param matchedType  1 员工 / 2 访客 / null 未匹配
+ * @param personNo     人员编号（员工 E000123 / 访客 V202611190001），用于和行人记录按人合并
  * @param resultStatus 1 放行 / 0 拒绝
  */
 public record VehicleEvent(
@@ -21,6 +22,7 @@ public record VehicleEvent(
         Integer matchedType,
         Long matchedId,
         String matchedName,
+        String personNo,
         int resultStatus,
         String failReason,
         String photoKey,

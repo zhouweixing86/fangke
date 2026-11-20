@@ -210,6 +210,19 @@ mvn spring-boot:run
 > 设备 `direction` 支持 **2=双向**（现场：一门 1 车闸 + 1 行闸，均双向）；双向设备不下发 `inout`，
 > 通行方向以设备上报的 `inout` 为准。
 
+### M20 通行记录合并（C-69）
+
+| 能力 | 位置 |
+|---|---|
+| 一人一天一行汇总（最早进场 / 最晚出场 / 进出次数 / 通道） | `traffic/web/AdminTrafficController#summary` |
+| UNPIVOT 合并：`access_event`（行人）+ `vehicle_event`（车辆）按 `person_no + day` 分组 | 同上（SQL UNION ALL + GROUP BY） |
+| 人员类型筛选（`E` 前缀=员工 / `V`=访客）、通行方式筛选（行人/车辆） | 同上 |
+| 某人某天明细（识别方式 + 门点 + 设备点位 + 车牌 + 抓拍入口） | `AdminTrafficController#detail` |
+| `vehicle_event.person_no` 补齐与历史回填 | V17 / V18 |
+
+> 只统计 `result_status=1` 的成功记录；被拒绝的尝试保留在原始表，可在车辆原始接口查。
+> 独立的「车辆记录」页已删除，管理端只保留一个「通行记录」页。
+
 ### M11 保安工作台
 
 | 能力 | 位置 |

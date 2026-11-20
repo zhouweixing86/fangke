@@ -37,6 +37,8 @@ import type {
   SyncBatch,
   SyncBatchItem,
   VisitorReport,
+  TrafficDetail,
+  TrafficRow,
   VehicleEventRow
 } from './types'
 
@@ -300,3 +302,11 @@ export const guardCheckout = (appointmentNo: string) =>
 
 export const listVehicleEvents = (params: Record<string, unknown>) =>
   get<PageResult<VehicleEventRow>>('/admin/vehicle/event', params)
+
+/* ---------------- 通行记录（C-69：行人 + 车辆合并） ---------------- */
+
+export const trafficSummary = (params: Record<string, unknown>) =>
+  get<PageResult<TrafficRow>>('/admin/traffic/summary', params)
+
+export const trafficDetail = (personNo: string, date: string) =>
+  get<TrafficDetail>(`/admin/traffic/${encodeURIComponent(personNo)}/detail`, { date })

@@ -492,3 +492,42 @@ export interface VehicleEventRow {
   photoKey: string
   deviceSn: string
 }
+
+/** 通行记录汇总：一人一天一行（C-69） */
+export interface TrafficRow {
+  personNo: string
+  personName: string
+  personType: 'EMPLOYEE' | 'VISITOR'
+  personTypeText: string
+  day: string
+  firstIn: string
+  lastOut: string
+  inCount: number
+  outCount: number
+  totalCount: number
+  channelText: string
+}
+
+/** 某人某天的进出明细 */
+export interface TrafficRecord {
+  personName: string
+  eventTime: string
+  channel: 'PEDESTRIAN' | 'VEHICLE'
+  channelText: string
+  direction: number
+  directionText: string
+  methodCode: number
+  methodText: string
+  plateNo: string
+  deviceSn: string
+  deviceName: string
+  gateName: string
+  eventId: number | null
+}
+
+export interface TrafficDetail {
+  personNo: string
+  date: string
+  personName: string
+  records: TrafficRecord[]
+}

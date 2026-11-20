@@ -37,12 +37,12 @@ public class VehicleAccessService {
     private static final Logger log = LoggerFactory.getLogger(VehicleAccessService.class);
     private static final DateTimeFormatter DAY_PATH = DateTimeFormatter.ofPattern("yyyyMMdd");
 
-    /** 判定结果。 */
+    /** 判定结果。{@code personNo} 用于把车辆记录与行人记录按人合并。 */
     public record Decision(boolean allowed, String reason, Integer matchedType,
-                           Long matchedId, String matchedName) {
+                           Long matchedId, String matchedName, String personNo) {
 
         public static Decision deny(String reason) {
-            return new Decision(false, reason, null, null, null);
+            return new Decision(false, reason, null, null, null, null);
         }
     }
 
@@ -96,9 +96,10 @@ public class VehicleAccessService {
             Employee e = employee.get();
             if (!inValidRange(e.getValidFrom(), e.getValidTo(), today)) {
                 return new Decision(false, "员工通行证已过期", VehicleEvent.TYPE_EMPLOYEE,
-                        e.getId(), e.getName());
+                        e.getId(), e.getName(), e.getPersonNo());
             }
-            return new Decision(true, "员工车辆", VehicleEvent.TYPE_EMPLOYEE, e.getId(), e.getName());
+            return new Decision(true, "员工车辆", VehicleEvent.TYPE_EMPLOYEE, e.getId(), e.getName(),
+                    e.getPersonNo());
         }
 
         // 2) 访客：当天已授权 + 批准门点命中
@@ -109,10 +110,11 @@ public class VehicleAccessService {
             if (gates.isEmpty() || !gates.contains(gateId)) {
                 continue;
             }
-            String name = visitorRepository.findById(appointment.getVisitorId())
-                    .map(v -> v.getName()).orElse("");
-            return new Decision(true, "访客车辆", VehicleEvent.TYPE_VISITOR,
-                    appointment.getId(), name);
+            // matched_id 记访客 ID（不是预约单 ID），与行人记录的人员口径一致
+            return visitorRepository.findById(appointment.getVisitorId())
+                    .map(v -> new Decision(true, "访客车辆", VehicleEvent.TYPE_VISITOR,
+                            v.getId(), v.getName(), v.getPersonNo()))
+                    .orElseGet(() -> Decision.deny("访客档案不存在"));
         }
         if (!appointments.isEmpty()) {
             return Decision.deny("该车牌今日已授权，但不包含当前门点");
@@ -137,6 +139,7 @@ public class VehicleAccessService {
                 decision == null ? null : decision.matchedType(),
                 decision == null ? null : decision.matchedId(),
                 decision == null ? null : decision.matchedName(),
+                decision == null ? null : decision.personNo(),
                 decision != null && decision.allowed()
                         ? VehicleEvent.RESULT_PASS : VehicleEvent.RESULT_DENY,
                 decision == null ? null : decision.reason(),

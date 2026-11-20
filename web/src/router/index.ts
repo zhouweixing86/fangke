@@ -83,14 +83,8 @@ const router = createRouter({
         {
           path: 'events',
           name: 'events',
-          component: () => import('@/views/AccessEventView.vue'),
+          component: () => import('@/views/TrafficView.vue'),
           meta: { title: '通行记录', adminOnly: true }
-        },
-        {
-          path: 'vehicles',
-          name: 'vehicles',
-          component: () => import('@/views/VehicleView.vue'),
-          meta: { title: '车辆记录', adminOnly: true }
         },
         {
           path: 'batches',

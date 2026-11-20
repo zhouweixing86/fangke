@@ -84,7 +84,6 @@ const allMenus: MenuItem[] = [
   { path: '/blacklist', title: '黑名单', icon: 'CircleClose', adminOnly: true },
   { path: '/appointments', title: '预约查询', icon: 'Calendar', adminOnly: true },
   { path: '/events', title: '通行记录', icon: 'Document', adminOnly: true },
-  { path: '/vehicles', title: '车辆记录', icon: 'Van', adminOnly: true },
   { path: '/batches', title: '下发批次', icon: 'Upload', adminOnly: true },
   { path: '/report', title: '报表统计', icon: 'DataAnalysis', adminOnly: true },
   { path: '/users', title: '账号管理', icon: 'Avatar', adminOnly: true },
