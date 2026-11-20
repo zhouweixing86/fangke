@@ -111,13 +111,13 @@
       <el-alert type="info" :closable="false" show-icon
         title="≤2MB 直接上传；超过 2MB 自动压缩。分辨率不低于 400×400，单人正面。上传即生效并进入待下发"
         style="margin-bottom: 12px" />
-      <label class="face-drop" :class="{ 'is-over': dragOver }" for="face-file-input"
+      <div class="face-drop" :class="{ 'is-over': dragOver }"
         @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="onFaceDrop">
         <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
         <div class="el-upload__text">将照片拖到此处，或<em>点击选择</em></div>
-      </label>
-      <input id="face-file-input" ref="faceInput" class="face-file-input" type="file"
-        accept="image/jpeg,image/png" @change="onFacePicked" />
+        <input id="face-file-input" ref="faceInput" class="face-file-input" type="file"
+          accept="image/jpeg,image/png" title="点击选择照片" @change="onFacePicked" />
+      </div>
 
       <el-table :data="faces" border stripe style="margin-top: 16px" size="small">
         <el-table-column label="上传时间" width="160">
@@ -393,6 +393,7 @@ onMounted(async () => {
 }
 
 .face-drop {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -428,15 +429,14 @@ onMounted(async () => {
   font-style: normal;
 }
 
-/* 视觉隐藏但仍可被 label 触发；不要用 display:none，个别浏览器会拦截 */
+/* 透明的原生 file input 直接铺满整个拖拽区：点击命中的就是 input 本身，
+   100% 触发浏览器文件选择框，不依赖 label 关联或脚本 click() */
 .face-file-input {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  border: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 </style>
