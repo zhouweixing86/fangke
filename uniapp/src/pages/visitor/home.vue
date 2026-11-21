@@ -4,6 +4,7 @@
       <image class="logo" src="/static/logo.png" mode="aspectFit" />
       <text class="brand">访客预约</text>
       <text class="slogan">预约申请 · 到访通行</text>
+      <text class="build">构建版 2026-11-21</text>
     </view>
 
     <view class="actions">
@@ -92,6 +93,13 @@ onShow(() => {
   margin-top: 14rpx;
   font-size: 30rpx;
   color: #8a9099;
+}
+
+/* 构建标识：联调时用来确认开发者工具跑的是哪一版 */
+.build {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #c0c4cc;
 }
 
 .actions {
