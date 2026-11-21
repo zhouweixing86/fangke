@@ -32,6 +32,27 @@ public interface AdminBlacklistRepository {
     /** 取拉黑对象的 HMAC（用于反查访客档案），不对外暴露。 */
     Optional<String> findTargetHmac(Long id);
 
+    /**
+     * 取拉黑对象的密文（下发到设备需要明文证件号，由调用方解密）。
+     *
+     * <p>默认返回空，方便测试替身只实现自己关心的方法。
+     */
+    default Optional<byte[]> findTargetEnc(Long id) {
+        return Optional.empty();
+    }
+
+    /**
+     * 当前生效的身份证类型黑名单密文列表。
+     *
+     * <p>设备开机拉全量名单索引（{@code getAllDeviceWhiteList}）时，黑名单也必须出现在索引里，
+     * 否则设备可能把本地黑名单当成"平台已删除"而清掉。
+     *
+     * <p>默认返回空，方便测试替身只实现自己关心的方法。
+     */
+    default List<byte[]> findActiveIdCardTargets() {
+        return List.of();
+    }
+
     /** 同类型 + 同 HMAC 且仍在有效期内，说明重复拉黑。 */
     boolean existsEffective(int targetType, String targetHmac);
 

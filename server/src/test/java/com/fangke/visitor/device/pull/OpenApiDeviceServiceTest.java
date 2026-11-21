@@ -74,6 +74,8 @@ class OpenApiDeviceServiceTest {
 
         gateService = new GateService(InMemoryGateRepository.withUnassigned(), props);
         service = new OpenApiDeviceService(deviceRepo, cmdRepo, grantRepo, visitorRepo,
+                mock(com.fangke.visitor.appointment.repository.BlacklistRepository.class),
+                mock(com.fangke.visitor.admin.repository.AdminBlacklistRepository.class),
                 mock(EmployeeRepository.class), mock(EmployeeFaceRepository.class),
                 mock(StorageService.class), crypto, mock(AccessEventRepository.class),
                 mock(VisitRecorder.class), mock(CaptureUploader.class),
@@ -133,6 +135,8 @@ class OpenApiDeviceServiceTest {
         EmployeeRepository employeeRepo = mock(EmployeeRepository.class);
         when(employeeRepo.findByPersonNo("E000001")).thenReturn(Optional.of(employee));
         OpenApiDeviceService svc = new OpenApiDeviceService(deviceRepo, cmdRepo, grantRepo, visitorRepo,
+                mock(com.fangke.visitor.appointment.repository.BlacklistRepository.class),
+                mock(com.fangke.visitor.admin.repository.AdminBlacklistRepository.class),
                 employeeRepo, mock(EmployeeFaceRepository.class), mock(StorageService.class), crypto,
                 mock(AccessEventRepository.class), mock(VisitRecorder.class), mock(CaptureUploader.class),
                 mock(QrTicketService.class), gateService, props);

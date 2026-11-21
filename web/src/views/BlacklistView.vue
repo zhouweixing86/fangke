@@ -48,6 +48,8 @@
     </div>
 
     <el-dialog v-model="formVisible" title="新增黑名单" width="560px">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
+        title="身份证类型会下发到设备本地黑名单（约 5 秒生效），刷证时被拒；手机号类型只在平台侧拦截预约，闸机无法识别手机号" />
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="对象类型" prop="targetType">
           <el-radio-group v-model="form.targetType">
@@ -156,10 +158,13 @@ async function save() {
   }
 }
 
-/** 立即生效：撤销在途预约、删设备名单、作废通行码（BR-B-003） */
+/** 立即生效：下发设备黑名单 + 撤销在途预约、删设备白名单、作废通行码（BR-B-003） */
 async function enforce(row: BlacklistRow) {
   await ElMessageBox.confirm(
-    `立即对「${row.targetMask}」生效？\n会撤回其待审批预约、撤销已下发授权（设备名单将删除该人）、作废未使用通行码。`,
+    `立即对「${row.targetMask}」生效？\n\n` +
+      `· 下发到设备本地黑名单（身份证类型，约 5 秒生效）\n` +
+      `· 撤回其待审批预约、撤销已下发授权（设备白名单删掉该人）\n` +
+      `· 作废未使用通行码`,
     '拉黑立即生效',
     { type: 'warning' }
   )
@@ -170,15 +175,16 @@ async function enforce(row: BlacklistRow) {
   await load()
 }
 
-async function changeStatus(row: BlacklistRow, status: number) {  await ElMessageBox.confirm(
+async function changeStatus(row: BlacklistRow, status: number) {
+  await ElMessageBox.confirm(
     status === 0
-      ? `让「${row.targetMask}」恢复可预约？失效后不再拦截。`
-      : `恢复拦截「${row.targetMask}」？其预约将被拒绝。`,
+      ? `让「${row.targetMask}」恢复可预约？\n失效后会从设备本地黑名单删除该人（约 5 秒生效），不再拦截。`
+      : `恢复拦截「${row.targetMask}」？\n会重新下发到设备本地黑名单，其预约将被拒绝。`,
     status === 0 ? '失效黑名单' : '恢复黑名单',
     { type: 'warning' }
   )
   await updateBlacklistStatus(row.id, status)
-  ElMessage.success(status === 0 ? '已失效' : '已恢复')
+  ElMessage.success(status === 0 ? '已失效，正在从设备删除' : '已恢复，正在下发到设备')
   await load()
 }
 

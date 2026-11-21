@@ -64,7 +64,8 @@ class BlacklistAdminServiceTest {
         dispatchService = mock(DispatchService.class);
         qrTicketService = mock(QrTicketService.class);
         service = new BlacklistAdminService(repo, crypto, visitorRepo, appointmentRepo,
-                appointmentService, dispatchService, qrTicketService);
+                appointmentService, dispatchService, qrTicketService,
+                mock(com.fangke.visitor.dispatch.service.BlacklistDeviceDispatcher.class));
     }
 
     @Test

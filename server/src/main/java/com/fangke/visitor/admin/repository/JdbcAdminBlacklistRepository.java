@@ -86,6 +86,23 @@ public class JdbcAdminBlacklistRepository implements AdminBlacklistRepository {
     }
 
     @Override
+    public Optional<byte[]> findTargetEnc(Long id) {
+        return jdbc.query("SELECT target_enc FROM blacklist WHERE id = ?",
+                (rs, i) -> rs.getBytes(1), id).stream().findFirst();
+    }
+
+    @Override
+    public List<byte[]> findActiveIdCardTargets() {
+        return jdbc.query("""
+                        SELECT target_enc FROM blacklist
+                        WHERE target_type = 1 AND status = 1
+                          AND (valid_from IS NULL OR valid_from <= NOW())
+                          AND (valid_to IS NULL OR valid_to >= NOW())
+                        """,
+                (rs, i) -> rs.getBytes(1));
+    }
+
+    @Override
     public boolean existsEffective(int targetType, String targetHmac) {
         Long count = jdbc.queryForObject(
                 "SELECT COUNT(1) FROM blacklist WHERE target_type = ? AND target_hmac = ? AND status = 1",

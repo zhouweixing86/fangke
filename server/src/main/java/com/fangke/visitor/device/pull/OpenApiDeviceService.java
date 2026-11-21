@@ -1,7 +1,9 @@
 package com.fangke.visitor.device.pull;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fangke.visitor.admin.repository.AdminBlacklistRepository;
 import com.fangke.visitor.appointment.model.Visitor;
+import com.fangke.visitor.appointment.repository.BlacklistRepository;
 import com.fangke.visitor.appointment.repository.VisitorRepository;
 import com.fangke.visitor.config.AppProperties;
 import com.fangke.visitor.device.model.AccessEvent;
@@ -28,10 +30,12 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 轮询式终端（HTTP 客户端版）的业务实现。
@@ -58,6 +62,8 @@ public class OpenApiDeviceService {
     private final PullCommandRepository commandRepository;
     private final AccessGrantRepository grantRepository;
     private final VisitorRepository visitorRepository;
+    private final BlacklistRepository blacklistRepository;
+    private final AdminBlacklistRepository adminBlacklistRepository;
     private final EmployeeRepository employeeRepository;
     private final EmployeeFaceRepository faceRepository;
     private final StorageService storageService;
@@ -73,6 +79,8 @@ public class OpenApiDeviceService {
                                 PullCommandRepository commandRepository,
                                 AccessGrantRepository grantRepository,
                                 VisitorRepository visitorRepository,
+                                BlacklistRepository blacklistRepository,
+                                AdminBlacklistRepository adminBlacklistRepository,
                                 EmployeeRepository employeeRepository,
                                 EmployeeFaceRepository faceRepository,
                                 StorageService storageService,
@@ -87,6 +95,8 @@ public class OpenApiDeviceService {
         this.commandRepository = commandRepository;
         this.grantRepository = grantRepository;
         this.visitorRepository = visitorRepository;
+        this.blacklistRepository = blacklistRepository;
+        this.adminBlacklistRepository = adminBlacklistRepository;
         this.employeeRepository = employeeRepository;
         this.faceRepository = faceRepository;
         this.storageService = storageService;
@@ -202,17 +212,43 @@ public class OpenApiDeviceService {
     /** getAllDeviceWhiteList：平台侧全部有效名单索引（idno + personVer）。 */
     public List<Map<String, Object>> personIndex(Device device) {
         List<Map<String, Object>> list = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        // 黑名单优先：设备开机拉全量索引时，黑名单必须出现在里面，否则会被当成"平台已删除"清掉
+        for (byte[] enc : adminBlacklistRepository.findActiveIdCardTargets()) {
+            String idno = decryptIdCard(enc);
+            if (idno != null && seen.add(idno)) {
+                list.add(indexItem(idno, 0));
+            }
+        }
         for (AccessGrant grant : activeGrants(device)) {
             PersonView view = build(grant);
-            if (view == null) {
+            if (view == null || view.idno() == null || !seen.add(view.idno())) {
                 continue;
             }
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("idno", view.idno());
-            item.put("personVer", view.personVer());
-            list.add(item);
+            list.add(indexItem(view.idno(), view.personVer()));
         }
         return list;
+    }
+
+    private Map<String, Object> indexItem(String idno, int personVer) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("idno", idno);
+        item.put("personVer", personVer);
+        return item;
+    }
+
+    /** 黑名单密文 → 明文证件号；解密失败返回 null（不让一条坏数据拖垮整次下发）。 */
+    private String decryptIdCard(byte[] enc) {
+        if (enc == null) {
+            return null;
+        }
+        try {
+            String plain = crypto.decrypt(enc);
+            return plain == null || plain.isBlank() ? null : plain.trim().toUpperCase();
+        } catch (Exception e) {
+            log.warn("黑名单证件号解密失败，跳过：{}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -249,6 +285,10 @@ public class OpenApiDeviceService {
 
     /** getDevicWhiteInfo：单个人员详情（含照片 base64）。 */
     public Map<String, Object> personDetail(Device device, String idno) {
+        // 黑名单优先：同一个人既被拉黑又有授权时，设备侧必须按黑名单处理
+        if (isBlacklisted(idno)) {
+            return blackPersonDetail(idno);
+        }
         PersonView view = findByIdno(device, idno);
         if (view == null) {
             return null;
@@ -271,6 +311,41 @@ public class OpenApiDeviceService {
         return data;
     }
 
+    /** 该证件号是否在生效中的黑名单里。 */
+    private boolean isBlacklisted(String idno) {
+        if (idno == null || idno.isBlank()) {
+            return false;
+        }
+        String plain = idno.trim().toUpperCase();
+        try {
+            return blacklistRepository.isBlacklisted(BlacklistRepository.TARGET_ID_CARD,
+                    crypto.hmac(plain), LocalDateTime.now());
+        } catch (Exception e) {
+            log.warn("黑名单判定失败 idno={}：{}", idno, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 黑名单人员详情：设备据此把人放进本地黑名单，刷到就拒绝并回传记录。
+     *
+     * <p>黑名单不需要照片（{@code passAlgo=true}），有效期给足（永久），
+     * 是否仍然生效由平台控制——失效时平台会下发删除指令。
+     */
+    private Map<String, Object> blackPersonDetail(String idno) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("usertype", "black");
+        data.put("name", OpenApiRecordMapper.maskIdCard(idno));
+        data.put("idno", idno.trim().toUpperCase());
+        data.put("peoplestartdate", DATETIME.format(DEVICE_MIN_VALID_FROM));
+        data.put("peopleenddate", DATETIME.format(DEVICE_MAX_VALID_TO));
+        data.put("timegroupid", 0);
+        data.put("group", "黑名单");
+        data.put("groupSuffix", "黑名单");
+        data.put("passAlgo", true);
+        return data;
+    }
+
     /** syncWhiteResult：设备回报新增/修改/删除结果，按人完成队列指令。 */
     public void syncWhiteResult(Device device, String idno, Integer resultType, Integer resultCode, String msg) {
         int status = resultCode != null && resultCode == 0 ? 2 : 3;
@@ -287,6 +362,11 @@ public class OpenApiDeviceService {
         PersonView view = findByIdno(device, idno);
         String personNo = view == null ? idno : view.personNo();
         int affected = commandRepository.markDoneByPerson(device.getId(), cmdType, personNo, status, msg);
+        // 黑名单指令的 personNo 存的是证件号：同一个人既是员工/访客又被拉黑时，
+        // findByIdno 会解析出人员编号，按编号匹配不到，这里再用证件号兜一次
+        if (affected == 0 && !personNo.equals(idno)) {
+            affected = commandRepository.markDoneByPerson(device.getId(), cmdType, idno, status, msg);
+        }
         log.info("名单回执 device={} idno={} type={} code={} msg={} 更新队列 {} 条",
                 device.getDeviceSn(), idno, resultType, resultCode, msg, affected);
         // 名单变了就回填「人数」：用该门点当前生效授权数作为期望值，
@@ -533,8 +613,10 @@ public class OpenApiDeviceService {
     static final LocalDateTime DEVICE_MAX_VALID_TO = LocalDateTime.of(2037, 12, 31, 23, 59, 59);
 
     /** 起始日期为空按"很久以前"下发，避免设备把空值当成"未生效"。 */
+    private static final LocalDateTime DEVICE_MIN_VALID_FROM = LocalDateTime.of(2000, 1, 1, 0, 0);
+
     private static LocalDateTime deviceValidFrom(LocalDateTime from) {
-        return from == null ? LocalDateTime.of(2000, 1, 1, 0, 0) : from;
+        return from == null ? DEVICE_MIN_VALID_FROM : from;
     }
 
     /** 结束日期为空或超过上限时统一截断，原因见 {@link #DEVICE_MAX_VALID_TO}。 */

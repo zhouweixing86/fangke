@@ -8,6 +8,7 @@ import com.fangke.visitor.appointment.repository.VisitorRepository;
 import com.fangke.visitor.appointment.service.AppointmentService;
 import com.fangke.visitor.common.BusinessException;
 import com.fangke.visitor.common.ErrorCode;
+import com.fangke.visitor.dispatch.service.BlacklistDeviceDispatcher;
 import com.fangke.visitor.dispatch.service.DispatchService;
 import com.fangke.visitor.employee.service.EmployeeValidator;
 import com.fangke.visitor.qr.service.QrTicketService;
@@ -42,6 +43,7 @@ public class BlacklistAdminService {
     private final AppointmentService appointmentService;
     private final DispatchService dispatchService;
     private final QrTicketService qrTicketService;
+    private final BlacklistDeviceDispatcher deviceDispatcher;
 
     public BlacklistAdminService(AdminBlacklistRepository repository,
                                  CryptoService crypto,
@@ -49,7 +51,8 @@ public class BlacklistAdminService {
                                  AppointmentRepository appointmentRepository,
                                  AppointmentService appointmentService,
                                  DispatchService dispatchService,
-                                 QrTicketService qrTicketService) {
+                                 QrTicketService qrTicketService,
+                                 BlacklistDeviceDispatcher deviceDispatcher) {
         this.repository = repository;
         this.crypto = crypto;
         this.visitorRepository = visitorRepository;
@@ -57,6 +60,7 @@ public class BlacklistAdminService {
         this.appointmentService = appointmentService;
         this.dispatchService = dispatchService;
         this.qrTicketService = qrTicketService;
+        this.deviceDispatcher = deviceDispatcher;
     }
 
     public record Page(List<AdminBlacklistRepository.Row> list, long total) {
@@ -109,8 +113,14 @@ public class BlacklistAdminService {
             throw new BusinessException(ErrorCode.PARAM_INVALID, "该对象已在黑名单中：" + masked);
         }
         try {
-            return repository.insert(type, crypto.encrypt(plain), hmac, masked, text,
+            long id = repository.insert(type, crypto.encrypt(plain), hmac, masked, text,
                     validFrom, validTo, operatorId);
+            // 已生效的身份证黑名单立刻推到设备（设备本地拒绝该证件号）
+            if (type == BlacklistRepository.TARGET_ID_CARD
+                    && (validFrom == null || !validFrom.isAfter(LocalDateTime.now()))) {
+                pushQuietly(id);
+            }
+            return id;
         } catch (DuplicateKeyException e) {
             throw new BusinessException(ErrorCode.PARAM_INVALID, "该对象已在黑名单中：" + masked);
         }
@@ -127,6 +137,8 @@ public class BlacklistAdminService {
         if (hmac == null) {
             throw new BusinessException(ErrorCode.PARAM_INVALID, "黑名单缺少目标摘要，无法反查访客");
         }
+        // 先把黑名单本身推到设备（重复下发会被队列去重），再处理在途预约
+        pushQuietly(id);
 
         var visitor = row.targetType() == BlacklistRepository.TARGET_ID_CARD
                 ? visitorRepository.findByIdCardHmac(hmac)
@@ -184,5 +196,24 @@ public class BlacklistAdminService {
         repository.findById(id).orElseThrow(
                 () -> new BusinessException(ErrorCode.PARAM_INVALID, "黑名单记录不存在：" + id));
         repository.updateStatus(id, status);
+        // 失效：从设备本地黑名单删掉；恢复生效：重新推回去
+        if (status == 0) {
+            try {
+                deviceDispatcher.remove(id);
+            } catch (Exception e) {
+                log.warn("黑名单撤销下发失败 id={}：{}", id, e.getMessage());
+            }
+        } else {
+            pushQuietly(id);
+        }
+    }
+
+    /** 下发失败不能影响拉黑本身（拉黑是安全动作，设备稍后由对账/重推补上）。 */
+    private void pushQuietly(Long id) {
+        try {
+            deviceDispatcher.push(id);
+        } catch (Exception e) {
+            log.warn("黑名单下发失败 id={}：{}", id, e.getMessage());
+        }
     }
 }
