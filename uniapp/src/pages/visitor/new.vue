@@ -166,6 +166,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { computed, reactive, ref } from 'vue'
 import { createAppointment, listAppGates, lookupEmployee } from '@/api'
 import type { GateOption } from '@/api/types'
+import { auth } from '@/store/auth'
 import { alert, showToast } from '@/utils/ui'
 
 type Mode = 'personal' | 'group'
@@ -332,6 +333,8 @@ async function submit() {
           }))
         : undefined,
       qrRequested: form.qrRequested,
+      // 小程序首次预约：把 openid 带上去，后端绑到访客档案，之后「我的预约」才能查到自己的单
+      wxOpenid: auth.openid || undefined,
       consentVersion: 'v1.0'
     })
     await alert('预约单号：' + result.appointmentNo + '\n状态：' + result.statusText, '提交成功')

@@ -30,6 +30,8 @@ export const wxLogin = (code: string) =>
     name: string
     openid: string
     bound: boolean
+    /** mock 模式：openid 由 code 派生，前端需复用同一个 code */
+    mock: boolean
     expiresInSeconds: number
   }>('/app/auth/wx-login', { code })
 

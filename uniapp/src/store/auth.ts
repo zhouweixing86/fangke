@@ -12,6 +12,8 @@ interface StoredUser {
   roles: string[]
   subjectId: number
   phoneMask?: string
+  /** 小程序 openid：首次预约时传给后端绑定，之后「我的预约」才能查到自己的单 */
+  openid?: string
 }
 
 interface AuthState extends StoredUser {
@@ -27,7 +29,8 @@ function restore(): AuthState {
     role: raw?.role ?? '',
     roles: raw?.roles ?? [],
     subjectId: raw?.subjectId ?? 0,
-    phoneMask: raw?.phoneMask ?? ''
+    phoneMask: raw?.phoneMask ?? '',
+    openid: raw?.openid ?? ''
   }
 }
 
@@ -43,16 +46,24 @@ function persist(token: string, user: StoredUser) {
   auth.roles = user.roles
   auth.subjectId = user.subjectId
   auth.phoneMask = user.phoneMask ?? ''
+  auth.openid = user.openid ?? ''
 }
 
-export function applyWxLogin(result: { token: string; role: string; subjectId: number; name: string }) {
+export function applyWxLogin(result: {
+  token: string
+  role: string
+  subjectId: number
+  name: string
+  openid?: string
+}) {
   persist(result.token, {
     kind: 'APP',
     name: result.name,
     role: result.role,
     roles: [result.role],
     subjectId: result.subjectId,
-    phoneMask: ''
+    phoneMask: '',
+    openid: result.openid
   })
 }
 
@@ -111,4 +122,38 @@ export function requireLogin(kind: AuthKind = 'APP') {
     return false
   }
   return true
+}
+
+/* ---------------- 微信登录辅助 ---------------- */
+
+const WX_CODE_KEY = 'fk_wx_code'
+
+/**
+ * 取一次微信登录 code，优先复用缓存。
+ *
+ * <p>mock 联调时后端把 code 当 openid，而 `wx.login` 每次返回的 code 都不同——
+ * 每次都重新取会让 openid 变化，导致"首次预约绑定"失效、「我的预约」查不到自己的单。
+ * 因此缓存复用；真实模式下 code 是一次性的，不能复用，
+ * 所以只在后端返回 `mock=true` 时才写缓存（见 cacheWxCode 的调用方）。
+ */
+export function requestWxCode(): Promise<string> {
+  const cached = uni.getStorageSync(WX_CODE_KEY)
+  if (cached) return Promise.resolve(cached as string)
+  return new Promise<string>((resolve, reject) => {
+    uni.login({
+      provider: 'weixin',
+      success: (res: any) => (res.code ? resolve(res.code) : reject(new Error('未获取到 code'))),
+      fail: () => reject(new Error('微信登录失败'))
+    })
+  })
+}
+
+/** 仅 mock 模式调用：记住 code，让后续登录拿到同一个 openid。 */
+export function cacheWxCode(code: string) {
+  uni.setStorageSync(WX_CODE_KEY, code)
+}
+
+/** 换真机/换微信时清掉，避免身份串号。 */
+export function clearWxCode() {
+  uni.removeStorageSync(WX_CODE_KEY)
 }

@@ -20,7 +20,7 @@
 <script setup lang="ts">
 import { onShow } from '@dcloudio/uni-app'
 import { wxLogin } from '@/api'
-import { applyWxLogin, auth } from '@/store/auth'
+import { applyWxLogin, auth, cacheWxCode, requestWxCode } from '@/store/auth'
 
 /**
  * 访客端首页（微信小程序）。
@@ -41,14 +41,11 @@ async function oneClickLogin() {
     return
   }
   try {
-    const code = await new Promise<string>((resolve, reject) => {
-      uni.login({
-        provider: 'weixin',
-        success: (res) => (res.code ? resolve(res.code) : reject(new Error('未获取到 code'))),
-        fail: () => reject(new Error('微信登录失败'))
-      })
-    })
-    applyWxLogin(await wxLogin(code))
+    const code = await requestWxCode()
+    const result = await wxLogin(code)
+    applyWxLogin(result)
+    // mock 模式下 openid 由 code 派生，必须复用同一个 code 才能保持身份稳定
+    if (result.mock) cacheWxCode(code)
   } catch {
     // 静默失败：不影响浏览与提交预约，提交时仍可正常工作
   }

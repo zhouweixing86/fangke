@@ -38,7 +38,7 @@ import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 import { myAppointments, wxLogin } from '@/api'
 import type { AppointmentView } from '@/api/types'
-import { applyWxLogin, auth } from '@/store/auth'
+import { applyWxLogin, auth, cacheWxCode, requestWxCode } from '@/store/auth'
 
 const tabs = [
   { label: '全部', name: 'all' },
@@ -76,14 +76,11 @@ async function ensureLogin() {
     return
   }
   try {
-    const code = await new Promise<string>((resolve, reject) => {
-      uni.login({
-        provider: 'weixin',
-        success: (res) => (res.code ? resolve(res.code) : reject(new Error('未获取到 code'))),
-        fail: () => reject(new Error('微信登录失败'))
-      })
-    })
-    applyWxLogin(await wxLogin(code))
+    const code = await requestWxCode()
+    const result = await wxLogin(code)
+    applyWxLogin(result)
+    // mock 模式下 openid 由 code 派生，必须复用同一个 code 才能保持身份稳定
+    if (result.mock) cacheWxCode(code)
   } catch {
     // 未登录也允许浏览（首次来访还没提交过预约）
   }

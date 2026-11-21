@@ -47,9 +47,14 @@ public class AppAuthService {
                               String phoneMask, long expiresInSeconds) {
     }
 
-    /** 微信一键登录结果：bound=false 表示该微信还没绑定访客档案（首次预约后自动绑定）。 */
+    /**
+     * 微信一键登录结果。
+     *
+     * @param bound 是否已绑定访客档案（false 表示首次使用，提交一次预约后自动绑定）
+     * @param mock  是否 mock 模式：mock 下 openid 由 code 派生，前端需复用同一个 code 才能保持身份稳定
+     */
     public record WxLoginResult(String token, String role, Long subjectId, String name,
-                                String openid, boolean bound, long expiresInSeconds) {
+                                String openid, boolean bound, long expiresInSeconds, boolean mock) {
     }
 
     private record CodeEntry(String code, Instant createdAt, Instant expireAt, int attempts) {
@@ -170,12 +175,12 @@ public class AppAuthService {
             String token = jwtService.issue(v.getId(), v.getPhoneMask(), List.of(ROLE_VISITOR));
             log.info("微信一键登录（已绑定） openid={} visitorId={} name={}", openid, v.getId(), v.getName());
             return new WxLoginResult(token, ROLE_VISITOR, v.getId(), v.getName(), openid, true,
-                    jwtService.ttlSeconds());
+                    jwtService.ttlSeconds(), props.getWx().isMock());
         }
         String token = jwtService.issue(0L, "微信用户", List.of(ROLE_VISITOR));
         log.info("微信一键登录（未绑定，待首次预约） openid={}", openid);
         return new WxLoginResult(token, ROLE_VISITOR, 0L, "微信访客", openid, false,
-                jwtService.ttlSeconds());
+                jwtService.ttlSeconds(), props.getWx().isMock());
     }
 
     /** mock 模式把 code 当 openid，方便没有小程序账号时联调。 */

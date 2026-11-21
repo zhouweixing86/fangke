@@ -69,6 +69,7 @@ public class AppAuthController {
         view.put("name", result.name());
         view.put("openid", result.openid());
         view.put("bound", result.bound());
+        view.put("mock", result.mock());
         view.put("expiresInSeconds", result.expiresInSeconds());
         return ApiResponse.ok(view);
     }
