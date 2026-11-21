@@ -169,6 +169,9 @@ export interface EventRow {
   personName: string
   resultStatus: number
   resultText: string
+  /** 失败记录的原因（如「黑名单拦截」），通过时为空 */
+  failReason: string
+  idCardMask: string
   source: number
   sourceText: string
   hasMedia: boolean

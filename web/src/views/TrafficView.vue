@@ -1,5 +1,11 @@
 <template>
   <div class="page-card">
+    <el-tabs v-model="activeTab" @tab-change="onTabChange">
+      <el-tab-pane label="人员通行" name="traffic" />
+      <el-tab-pane label="拒绝记录" name="denied" />
+    </el-tabs>
+
+    <template v-if="activeTab === 'traffic'">
     <div class="toolbar">
       <el-date-picker v-model="query.range" type="daterange" value-format="YYYY-MM-DD"
         start-placeholder="开始日期" end-placeholder="结束日期" style="width: 240px" />
@@ -60,6 +66,57 @@
       <el-pagination v-model:current-page="page" v-model:page-size="size" :total="total"
         layout="total, prev, pager, next" @current-change="load" />
     </div>
+    </template>
+
+    <template v-else>
+      <div class="toolbar">
+        <el-date-picker v-model="denyRange" type="daterange" value-format="YYYY-MM-DD"
+          start-placeholder="开始日期" end-placeholder="结束日期" style="width: 240px" />
+        <el-input v-model="denyKeyword" placeholder="姓名 / 人员编号 / 证件号" clearable
+          style="width: 200px" @keyup.enter="loadDenied" />
+        <el-button type="primary" @click="loadDenied">查询</el-button>
+        <el-button :icon="Refresh" @click="loadDenied">刷新</el-button>
+        <span class="spacer" />
+        <span class="text-muted">设备判为不通过的记录（黑名单拦截、无效卡、过期证等），含拒绝原因</span>
+      </div>
+
+      <el-table v-loading="denyLoading" :data="denyRows" border stripe>
+        <el-table-column prop="eventTime" label="时间" width="165" />
+        <el-table-column label="进出" width="70">
+          <template #default="{ row }">
+            <el-tag :type="row.direction === 1 ? 'success' : 'info'" size="small">
+              {{ row.directionText }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="identifyTypeText" label="识别方式" width="95" />
+        <el-table-column prop="personName" label="姓名" width="110" />
+        <el-table-column prop="idCardMask" label="证件号" width="150" />
+        <el-table-column prop="personNo" label="人员编号" width="130" />
+        <el-table-column label="原因" min-width="150">
+          <template #default="{ row }">
+            <el-tag v-if="row.failReason" type="danger" size="small" effect="plain">
+              {{ row.failReason }}
+            </el-tag>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="deviceSn" label="设备" width="150" />
+        <el-table-column label="照片" width="80">
+          <template #default="{ row }">
+            <el-button v-if="row.hasMedia" link type="primary" @click="showMedia({ eventId: row.id } as any)">
+              查看
+            </el-button>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="pager">
+        <el-pagination v-model:current-page="denyPage" v-model:page-size="denySize" :total="denyTotal"
+          layout="total, prev, pager, next" @current-change="loadDenied" />
+      </div>
+    </template>
 
     <el-drawer v-model="detailVisible" :title="detailTitle" size="820px">
       <template v-if="detail">
@@ -176,8 +233,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
-import { listDepts, listEventMedia, trafficDetail, trafficSummary } from '@/api'
-import type { DeptView, EventMedia, TrafficDetail, TrafficRow } from '@/api/types'
+import { listDepts, listEventMedia, listEvents, trafficDetail, trafficSummary } from '@/api'
+import type { DeptView, EventMedia, EventRow, TrafficDetail, TrafficRow } from '@/api/types'
+
+/** 人员通行（汇总）/ 拒绝记录（失败明细） */
+const activeTab = ref<'traffic' | 'denied'>('traffic')
 
 const loading = ref(false)
 const rows = ref<TrafficRow[]>([])
@@ -185,6 +245,39 @@ const total = ref(0)
 const page = ref(1)
 const size = ref(20)
 const depts = ref<DeptView[]>([])
+
+/* ---------------- 拒绝记录 ---------------- */
+const denyLoading = ref(false)
+const denyRows = ref<EventRow[]>([])
+const denyTotal = ref(0)
+const denyPage = ref(1)
+const denySize = ref(20)
+const denyRange = ref<[string, string] | null>(null)
+const denyKeyword = ref('')
+
+async function loadDenied() {
+  denyLoading.value = true
+  try {
+    const result = await listEvents({
+      from: denyRange.value?.[0],
+      to: denyRange.value?.[1],
+      result: 0,
+      keyword: denyKeyword.value || undefined,
+      page: denyPage.value,
+      size: denySize.value
+    })
+    denyRows.value = result.list
+    denyTotal.value = result.total
+  } finally {
+    denyLoading.value = false
+  }
+}
+
+function onTabChange(name: string | number) {
+  if (name === 'denied' && denyRows.value.length === 0) {
+    loadDenied()
+  }
+}
 
 const query = reactive<{
   range: [string, string] | null

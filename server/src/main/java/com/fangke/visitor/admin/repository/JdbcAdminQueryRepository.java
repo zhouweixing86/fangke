@@ -95,6 +95,7 @@ public class JdbcAdminQueryRepository implements AdminQueryRepository {
         return jdbc.query("""
                         SELECT e.id, e.event_uuid, e.device_sn, e.direction, e.event_time, e.identify_type,
                                e.person_no, e.person_name, e.result_status, e.source,
+                               e.fail_reason, e.id_card_mask,
                                (SELECT COUNT(1) FROM access_event_media m WHERE m.event_id = e.id) AS media_count
                         FROM access_event e
                         """ + where + " ORDER BY e.event_time DESC, e.id DESC LIMIT ? OFFSET ?",
@@ -109,6 +110,8 @@ public class JdbcAdminQueryRepository implements AdminQueryRepository {
                         rs.getString("person_name"),
                         rs.getInt("result_status"),
                         rs.getInt("source"),
+                        rs.getString("fail_reason"),
+                        rs.getString("id_card_mask"),
                         rs.getInt("media_count")),
                 args.toArray());
     }
@@ -164,8 +167,9 @@ public class JdbcAdminQueryRepository implements AdminQueryRepository {
             args.add(resultStatus);
         }
         if (StringUtils.hasText(personNo)) {
-            sb.append(" AND (e.person_no LIKE ? OR e.person_name LIKE ?)");
+            sb.append(" AND (e.person_no LIKE ? OR e.person_name LIKE ? OR e.id_card_mask LIKE ?)");
             String like = "%" + personNo.trim() + "%";
+            args.add(like);
             args.add(like);
             args.add(like);
         }

@@ -53,6 +53,8 @@ class OpenApiDeviceServiceTest {
     private AccessGrantRepository grantRepo;
     private VisitorRepository visitorRepo;
     private AccessEventRepository eventRepo;
+    private com.fangke.visitor.employee.repository.EmployeeRepository employeeRepo;
+    private com.fangke.visitor.appointment.repository.BlacklistRepository blacklistRepo;
     private CryptoService crypto;
     private OpenApiDeviceService service;
     private GateService gateService;
@@ -73,12 +75,14 @@ class OpenApiDeviceServiceTest {
         grantRepo = mock(AccessGrantRepository.class);
         visitorRepo = mock(VisitorRepository.class);
         eventRepo = mock(AccessEventRepository.class);
+        employeeRepo = mock(com.fangke.visitor.employee.repository.EmployeeRepository.class);
+        blacklistRepo = mock(com.fangke.visitor.appointment.repository.BlacklistRepository.class);
 
         gateService = new GateService(InMemoryGateRepository.withUnassigned(), props);
         service = new OpenApiDeviceService(deviceRepo, cmdRepo, grantRepo, visitorRepo,
-                mock(com.fangke.visitor.appointment.repository.BlacklistRepository.class),
+                blacklistRepo,
                 mock(com.fangke.visitor.admin.repository.AdminBlacklistRepository.class),
-                mock(EmployeeRepository.class), mock(EmployeeFaceRepository.class),
+                employeeRepo, mock(EmployeeFaceRepository.class),
                 mock(StorageService.class), crypto, eventRepo,
                 mock(VisitRecorder.class), mock(CaptureUploader.class),
                 mock(QrTicketService.class), gateService, props);
@@ -280,6 +284,24 @@ class OpenApiDeviceServiceTest {
 
         assertEquals(1, done);
         assertEquals(2, cmdRepo.rows.get(0).status(), "回调后必须收掉，否则会一直卡到超时报废");
+    }
+
+    @Test
+    @DisplayName("通行记录：黑名单拦截的失败记录，原因补成「黑名单拦截」")
+    void blacklistFailureReason() throws Exception {
+        when(blacklistRepo.isBlacklisted(anyInt(), anyString(), any())).thenReturn(true);
+        when(employeeRepo.findByIdCardHmac(anyString())).thenReturn(Optional.empty());
+        when(visitorRepo.findByIdCardHmac(anyString())).thenReturn(Optional.empty());
+        var captor = org.mockito.ArgumentCaptor.forClass(
+                com.fangke.visitor.device.model.AccessEvent.class);
+        when(eventRepo.insertIfAbsent(captor.capture())).thenReturn(Optional.of(7L));
+        var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(
+                "{\"time\":\"2026-11-21 17:02:41\",\"openType\":2,\"inout\":1,\"resultStatus\":0,"
+                        + "\"idNum\":\"342221199704020012\"}");
+
+        service.receiveRecord(device(), node, node.toString());
+
+        assertEquals("黑名单拦截", captor.getValue().failReason());
     }
 
     private AccessGrant grant(Long id, int subjectType, Long subjectId, String personNo) {

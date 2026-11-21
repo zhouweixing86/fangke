@@ -400,7 +400,7 @@ public class OpenApiDeviceService {
                 OpenApiRecordMapper.eventUuid(tableId, id, device.getDeviceSn(), event.eventTime(), idCard),
                 event.deviceId(), event.deviceSn(), event.gateId(), event.direction(),
                 event.eventTime(), event.identifyType(), event.personNo(), event.personName(),
-                event.idCardMask(), event.resultStatus(), event.failReason(), event.score(),
+                event.idCardMask(), event.resultStatus(), failReasonOf(event, idCard), event.score(),
                 event.temperature(), event.mateFlag(), event.abnormalFlag(), event.source(),
                 event.rawJson());
 
@@ -585,6 +585,26 @@ public class OpenApiDeviceService {
      * 「通行记录」按人汇总（traffic/summary 要求 person_no 非空）就一条都查不出来。
      * 证件号大小写规范化规则员工和访客不一定一致，两种都试一次。
      */
+    /**
+     * 失败记录的拒绝原因：设备只会报「未通过」，平台知道真实原因时补上，通行记录才看得懂。
+     *
+     * <p>黑名单拦截时设备同样只回 {@code resultStatus=0}，所以这里按证件号回查一次黑名单。
+     */
+    private String failReasonOf(AccessEvent event, String idCard) {
+        if (event.resultStatus() == 1 || idCard == null || idCard.isBlank()) {
+            return event.failReason();
+        }
+        try {
+            if (blacklistRepository.isBlacklisted(BlacklistRepository.TARGET_ID_CARD,
+                    crypto.hmac(idCard.trim()), LocalDateTime.now())) {
+                return "黑名单拦截";
+            }
+        } catch (Exception e) {
+            log.debug("黑名单回查失败 idno={}：{}", OpenApiRecordMapper.maskIdCard(idCard), e.getMessage());
+        }
+        return event.failReason();
+    }
+
     private String resolvePersonNo(String idCard) {
         if (idCard == null || idCard.isBlank()) {
             return null;

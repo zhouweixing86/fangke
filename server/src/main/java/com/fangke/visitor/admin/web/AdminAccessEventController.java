@@ -48,7 +48,7 @@ public class AdminAccessEventController {
 
         StringBuilder sb = new StringBuilder();
         sb.append('\ufeff');
-        sb.append("通行时间,设备,方向,识别方式,人员编号,姓名,结果,来源\r\n");
+        sb.append("通行时间,设备,方向,识别方式,人员编号,姓名,证件号,结果,拒绝原因,来源\r\n");
         for (AdminQueryRepository.EventRow row : rows) {
             sb.append(csv(DATETIME.format(row.eventTime()))).append(',')
                     .append(csv(row.deviceSn())).append(',')
@@ -56,7 +56,9 @@ public class AdminAccessEventController {
                     .append(csv(identifyText(row.identifyType()))).append(',')
                     .append(csv(row.personNo())).append(',')
                     .append(csv(row.personName())).append(',')
+                    .append(csv(row.idCardMask())).append(',')
                     .append(csv(row.resultStatus() == 1 ? "通过" : "失败")).append(',')
+                    .append(csv(row.failReason())).append(',')
                     .append(csv(row.source() == 3 ? "人工开门" : "设备回调")).append("\r\n");
         }
         response.getWriter().write(sb.toString());
@@ -104,6 +106,8 @@ public class AdminAccessEventController {
         view.put("personName", row.personName() == null ? "" : row.personName());
         view.put("resultStatus", row.resultStatus());
         view.put("resultText", row.resultStatus() == 1 ? "通过" : "失败");
+        view.put("failReason", row.failReason() == null ? "" : row.failReason());
+        view.put("idCardMask", row.idCardMask() == null ? "" : row.idCardMask());
         view.put("source", row.source());
         view.put("sourceText", row.source() == 3 ? "人工开门" : "设备回调");
         view.put("hasMedia", row.mediaCount() > 0);

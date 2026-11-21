@@ -19,7 +19,7 @@ public interface AdminQueryRepository {
 
     record EventRow(Long id, String eventUuid, String deviceSn, int direction, LocalDateTime eventTime,
                     int identifyType, String personNo, String personName, int resultStatus, int source,
-                    int mediaCount) {
+                    String failReason, String idCardMask, int mediaCount) {
     }
 
     List<AppointmentRow> searchAppointments(String keyword, Integer status, LocalDate from, LocalDate to,
