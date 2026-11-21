@@ -303,6 +303,63 @@ export interface PendingRow {
   createdAt: string
 }
 
+/* ---------------- 管理端审核（单级，管理端账号） ---------------- */
+
+/** 待审核列表行 */
+export interface ReviewRow {
+  taskId: number
+  level: number
+  appointmentNo: string
+  visitorName: string
+  idCardMask: string
+  purpose: string
+  startTime: string
+  endTime: string
+}
+
+export interface ReviewGateOption {
+  id: number
+  name: string
+}
+
+/** 审核详情：门点选择 + 二维码开门申请 + 审批轨迹 */
+export interface ReviewDetail {
+  taskId: number
+  level: number
+  status: number
+  statusText: string
+  appointmentNo: string
+  appointmentStatus: number
+  appointmentStatusText: string
+  visitorName: string
+  idCardMask: string
+  visitorType: string
+  purpose: string
+  visitPhoneMask: string
+  startTime: string
+  endTime: string
+  gates: {
+    gateScope: number
+    selectable: ReviewGateOption[]
+    appliedGateIds: number[]
+    approvedGateIds: number[]
+  } | null
+  canAct: boolean
+  actions: {
+    action: number
+    actionText: string
+    operatorId: string
+    operatorType: number
+    comment: string
+    gates: string[]
+    at: string
+  }[]
+  /** 访客是否申请二维码开门 */
+  qrRequested?: boolean
+  /** 当前是否已同意二维码开门 */
+  qrApproved?: boolean
+}
+
 export interface DispatchResult {
   batchId: number
   batchNo: string

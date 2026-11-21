@@ -166,7 +166,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { computed, reactive, ref } from 'vue'
 import { createAppointment, listAppGates, lookupEmployee } from '@/api'
 import type { GateOption } from '@/api/types'
-import { auth } from '@/store/auth'
+import { visitorOpenid } from '@/utils/visitor'
 import { alert, showToast } from '@/utils/ui'
 
 type Mode = 'personal' | 'group'
@@ -305,6 +305,8 @@ async function submit() {
   const useGates = gates.value.length > 1 && gateScope.value === 1
   submitting.value = true
   try {
+    // 首次预约要把 openid 带上，后端据此绑定访客档案，否则「我的预约」查不到自己的单
+    const openid = await visitorOpenid()
     const result = await createAppointment({
       visitPhone: form.visitPhone.trim(),
       visitorType: form.visitorType,
@@ -333,8 +335,7 @@ async function submit() {
           }))
         : undefined,
       qrRequested: form.qrRequested,
-      // 小程序首次预约：把 openid 带上去，后端绑到访客档案，之后「我的预约」才能查到自己的单
-      wxOpenid: auth.openid || undefined,
+      wxOpenid: openid || undefined,
       consentVersion: 'v1.0'
     })
     await alert('预约单号：' + result.appointmentNo + '\n状态：' + result.statusText, '提交成功')

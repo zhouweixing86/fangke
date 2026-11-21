@@ -36,9 +36,10 @@
 <script setup lang="ts">
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
-import { myAppointments, wxLogin } from '@/api'
+import { myAppointments } from '@/api'
 import type { AppointmentView } from '@/api/types'
-import { applyWxLogin, auth, cacheWxCode, requestWxCode } from '@/store/auth'
+import { auth } from '@/store/auth'
+import { ensureVisitorLogin } from '@/utils/visitor'
 
 const tabs = [
   { label: '全部', name: 'all' },
@@ -70,17 +71,10 @@ function switchTab(name: string) {
   load()
 }
 
-/** 静默一键登录：已有 token 直接复用，没有就 wx.login 换一个 */
+/** 静默一键登录：没有 token 或还没绑定访客档案（subjectId=0）时重新登录 */
 async function ensureLogin() {
-  if (auth.token && auth.kind === 'APP') {
-    return
-  }
   try {
-    const code = await requestWxCode()
-    const result = await wxLogin(code)
-    applyWxLogin(result)
-    // mock 模式下 openid 由 code 派生，必须复用同一个 code 才能保持身份稳定
-    if (result.mock) cacheWxCode(code)
+    await ensureVisitorLogin()
   } catch {
     // 未登录也允许浏览（首次来访还没提交过预约）
   }

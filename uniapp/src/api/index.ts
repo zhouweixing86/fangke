@@ -16,7 +16,9 @@ import type {
   QrIssueResult,
   QrVerifyResult,
   ReportDaily,
-  ReportOverview
+  ReportOverview,
+  ReviewDetail,
+  ReviewRow
 } from './types'
 
 /* ---------------- 登录（只有管理端；访客走微信小程序静默登录） ---------------- */
@@ -76,6 +78,23 @@ export const guardOpenDoor = (payload: Record<string, unknown>) =>
   post<{ opened: boolean; devices: number }>('/guard/door/open', payload)
 export const guardCheckout = (no: string) => post<void>('/guard/visit/' + no + '/checkout')
 export const guardVerifyQr = (code: string) => post<QrVerifyResult>('/guard/qr/verify', { code })
+
+/* ---------------- 管理端审核（单级） ---------------- */
+
+export const guardReviewTodo = (params: Record<string, unknown>) =>
+  get<PageResult<ReviewRow>>('/guard/approval/todo', params)
+
+export const guardReviewDetail = (taskId: number) =>
+  get<ReviewDetail>(`/guard/approval/${taskId}`)
+
+export const guardReviewPass = (
+  taskId: number,
+  data: { comment?: string; approvedGateIds?: number[]; qrApproved?: boolean }
+) => post<{ appointmentNo: string; status: number; statusText: string; dispatchStarted: boolean }>(
+  `/guard/approval/${taskId}/pass`, data)
+
+export const guardReviewReject = (taskId: number, comment: string) =>
+  post<void>(`/guard/approval/${taskId}/reject`, { comment })
 
 /* ---------------- 管理端 ---------------- */
 

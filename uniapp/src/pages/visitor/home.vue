@@ -20,8 +20,8 @@
 
 <script setup lang="ts">
 import { onShow } from '@dcloudio/uni-app'
-import { wxLogin } from '@/api'
-import { applyWxLogin, auth, cacheWxCode, requestWxCode } from '@/store/auth'
+import { auth } from '@/store/auth'
+import { ensureVisitorLogin } from '@/utils/visitor'
 
 /**
  * 访客端首页（微信小程序）。
@@ -38,17 +38,13 @@ function goMine() {
 }
 
 async function oneClickLogin() {
-  if (auth.token && auth.kind === 'APP') {
+  if (auth.token && auth.kind === 'APP' && auth.subjectId > 0) {
     return
   }
   try {
-    const code = await requestWxCode()
-    const result = await wxLogin(code)
-    applyWxLogin(result)
-    // mock 模式下 openid 由 code 派生，必须复用同一个 code 才能保持身份稳定
-    if (result.mock) cacheWxCode(code)
+    await ensureVisitorLogin()
   } catch {
-    // 静默失败：不影响浏览与提交预约，提交时仍可正常工作
+    // 静默失败：不影响浏览与提交预约，提交时会再试一次
   }
 }
 

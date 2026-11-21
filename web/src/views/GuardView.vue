@@ -371,7 +371,9 @@ async function openReview(row: ReviewRow) {
   const detail = await guardReviewDetail(row.taskId)
   reviewDetail.value = detail
   reviewGateIds.value = [...(detail.gates?.approvedGateIds ?? [])]
-  reviewQrApproved.value = Boolean(detail.qrApproved)
+  // 访客申请了二维码就默认勾上「同意」——绝大多数场景都会同意，减少一次点击；
+  // 已明确拒绝过（申请了但 approved=false）时也默认勾上，由审核人再决定是否取消。
+  reviewQrApproved.value = Boolean(detail.qrRequested) || Boolean(detail.qrApproved)
   reviewVisible.value = true
 }
 
