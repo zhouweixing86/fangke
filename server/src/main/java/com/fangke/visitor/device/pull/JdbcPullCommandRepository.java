@@ -90,8 +90,17 @@ public class JdbcPullCommandRepository implements PullCommandRepository {
     }
 
     @Override
-    public boolean hasPending(Long deviceId, String cmdType) {
-        Long count = jdbc.queryForObject(
+    public List<Row> listDispatching(Long deviceId, String cmdType, int limit) {
+        return jdbc.query("""
+                        SELECT id, cmd_type, priority, payload, retry_count FROM device_cmd
+                        WHERE device_id = ? AND cmd_type = ? AND status = 1
+                        ORDER BY priority DESC, id
+                        LIMIT ?
+                        """, MAPPER_ROW, deviceId, cmdType, Math.max(1, limit));
+    }
+
+    @Override
+    public boolean hasPending(Long deviceId, String cmdType) {        Long count = jdbc.queryForObject(
                 "SELECT COUNT(1) FROM device_cmd WHERE device_id = ? AND cmd_type = ? AND status = 0",
                 Long.class, deviceId, cmdType);
         return count != null && count > 0;

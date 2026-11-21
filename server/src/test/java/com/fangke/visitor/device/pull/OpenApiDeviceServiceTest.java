@@ -267,6 +267,21 @@ class OpenApiDeviceServiceTest {
         verify(eventRepo, org.mockito.Mockito.never()).insertIfAbsent(any());
     }
 
+    @Test
+    @DisplayName("参数下发：设备回调后把「执行中」的指令收掉，不再卡到超时重试")
+    void paramSyncCompletesAfterDevicePull() {
+        cmdRepo.enqueue(1L, PullCommandRepository.TYPE_PARAM_SYNC, 7, null, null);
+
+        Map<String, Object> data = service.heartbeat(device());
+        assertEquals("syncDeviceParameter", data.get("action"));
+        assertEquals(1, cmdRepo.rows.get(0).status(), "心跳交付后是执行中");
+
+        int done = service.completeSimpleCommand(1L, PullCommandRepository.TYPE_PARAM_SYNC, "设备已拉取参数");
+
+        assertEquals(1, done);
+        assertEquals(2, cmdRepo.rows.get(0).status(), "回调后必须收掉，否则会一直卡到超时报废");
+    }
+
     private AccessGrant grant(Long id, int subjectType, Long subjectId, String personNo) {
         return new AccessGrant(id, subjectType, subjectId, personNo, 100L, 1L,
                 LocalDateTime.of(2026, 11, 19, 0, 0), LocalDateTime.of(2026, 11, 19, 23, 59, 59),
@@ -308,6 +323,15 @@ class OpenApiDeviceServiceTest {
         public boolean hasPending(Long deviceId, String cmdType) {
             return rows.stream().anyMatch(r -> r.deviceId().equals(deviceId)
                     && r.cmdType().equals(cmdType) && r.status() == 0);
+        }
+
+        @Override
+        public List<Row> listDispatching(Long deviceId, String cmdType, int limit) {
+            return rows.stream()
+                    .filter(r -> r.deviceId().equals(deviceId) && r.cmdType().equals(cmdType) && r.status() == 1)
+                    .limit(limit)
+                    .map(r -> new Row(r.id(), r.cmdType(), r.priority(), r.payload(), r.status()))
+                    .toList();
         }
 
         @Override

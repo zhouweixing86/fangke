@@ -691,11 +691,16 @@ public class OpenApiDeviceService {
 
     /** 设备已主动拉取某类指令（如参数/时间），把队列里该类指令直接置成功。 */
     public int completeSimpleCommand(Long deviceId, String cmdType, String message) {
-        List<PullCommandRepository.Row> rows = commandRepository.listPending(deviceId, cmdType, MAX_BATCH);
-        if (rows.isEmpty()) {
+        List<Long> ids = new ArrayList<>();
+        for (PullCommandRepository.Row row : commandRepository.listPending(deviceId, cmdType, MAX_BATCH)) {
+            ids.add(row.id());
+        }
+        for (PullCommandRepository.Row row : commandRepository.listDispatching(deviceId, cmdType, MAX_BATCH)) {
+            ids.add(row.id());
+        }
+        if (ids.isEmpty()) {
             return 0;
         }
-        List<Long> ids = rows.stream().map(PullCommandRepository.Row::id).toList();
         commandRepository.markDispatching(ids, LocalDateTime.now());
         commandRepository.markDone(ids, 2, message);
         return ids.size();

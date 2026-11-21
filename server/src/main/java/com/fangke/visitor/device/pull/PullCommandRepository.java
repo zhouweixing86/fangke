@@ -29,6 +29,14 @@ public interface PullCommandRepository {
     /** 待执行（status=0）的指令，按优先级、id 升序。 */
     List<Row> listPending(Long deviceId, String cmdType, int limit);
 
+    /**
+     * 执行中（status=1）的指令。
+     *
+     * <p>心跳「交付 action」时已经把指令置为执行中，设备随后才回调对应接口；
+     * 回执完成时必须把执行中的也一起收掉，否则这些指令会一直卡到超时重试（PARAM_SYNC / SYNC_TIME 踩过）。
+     */
+    List<Row> listDispatching(Long deviceId, String cmdType, int limit);
+
     /** 指定类型是否有待执行指令（心跳决策用）。 */
     boolean hasPending(Long deviceId, String cmdType);
 
