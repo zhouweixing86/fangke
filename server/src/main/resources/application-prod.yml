@@ -35,6 +35,10 @@ fangke:
     pull-command-timeout-seconds: 300
     # 设备可达的平台根地址（设备会自己拼 /openapi/v1/...），不要带 /openapi/v1
     pull-public-base-url: http://<现场平台IP>:8081
+    # 远程管理：仅在平台与设备同网时可用；云端部署连不通属正常
+    remote-port: 9090
+    remote-password: CHANGE_ME
+    remote-timeout-seconds: 5
 
   storage:
     endpoint: http://127.0.0.1:9000

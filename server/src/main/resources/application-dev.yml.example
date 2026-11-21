@@ -32,6 +32,9 @@ fangke:
     pull-sign-key: fangke-pull-key
     pull-heart-seconds: 5
     pull-public-base-url: http://<本机局域网IP>:8080
+    remote-port: 9090
+    remote-password: "888888"
+    remote-timeout-seconds: 5
 
   storage:
     endpoint: http://127.0.0.1:9000

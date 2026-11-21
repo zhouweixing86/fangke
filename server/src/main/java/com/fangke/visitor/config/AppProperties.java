@@ -218,6 +218,39 @@ public class AppProperties {
         /** 平台对设备可达的根地址（下发给设备当 thirdQrUrl 前缀），如 http://192.168.10.50:8080 */
         private String pullPublicBaseUrl = "";
 
+        /* ---------------- 远程管理：平台直连设备的 9090 下行接口 ---------------- */
+
+        /** 设备 HTTP 管理端口（设备作为服务端，Web 后台与下行接口同一个端口）。 */
+        private int remotePort = 9090;
+        /** 设备管理员密码（多数接口用它代替 token）。 */
+        private String remotePassword = "888888";
+        /** 远程调用超时（秒）：设备可能离线，不能把平台线程拖死。 */
+        private int remoteTimeoutSeconds = 5;
+
+        public int getRemotePort() {
+            return remotePort;
+        }
+
+        public void setRemotePort(int remotePort) {
+            this.remotePort = remotePort;
+        }
+
+        public String getRemotePassword() {
+            return remotePassword;
+        }
+
+        public void setRemotePassword(String remotePassword) {
+            this.remotePassword = remotePassword;
+        }
+
+        public int getRemoteTimeoutSeconds() {
+            return remoteTimeoutSeconds;
+        }
+
+        public void setRemoteTimeoutSeconds(int remoteTimeoutSeconds) {
+            this.remoteTimeoutSeconds = remoteTimeoutSeconds;
+        }
+
         public String getPullSignKey() {
             return pullSignKey;
         }

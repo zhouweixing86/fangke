@@ -98,6 +98,12 @@ fangke:
     # 例：http://192.168.10.50:8080 ；留空则不自动下发 thirdQrUrl
     pull-public-base-url: ${DEVICE_PULL_PUBLIC_BASE_URL:}
 
+    # 远程管理：平台直连设备 9090 端口调下行接口（读参数 / 校时 / 抓拍 / 弹框 / 重启…）
+    # 要求平台与设备同网；云端部署时连不通属正常，界面会引导走「本地管理」
+    remote-port: ${DEVICE_REMOTE_PORT:9090}
+    remote-password: ${DEVICE_REMOTE_PASSWORD:888888}
+    remote-timeout-seconds: ${DEVICE_REMOTE_TIMEOUT:5}
+
   storage:
     # 照片存对象存储（S3 兼容）。默认指向内网 MinIO —— 照片不出园区。
     # 换云 OSS/COS 只改这四项，业务代码不动。

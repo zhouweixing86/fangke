@@ -82,6 +82,40 @@ export const openDeviceDoor = (id: number) => post<{ opened: boolean }>(`/admin/
 export const getDeviceCapabilities = (id: number) =>
   get<DeviceCapabilityRow[]>(`/admin/device/${id}/capabilities`)
 
+/* ---------------- 设备远程管理（平台直连设备 9090） ---------------- */
+
+export interface DeviceRemoteInfo {
+  deviceId: number
+  deviceSn: string
+  ip?: string
+  localAdminUrl: string
+  reachable: boolean
+  unreachableReason?: string
+  version?: Record<string, unknown>
+}
+
+export const deviceRemoteInfo = (id: number) =>
+  get<DeviceRemoteInfo>(`/admin/device/${id}/remote/info`)
+export const deviceRemoteParameters = (id: number) =>
+  get<Record<string, unknown>>(`/admin/device/${id}/remote/parameters`)
+export const deviceRemoteTime = (id: number) =>
+  get<{ deviceTime?: string; platformTime?: string }>(`/admin/device/${id}/remote/time`)
+/** 直连开闸：秒级生效，要求平台与设备同网 */
+export const deviceRemoteOpen = (id: number) =>
+  post<Record<string, unknown>>(`/admin/device/${id}/remote/open`)
+export const deviceRemoteSyncTime = (id: number) =>
+  post<Record<string, unknown>>(`/admin/device/${id}/remote/sync-time`)
+export const deviceRemoteTip = (id: number, data: { msg: string; color?: number; playId?: number }) =>
+  post<Record<string, unknown>>(`/admin/device/${id}/remote/tip`, data)
+export const deviceRemoteSnapshot = (id: number) =>
+  post<{ image?: string }>(`/admin/device/${id}/remote/snapshot`)
+export const deviceRemoteGateHold = (id: number, data: { enabled: boolean; minutes?: number }) =>
+  post<Record<string, unknown>>(`/admin/device/${id}/remote/gate-hold`, data)
+export const deviceRemoteReboot = (id: number) =>
+  post<Record<string, unknown>>(`/admin/device/${id}/remote/reboot`)
+export const deviceRemoteRestore = (id: number) =>
+  post<Record<string, unknown>>(`/admin/device/${id}/remote/restore`)
+
 /* ---------------- 员工 ---------------- */
 
 export const listDepts = () => get<DeptView[]>('/admin/dept')
