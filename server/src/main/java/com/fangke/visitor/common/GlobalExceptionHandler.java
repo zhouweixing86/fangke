@@ -78,6 +78,21 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(ErrorCode.PARAM_INVALID.code(), "请求方法不支持：" + request.getMethod()));
     }
 
+    /**
+     * 数据库约束类错误（字段超长、唯一键冲突等）：以前落进兜底分支变成"系统内部错误"，
+     * 现场完全不知道是哪里填错了。这里显式转成参数错误并保留原因摘要。
+     */
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(
+            org.springframework.dao.DataIntegrityViolationException ex, HttpServletRequest request) {
+        String root = ex.getMostSpecificCause().getMessage();
+        log.warn("数据约束错误 uri={} cause={}", request.getRequestURI(), root);
+        String message = root != null && root.contains("Data too long")
+                ? "提交内容过长，超出字段限制，请精简后重试"
+                : "提交的数据不符合要求（重复或格式错误），请检查后重试";
+        return ResponseEntity.badRequest().body(ApiResponse.fail(ErrorCode.PARAM_INVALID.code(), message));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex, HttpServletRequest request) {
         log.error("未处理异常 uri={}", request.getRequestURI(), ex);

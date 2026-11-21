@@ -133,9 +133,18 @@ public class JdbcVisitorRepository implements VisitorRepository {
 
     @Override
     public void recordConsent(Long visitorId, int consentType, String version, String ip, String ua) {
+        // 微信开发者工具/微信内置浏览器的 UA 可能 300~500 字符，个别机型更长；
+        // 这里按列宽截断，避免"Data too long"把访客提交预约打挂（V23 已放宽到 1024）
         jdbc.update("INSERT INTO visitor_consent (visitor_id, consent_type, version, agreed_at, ip, ua) "
                         + "VALUES (?, ?, ?, NOW(3), ?, ?)",
-                visitorId, consentType, version, ip, ua);
+                visitorId, consentType, version, truncate(ip, 64), truncate(ua, 1024));
+    }
+
+    private String truncate(String value, int max) {
+        if (value == null || value.length() <= max) {
+            return value;
+        }
+        return value.substring(0, max);
     }
 
     @Override

@@ -96,7 +96,9 @@ public class AppointmentService {
                 request.visitor().company());
         // 微信一键登录：首次预约成功后把 openid 绑到访客档案，下次进小程序直接能看到「我的预约」
         if (request.wxOpenid() != null && !request.wxOpenid().isBlank()) {
-            visitorRepository.bindWxOpenid(visitor.getId(), request.wxOpenid().trim());
+            String openid = request.wxOpenid().trim();
+            // 列宽 64：mock 模式 openid 是 "mock-" + code，正常不会超，截断只是兜底
+            visitorRepository.bindWxOpenid(visitor.getId(), openid.length() > 64 ? openid.substring(0, 64) : openid);
         }
         if (source == Appointment.SOURCE_SELF || source == Appointment.SOURCE_INVITE) {
             visitorService.agree(visitor.getId(), source == Appointment.SOURCE_INVITE ? 2 : 1,
