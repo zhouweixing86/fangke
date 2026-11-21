@@ -189,6 +189,36 @@ public class DeviceRemoteService {
         return toMap(call(device, "/setDeviceParameter", data));
     }
 
+    /**
+     * 把「二维码交给平台判定」写进设备：{@code thirdOpenDoorLocal=0} + {@code thirdQrUrl} 指向本服务。
+     *
+     * <p>不写这一项，设备扫到平台签发的码只会在<b>本地</b>解析，解析不了就提示「二维码未授权」，
+     * 而且根本不会回调 {@code /openapi/v1/qrCodePush}（真机排查时平台侧一条请求都没有）。
+     */
+    public Map<String, Object> applyQrPushConfig(Device device) {
+        String url = qrPushUrl();
+        if (url == null) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID,
+                    "未配置 fangke.device.pull-public-base-url（平台对设备可达的地址），设备无法回调核对二维码");
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("thirdOpenDoorLocal", 0);
+        data.put("thirdQrUrl", url);
+        Map<String, Object> view = toMap(call(device, "/setDeviceParameter", data));
+        view.put("thirdQrUrl", url);
+        view.put("thirdOpenDoorLocal", 0);
+        return view;
+    }
+
+    /** 二维码核验地址；与 {@code /syncDeviceParameter} 下发给设备的保持一致。 */
+    public String qrPushUrl() {
+        String base = props.getDevice().getPullPublicBaseUrl();
+        if (base == null || base.isBlank()) {
+            return null;
+        }
+        return base.endsWith("/") ? base + "openapi/v1/qrCodePush" : base + "/openapi/v1/qrCodePush";
+    }
+
     /** 设备用 0/1 表示开关。 */
     private int toDeviceFlag(Object value) {
         if (value instanceof Boolean b) {

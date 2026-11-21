@@ -118,6 +118,11 @@ export const deviceRemoteSwitches = (id: number) =>
   get<Record<string, string>>(`/admin/device/${id}/remote/switches`)
 export const deviceRemoteSetSwitches = (id: number, data: Record<string, boolean>) =>
   post<Record<string, unknown>>(`/admin/device/${id}/remote/switches`, data)
+/** 二维码核验接线：把设备 thirdQrUrl 指到平台（扫码后回来问平台） */
+export const deviceRemoteApplyQrConfig = (id: number) =>
+  post<{ qrPushUrl: string; appliedNow: boolean; appliedNowError?: string; queuedDevices: number }>(
+    `/admin/device/${id}/remote/qr-config`
+  )
 export const deviceRemoteRestore = (id: number) =>
   post<Record<string, unknown>>(`/admin/device/${id}/remote/restore`)
 /** 从设备本地名单删掉一条（清理孤儿名单/换人时用） */

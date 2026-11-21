@@ -15,6 +15,7 @@ import com.fangke.visitor.approval.repository.ApprovalTaskRepository;
 import com.fangke.visitor.common.BusinessException;
 import com.fangke.visitor.common.ErrorCode;
 import com.fangke.visitor.common.PageResult;
+import com.fangke.visitor.device.remote.DeviceQrConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -92,6 +93,7 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     private final NotifyPort notifyPort;
     private final DispatchTrigger dispatchTrigger;
     private final AppointmentGateService appointmentGateService;
+    private final DeviceQrConfigService qrConfigService;
 
     public ApprovalService(ApprovalConfigRepository configRepository,
                            ApprovalTaskRepository taskRepository,
@@ -100,7 +102,8 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                            VisitorRepository visitorRepository,
                            NotifyPort notifyPort,
                            DispatchTrigger dispatchTrigger,
-                           AppointmentGateService appointmentGateService) {
+                           AppointmentGateService appointmentGateService,
+                           DeviceQrConfigService qrConfigService) {
         this.configRepository = configRepository;
         this.taskRepository = taskRepository;
         this.actionRepository = actionRepository;
@@ -109,6 +112,7 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         this.notifyPort = notifyPort;
         this.dispatchTrigger = dispatchTrigger;
         this.appointmentGateService = appointmentGateService;
+        this.qrConfigService = qrConfigService;
     }
 
     /* ---------------- 启动 / 取消 ---------------- */
@@ -379,6 +383,14 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         appointmentRepository.update(appointment);
         log.info("二维码开门审批 appointment={} approved={} operator={}",
                 appointment.getAppointmentNo(), qrApproved, operatorId);
+        if (qrApproved) {
+            // 同意二维码开门的同时把设备接到平台核验上，现场不用再手工配 thirdQrUrl
+            try {
+                qrConfigService.requestParamSync();
+            } catch (Exception e) {
+                log.warn("二维码核验地址下发失败 appointment={}：{}", appointment.getAppointmentNo(), e.getMessage());
+            }
+        }
     }
 
     private String gateSnapshot(List<Long> gateIds) {

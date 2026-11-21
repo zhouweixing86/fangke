@@ -154,6 +154,15 @@
             访客用二维码进闸需要「摄像头扫码」为开启状态。其余参数请在「本地管理」里修改。
           </div>
 
+          <el-divider content-position="left">二维码核验接线</el-divider>
+          <div class="tip-row">
+            <el-button :loading="remoteBusy === 'qr'" @click="doApplyQrConfig">应用二维码核验地址</el-button>
+            <span class="text-muted mono">thirdQrUrl = {{ qrPushUrlOfDevice || '（空）' }}</span>
+          </div>
+          <div class="text-muted" style="margin-top: 4px">
+            设备扫到码必须回来问平台才能放行；这里为空时设备只在本地判定，扫码一律提示「二维码未授权」。
+          </div>
+
           <el-divider content-position="left">名单清理</el-divider>
           <div class="tip-row">
             <el-input v-model="cleanIdno" placeholder="身份证号 / 人员编号" maxlength="18" style="width: 230px" />
@@ -228,6 +237,7 @@ import {
   deviceRemoteSnapshot,
   deviceRemoteSwitches,
   deviceRemoteSetSwitches,
+  deviceRemoteApplyQrConfig,
   deviceRemoteSyncTime,
   deviceRemoteTip,
   listDevices,
@@ -320,6 +330,8 @@ const remoteParams = ref<Record<string, unknown>>({})
 const switchDefs = ref<Record<string, string>>({})
 /** 开关当前值 */
 const switchStates = ref<Record<string, boolean>>({})
+/** 设备里已配置的二维码核验地址（空 = 没接线，扫码只会本地判定） */
+const qrPushUrlOfDevice = computed(() => String(remoteParams.value.thirdQrUrl || ''))
 /** 名单清理：证件号 + 类型 */
 const cleanIdno = ref('')
 const cleanType = ref('white')
@@ -385,8 +397,26 @@ async function toggleSwitch(key: string, value: boolean) {  if (!remoteRow.value
   }
 }
 
-/** 本地管理：直接跳设备自己的 Web 后台（同网即可，不依赖平台） */
-function openLocal(row: DeviceView) {
+/** 二维码核验接线：把设备 thirdQrUrl 指到平台（同网立即写，另排队一次参数下发） */
+async function doApplyQrConfig() {
+  if (!remoteRow.value) return
+  remoteBusy.value = 'qr'
+  try {
+    const res = await deviceRemoteApplyQrConfig(remoteRow.value.id)
+    if (res.appliedNow) {
+      ElMessage.success('二维码核验地址已写入设备')
+    } else {
+      ElMessage.warning(`设备直连不通，已排队参数下发（${res.appliedNowError || '等待设备心跳'}）`)
+    }
+    await loadRemoteSwitches()
+  } catch (error) {
+    showRemoteError(error)
+  } finally {
+    remoteBusy.value = ''
+  }
+}
+
+/** 本地管理：直接跳设备自己的 Web 后台（同网即可，不依赖平台） */function openLocal(row: DeviceView) {
   const url = remoteInfo.value?.localAdminUrl
     || `http://${row.ip}:9090/home.html`
   window.open(url, '_blank', 'noopener')

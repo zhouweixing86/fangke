@@ -259,18 +259,11 @@ public class DeviceOpenApiController {
     public Map<String, Object> qrCodePush(@RequestBody(required = false) String rawText,
                                           HttpServletRequest request) {
         JsonNode body = parse(rawText);
-        String deviceNo = text(body, "deviceno");
+        String deviceNo = firstNonBlank(text(body, "deviceno"), text(body, "sn"), text(body, "deviceSn"));
         Device device = service.resolveOrRegister(deviceNo, request.getRemoteAddr());
-        String code = null;
-        JsonNode data = body == null ? null : body.get("data");
-        if (data != null) {
-            if (data.isTextual()) {
-                JsonNode inner = parse(data.asText());
-                code = inner == null ? data.asText() : text(inner, "qrCode");
-            } else {
-                code = text(data, "qrCode");
-            }
-        }
+        String code = extractQrCode(rawText, body, request);
+        log.info("二维码推送 device={} code={} from={} raw={}", deviceNo, code, request.getRemoteAddr(),
+                rawText == null ? "null" : rawText.substring(0, Math.min(300, rawText.length())));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("actionName", "qrCodePush");
         if (device == null || code == null || code.isBlank()) {
@@ -283,6 +276,7 @@ public class DeviceOpenApiController {
             QrTicketService.VerifyResult verify = service.verifyQr(device, code.trim());
             result.put("resultcode", verify.allowed() ? "1" : "0");
             result.put("message", verify.reason());
+            result.put("msg", verify.reason());
             result.put("openGate", verify.allowed() ? 1 : 0);
             if (verify.allowed()) {
                 result.put("idno", verify.idCardMask());
@@ -385,6 +379,43 @@ public class DeviceOpenApiController {
         }
         JsonNode value = node.get(field);
         return value == null || value.isNull() ? null : value.asText();
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 各家固件送码的写法不一样，能认的都认一遍：
+     * {@code data.qrCode}、{@code data} 里再套一层 JSON 或纯文本、顶层 {@code qrCode}、
+     * 整个请求体就是码、以及 {@code ?qrCode=} 查询参数。
+     */
+    private String extractQrCode(String rawText, JsonNode body, HttpServletRequest request) {
+        String code = null;
+        JsonNode data = body == null ? null : body.get("data");
+        if (data != null) {
+            if (data.isTextual()) {
+                JsonNode inner = parse(data.asText());
+                code = inner == null ? data.asText() : text(inner, "qrCode");
+            } else {
+                code = text(data, "qrCode");
+            }
+        }
+        if (code == null || code.isBlank()) {
+            code = firstNonBlank(text(body, "qrCode"), text(body, "code"), text(body, "qrContent"));
+        }
+        if (code == null || code.isBlank()) {
+            code = firstNonBlank(request.getParameter("qrCode"), request.getParameter("code"));
+        }
+        if ((code == null || code.isBlank()) && body == null && rawText != null && !rawText.isBlank()) {
+            code = rawText.trim();
+        }
+        return code;
     }
 
     private Integer intValue(JsonNode node, String field) {

@@ -37,10 +37,13 @@ public class DeviceRemoteController {
 
     private final DeviceRepository deviceRepository;
     private final DeviceRemoteService remoteService;
+    private final DeviceQrConfigService qrConfigService;
 
-    public DeviceRemoteController(DeviceRepository deviceRepository, DeviceRemoteService remoteService) {
+    public DeviceRemoteController(DeviceRepository deviceRepository, DeviceRemoteService remoteService,
+                                  DeviceQrConfigService qrConfigService) {
         this.deviceRepository = deviceRepository;
         this.remoteService = remoteService;
+        this.qrConfigService = qrConfigService;
     }
 
     /**
@@ -132,6 +135,17 @@ public class DeviceRemoteController {
     public ApiResponse<Map<String, Object>> setSwitches(@PathVariable Long id,
                                                         @RequestBody Map<String, Object> body) {
         return ApiResponse.ok(remoteService.setSwitches(load(id), body));
+    }
+
+    /**
+     * 应用二维码核验配置：把设备的 thirdQrUrl 指到本服务。
+     *
+     * <p>现场开二维码开门必须做一次，否则设备只在本地判定，扫平台码一律「二维码未授权」。
+     */
+    @PostMapping("/qr-config")
+    @AuditLog(module = "DEVICE", action = "REMOTE_QR_CONFIG")
+    public ApiResponse<Map<String, Object>> applyQrConfig(@PathVariable Long id) {
+        return ApiResponse.ok(qrConfigService.apply(load(id)));
     }
 
     public record PersonDeleteRequest(String idno, String usertype) {

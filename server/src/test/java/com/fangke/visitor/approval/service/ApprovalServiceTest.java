@@ -16,6 +16,7 @@ import com.fangke.visitor.common.BusinessException;
 import com.fangke.visitor.common.ErrorCode;
 import com.fangke.visitor.common.PageResult;
 import com.fangke.visitor.config.AppProperties;
+import com.fangke.visitor.device.remote.DeviceQrConfigService;
 import com.fangke.visitor.gate.repository.InMemoryGateRepository;
 import com.fangke.visitor.gate.service.GateService;
 import org.junit.jupiter.api.BeforeEach;
@@ -329,8 +330,15 @@ class ApprovalServiceTest {
                 new InMemoryAppointmentGateRepository(),
                 new GateService(InMemoryGateRepository.withUnassigned(), gateProps));
 
+        DeviceQrConfigService qrConfig = new DeviceQrConfigService(null, null, null) {
+            @Override
+            public int requestParamSync() {
+                return 0;
+            }
+        };
+
         service = new ApprovalService(configRepo, taskRepo, actionRepo, appointmentRepo,
-                new FakeVisitorRepo(), notify, dispatch, gateSelection);
+                new FakeVisitorRepo(), notify, dispatch, gateSelection, qrConfig);
 
         appointment = new Appointment();
         appointment.setAppointmentNo("A2026111600001");
