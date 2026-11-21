@@ -1,6 +1,6 @@
 import { reactive } from 'vue'
 import { clearAuth, getStoredUser, getToken, setStoredUser, setToken } from '@/api/http'
-import type { AdminLoginResult, AppLoginResult } from '@/api/types'
+import type { AdminLoginResult } from '@/api/types'
 
 /** 登录身份种类：APP=访客/员工（手机号验证码），ADMIN=后台账号（账号密码） */
 export type AuthKind = 'APP' | 'ADMIN'
@@ -45,17 +45,6 @@ function persist(token: string, user: StoredUser) {
   auth.phoneMask = user.phoneMask ?? ''
 }
 
-export function applyAppLogin(result: AppLoginResult) {
-  persist(result.token, {
-    kind: 'APP',
-    name: result.name,
-    role: result.role,
-    roles: [result.role],
-    subjectId: result.subjectId,
-    phoneMask: result.phoneMask
-  })
-}
-
 export function applyWxLogin(result: { token: string; role: string; subjectId: number; name: string }) {
   persist(result.token, {
     kind: 'APP',
@@ -90,20 +79,25 @@ export function logout() {
   uni.reLaunch({ url: '/pages/login/login' })
 }
 
-/** 访客/员工端 */
+/** 访客端（仅微信小程序使用） */
 export const isAppUser = () => auth.kind === 'APP' && !!auth.role
 export const isVisitor = () => auth.role === 'APP_VISITOR'
-export const isEmployee = () => auth.role === 'APP_EMPLOYEE'
 
 /** 管理端 */
 export const isAdminUser = () => auth.kind === 'ADMIN'
 export const isAdmin = () => auth.roles.indexOf('ADMIN') >= 0
 export const isGuardOrAdmin = () => auth.roles.indexOf('GUARD') >= 0 || isAdmin()
 
-/** 登录后落到哪个首页 */
+/**
+ * 登录后落到哪个首页。
+ *
+ * <p>只有两个入口：管理端 → 工作台；访客（小程序）→ 首页。
+ * 员工不登录，所以没有员工首页。
+ */
 export function homePath(): string {
   if (isAdminUser()) return '/pages/admin/workbench'
-  return isVisitor() ? '/pages/visitor/home' : '/pages/employee/todo'
+  if (isVisitor()) return '/pages/visitor/home'
+  return '/pages/login/login'
 }
 
 /** 页面守卫：未登录/角色不符时跳走 */

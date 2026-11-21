@@ -124,7 +124,7 @@ export interface ApprovalConfig {
   approvalLevel: number
   defaultL1User: number | null
   l2CandidateIds: number[]
-  /** 二级复核角色（默认 GUARD=保安），该角色的后台账号都可复核 */
+  /** 审核角色（默认 GUARD=保安），该角色的后台账号都可审核 */
   l2Role: string
   reminderIntervalMin: number
   reminderMaxPerTask: number
@@ -271,7 +271,7 @@ export interface GuardDashboard {
   deviceStatusText: string
 }
 
-/** 保安复核待办行（C-65：被访人确认后待保安复核） */
+/** 待审核行（单级：管理端保安/管理员审核） */
 export interface ReviewRow {
   taskId: number
   level: number

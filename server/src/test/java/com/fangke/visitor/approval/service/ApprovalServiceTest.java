@@ -346,40 +346,40 @@ class ApprovalServiceTest {
         return taskRepo.store.keySet().iterator().next();
     }
 
-    /* ---------------- 用例 ---------------- */
+    /* ---------------- 用例（单级审批：管理端审核） ---------------- */
 
     @Test
-    @DisplayName("启动审批：按被访人生成一级任务并通知")
-    void startCreatesLevel1Task() {
+    @DisplayName("启动审批：生成一条管理端角色任务，不再指派给员工")
+    void startCreatesRoleTask() {
         service.start(appointment);
 
         assertEquals(1, taskRepo.store.size());
         ApprovalTask task = taskRepo.store.get(onlyTaskId());
-        assertEquals(5L, task.assigneeId());
+        assertEquals(ApprovalTask.TYPE_ROLE, task.assigneeType());
+        assertEquals("GUARD", task.assigneeRole());
         assertEquals(1, task.level());
         assertEquals(Appointment.PENDING_L1, appointment.getStatus());
         assertEquals(onlyTaskId(), appointment.getCurrentTaskId());
-        assertTrue(notifications.contains("todo:5"));
     }
 
     @Test
-    @DisplayName("被访人未匹配且无默认审批人：不建任务但不抛错（留在待审批）")
-    void startWithoutApprover() {
-        appointment.setVisitEmployeeId(null);
+    @DisplayName("即使配了双级，也只生成一级任务（级数固定 1）")
+    void alwaysSingleLevel() {
+        configRepo.config = new ApprovalConfig(1L, "GLOBAL", 2, null, List.of(), "GUARD", 30, 2);
         service.start(appointment);
 
-        // 被访人未匹配时兜底给保安角色，否则预约停在待审批却没有任何任务（死单）
         assertEquals(1, taskRepo.store.size());
+        assertEquals(1, taskRepo.store.get(onlyTaskId()).level());
         assertEquals(Appointment.PENDING_L1, appointment.getStatus());
     }
 
     @Test
-    @DisplayName("一级审批通过（单级）：预约单变已通过并触发下发")
-    void singleLevelPass() {
+    @DisplayName("管理端审核通过：预约变已通过并触发下发")
+    void passDispatches() {
         service.start(appointment);
-        ApprovalService.PassResult result = service.pass(onlyTaskId(), 5L, "同意", null);
+        ApprovalService.PassResult result =
+                service.guardPass(onlyTaskId(), 99L, List.of("GUARD"), "同意", null);
 
-        assertEquals(0, result.status() == Appointment.APPROVED ? 0 : 1);
         assertEquals(Appointment.APPROVED, appointment.getStatus());
         assertTrue(result.dispatchStarted());
         assertEquals(List.of("A2026111600001"), dispatches);
@@ -387,171 +387,63 @@ class ApprovalServiceTest {
     }
 
     @Test
-    @DisplayName("双审：一级（被访人）通过后生成保安复核角色任务，不下发")
-    void twoLevelPass() {
-        configRepo.config = new ApprovalConfig(1L, "GLOBAL", 2, null, List.of(), "GUARD", 30, 2);
+    @DisplayName("没有审核角色的人不能通过（3006）")
+    void roleCheck() {
         service.start(appointment);
-
-        ApprovalService.PassResult result = service.pass(onlyTaskId(), 5L, "同意", null);
-
-        assertTrue(result.needSecondLevel());
-        assertEquals(Appointment.PENDING_L2, appointment.getStatus());
-        assertEquals(2, taskRepo.store.size());
-        ApprovalTask second = taskRepo.store.get(appointment.getCurrentTaskId());
-        assertEquals(ApprovalTask.TYPE_ROLE, second.assigneeType());
-        assertEquals("GUARD", second.assigneeRole());
-        assertFalse(dispatches.contains("A2026111600001"), "保安未复核前不能下发授权");
-    }
-
-    @Test
-    @DisplayName("双审：保安复核通过后才下发授权")
-    void guardReviewPass() {
-        configRepo.config = new ApprovalConfig(1L, "GLOBAL", 2, null, List.of(), "GUARD", 30, 2);
-        service.start(appointment);
-        service.pass(onlyTaskId(), 5L, "同意", null);
-        long guardTaskId = appointment.getCurrentTaskId();
-
-        ApprovalService.PassResult result = service.guardPass(guardTaskId, 99L, List.of("GUARD"), "放行", null);
-
-        assertTrue(result.dispatchStarted());
-        assertEquals(Appointment.APPROVED, appointment.getStatus());
-        assertTrue(dispatches.contains("A2026111600001"));
-    }
-
-    @Test
-    @DisplayName("双审：员工端不能处理保安复核任务（3006）")
-    void employeeCannotHandleGuardTask() {
-        configRepo.config = new ApprovalConfig(1L, "GLOBAL", 2, null, List.of(), "GUARD", 30, 2);
-        service.start(appointment);
-        service.pass(onlyTaskId(), 5L, "同意", null);
-        long guardTaskId = appointment.getCurrentTaskId();
-
-        BusinessException e = assertThrows(BusinessException.class,
-                () -> service.pass(guardTaskId, 5L, "越权审批", null));
-        assertEquals(ErrorCode.NOT_TASK_OWNER.code(), e.getCode());
-    }
-
-    @Test
-    @DisplayName("双审：无复核角色的人不能通过；保安驳回则整单驳回")
-    void guardRoleCheck() {
-        configRepo.config = new ApprovalConfig(1L, "GLOBAL", 2, null, List.of(), "GUARD", 30, 2);
-        service.start(appointment);
-        service.pass(onlyTaskId(), 5L, "同意", null);
-        long guardTaskId = appointment.getCurrentTaskId();
-
         BusinessException denied = assertThrows(BusinessException.class,
-                () -> service.guardPass(guardTaskId, 99L, List.of("VISITOR_ADMIN"), "放行", null));
+                () -> service.guardPass(onlyTaskId(), 99L, List.of("VISITOR_ADMIN"), "放行", null));
         assertEquals(ErrorCode.NOT_TASK_OWNER.code(), denied.getCode());
+        assertFalse(dispatches.contains("A2026111600001"));
+    }
 
-        service.guardReject(guardTaskId, 99L, List.of("GUARD"), "人证不符");
+    @Test
+    @DisplayName("驳回必须填原因；驳回后不下发")
+    void rejectNeedsComment() {
+        service.start(appointment);
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.guardReject(onlyTaskId(), 99L, List.of("GUARD"), " "));
+        assertEquals(ErrorCode.PARAM_MISSING.code(), e.getCode());
+
+        service.guardReject(onlyTaskId(), 99L, List.of("GUARD"), "人证不符");
         assertEquals(Appointment.REJECTED, appointment.getStatus());
         assertEquals("人证不符", appointment.getRejectReason());
         assertFalse(dispatches.contains("A2026111600001"), "驳回后不得下发");
     }
 
     @Test
-    @DisplayName("驳回必须填意见；驳回后其余待办失效")
-    void reject() {
+    @DisplayName("同一任务不能重复审核（3005）")
+    void cannotHandleTwice() {
         service.start(appointment);
-        BusinessException noComment = assertThrows(BusinessException.class,
-                () -> service.reject(onlyTaskId(), 5L, " "));
-        assertEquals(ErrorCode.PARAM_MISSING.code(), noComment.getCode());
+        service.guardPass(onlyTaskId(), 99L, List.of("GUARD"), null, null);
 
-        service.reject(onlyTaskId(), 5L, "当天不在");
-        assertEquals(Appointment.REJECTED, appointment.getStatus());
-        assertEquals("当天不在", appointment.getRejectReason());
-        assertTrue(notifications.contains("result:false"));
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.guardPass(onlyTaskId(), 99L, List.of("GUARD"), null, null));
+        assertEquals(ErrorCode.TASK_ALREADY_HANDLED.code(), e.getCode());
     }
 
     @Test
-    @DisplayName("非审批人操作被拒（3006）；已处理任务再操作被拒（3005）")
-    void ownershipAndStatus() {
-        service.start(appointment);
-        BusinessException notOwner = assertThrows(BusinessException.class,
-                () -> service.pass(onlyTaskId(), 99L, null, null));
-        assertEquals(ErrorCode.NOT_TASK_OWNER.code(), notOwner.getCode());
-
-        service.pass(onlyTaskId(), 5L, null, null);
-        BusinessException handled = assertThrows(BusinessException.class,
-                () -> service.pass(onlyTaskId(), 5L, null, null));
-        assertEquals(ErrorCode.TASK_ALREADY_HANDLED.code(), handled.getCode());
-    }
-
-    @Test
-    @DisplayName("转办：任务改派给他人")
-    void transfer() {
-        service.start(appointment);
-        service.transfer(onlyTaskId(), 5L, 6L, "我在出差");
-
-        assertEquals(6L, taskRepo.store.get(onlyTaskId()).assigneeId());
-        assertTrue(notifications.contains("todo:6"));
-    }
-
-    @Test
-    @DisplayName("加签：同层并行，全部通过才终审")
-    void countersign() {
-        service.start(appointment);
-        service.countersign(onlyTaskId(), 5L, 6L);
-        assertEquals(2, taskRepo.store.size());
-
-        ApprovalService.PassResult first = service.pass(onlyTaskId(), 5L, null, null);
-        assertEquals(Appointment.PENDING_L1, appointment.getStatus());
-        assertFalse(first.dispatchStarted());
-
-        long secondTask = taskRepo.store.keySet().stream().filter(id -> id != onlyTaskId()).findFirst().orElseThrow();
-        service.pass(secondTask, 6L, null, null);
-        assertEquals(Appointment.APPROVED, appointment.getStatus());
-    }
-
-    @Test
-    @DisplayName("催办限流：同一任务按次数上限拒绝")
+    @DisplayName("催办：按配置间隔限流")
     void remindLimit() {
         service.start(appointment);
-        long taskId = onlyTaskId();
 
-        int remaining = service.remind(taskId, 5L);
-        assertEquals(1, remaining);
-        assertTrue(notifications.contains("remind:5"));
+        int remaining = service.remind(onlyTaskId(), 99L);
+        assertEquals(1, remaining, "默认上限 2 次，第一次后剩 1 次");
 
-        // 刚催办过，间隔不足
-        BusinessException tooFrequent = assertThrows(BusinessException.class,
-                () -> service.remind(taskId, 5L));
-        assertEquals(ErrorCode.STATUS_NOT_ALLOWED.code(), tooFrequent.getCode());
-
-        // 把上次时间改早，再催一次达到上限
-        ApprovalTask task = taskRepo.store.get(taskId);
-        taskRepo.store.put(taskId, new ApprovalTask(task.id(), task.appointmentId(), task.level(),
-                task.assigneeId(), task.status(), task.reminderCount(),
-                LocalDateTime.now().minusHours(2), task.finishedAt(), task.createdAt(),
-                task.assigneeType(), task.assigneeRole()));
-        service.remind(taskId, 5L);
-
-        BusinessException maxed = assertThrows(BusinessException.class,
-                () -> service.remind(taskId, 5L));
-        assertEquals(ErrorCode.STATUS_NOT_ALLOWED.code(), maxed.getCode());
+        BusinessException again = assertThrows(BusinessException.class,
+                () -> service.remind(onlyTaskId(), 99L));
+        assertEquals(ErrorCode.STATUS_NOT_ALLOWED.code(), again.getCode(), "30 分钟内不能重复催办");
     }
 
     @Test
-    @DisplayName("待办角标与列表")
-    void todo() {
-        service.start(appointment);
-        assertEquals(1, service.todoCount(5L));
-        assertEquals(0, service.todoCount(6L));
+    @DisplayName("配置：级数强制 1，角色为空时用默认 GUARD")
+    void configForcedSingleLevel() {
+        service.updateConfig(new ApprovalConfig(1L, "GLOBAL", 2, null, List.of(), "", 15, 3));
 
-        PageResult<ApprovalService.TodoView> page = service.todoList(5L, 1, 10);
-        assertEquals(1, page.getTotal());
-    }
-
-    @Test
-    @DisplayName("配置校验：审批级数只能是 1 或 2；二级角色为空时回落 GUARD")
-    void configValidation() {
-        BusinessException e = assertThrows(BusinessException.class, () -> service.updateConfig(
-                new ApprovalConfig(1L, "GLOBAL", 3, null, List.of(), "GUARD", 30, 2)));
-        assertEquals(ErrorCode.PARAM_INVALID.code(), e.getCode());
-
-        ApprovalConfig saved = service.updateConfig(
-                new ApprovalConfig(1L, "GLOBAL", 1, null, List.of(), null, 30, 2));
+        ApprovalConfig saved = service.getConfig();
+        assertEquals(1, saved.approvalLevel());
         assertFalse(saved.twoLevel());
-        assertEquals("GUARD", saved.roleOrDefault(), "角色为空时回落 GUARD");
+        assertEquals("GUARD", saved.roleOrDefault());
+        assertEquals(15, saved.reminderIntervalMin());
+        assertEquals(3, saved.reminderMaxPerTask());
     }
 }

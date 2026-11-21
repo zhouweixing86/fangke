@@ -59,7 +59,7 @@
 
         <el-tab-pane label="待审批（只读）" name="pending">
           <el-alert type="info" :closable="false" show-icon
-            title="一级审批由被访员工处理，保安只能查看与催办；被访人确认后会进入「待保安复核」"
+            title="预约提交后进入待审核，由保安/管理员审核；审核通过即下发门禁授权"
             style="margin-bottom: 12px" />
           <el-table v-loading="pendingLoading" :data="pendingList" border stripe>
             <el-table-column prop="appointmentNo" label="预约单号" width="170" />
@@ -83,12 +83,12 @@
 
         <el-tab-pane name="review">
           <template #label>
-            待保安复核
+            待我审核
             <el-badge v-if="reviewCount > 0" :value="reviewCount" type="danger"
               style="margin-left: 6px; vertical-align: top" />
           </template>
           <el-alert type="warning" :closable="false" show-icon
-            title="被访人已确认，需保安复核后才下发门禁授权；发现异常请拒绝放行"
+            title="审核通过后立即下发门禁授权；发现异常请拒绝放行"
             style="margin-bottom: 12px" />
           <el-table v-loading="reviewLoading" :data="reviewList" border stripe>
             <el-table-column prop="appointmentNo" label="预约单号" width="170" />
@@ -99,7 +99,7 @@
             <el-table-column prop="endTime" label="预约结束" width="150" />
             <el-table-column label="操作" width="110" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" @click="openReview(row)">复核</el-button>
+                <el-button link type="primary" @click="openReview(row)">审核</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -137,7 +137,7 @@
       </div>
     </el-dialog>
 
-    <el-dialog v-model="reviewVisible" title="保安复核" width="640px">
+    <el-dialog v-model="reviewVisible" title="预约审核" width="640px">
       <template v-if="reviewDetail">
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="预约单号">{{ reviewDetail.appointmentNo }}</el-descriptions-item>
@@ -182,7 +182,7 @@
       <template #footer>
         <el-button @click="reviewVisible = false">取消</el-button>
         <el-button type="danger" :loading="reviewActing" @click="doReject">拒绝放行</el-button>
-        <el-button type="primary" :loading="reviewActing" @click="doPass">复核通过</el-button>
+        <el-button type="primary" :loading="reviewActing" @click="doPass">审核通过</el-button>
       </template>
     </el-dialog>
   </div>
@@ -319,7 +319,7 @@ async function doVerify() {
   }
 }
 
-/* ---------------- 待保安复核（C-65） ---------------- */
+/* ---------------- 待我审核（C-65） ---------------- */
 
 const reviewList = ref<ReviewRow[]>([])
 const reviewTotal = ref(0)
@@ -336,7 +336,7 @@ const reviewComment = ref('')
 /** 是否同意访客的「二维码开门」申请（仅当访客申请过时显示开关） */
 const reviewQrApproved = ref(false)
 
-/** 被访人确认的开放范围（只读展示，用于对比保安是否收窄） */
+/** 访客申请的开放范围（只读展示，用于对比审核时是否收窄） */
 const appliedText = computed(() => {
   const g = reviewDetail.value?.gates
   if (!g) return '-'

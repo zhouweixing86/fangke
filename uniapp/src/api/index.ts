@@ -2,10 +2,7 @@ import { API_BASE, del, get, getToken, post, put } from './http'
 import { showToast } from '@/utils/ui'
 import type {
   AdminLoginResult,
-  AppLoginResult,
-  AppMe,
   AppointmentView,
-  ApprovalDetail,
   BlacklistRow,
   DeviceView,
   DispatchResult,
@@ -13,28 +10,16 @@ import type {
   EventRow,
   GateOption,
   GuardDashboard,
-  NotificationItem,
   OnsiteRow,
   PageResult,
-  PassResult,
   PendingRow,
   QrIssueResult,
   QrVerifyResult,
   ReportDaily,
-  ReportOverview,
-  TodoView
+  ReportOverview
 } from './types'
 
-/* ---------------- 登录 ---------------- */
-
-export const appSendCode = (phone: string) =>
-  post<{ phoneMask: string; ttlSeconds: number; resendAfterSeconds: number; mockCode: string | null }>(
-    '/app/auth/code',
-    { phone }
-  )
-
-export const appLogin = (phone: string, code: string) =>
-  post<AppLoginResult>('/app/auth/login', { phone, code })
+/* ---------------- 登录（只有管理端；访客走微信小程序静默登录） ---------------- */
 
 /** 微信小程序一键登录：wx.login 拿到的 code 直接换 token（不用注册/验证码） */
 export const wxLogin = (code: string) =>
@@ -54,8 +39,6 @@ export const lookupEmployee = (phone: string) =>
     '/app/employee/lookup',
     { phone }
   )
-
-export const appMe = () => get<AppMe>('/app/me')
 
 export const adminLogin = (username: string, password: string) =>
   post<AdminLoginResult>('/auth/login', { username, password })
@@ -77,31 +60,6 @@ export const cancelAppointment = (no: string, reason?: string) =>
   post<void>('/app/appointment/' + no + '/cancel', { reason })
 
 export const issueQr = (no: string) => post<QrIssueResult>('/app/appointment/' + no + '/qr')
-
-/* ---------------- 员工审批 ---------------- */
-
-export const myTodo = (params: Record<string, unknown>) =>
-  get<PageResult<TodoView>>('/app/approval/todo', params)
-
-export const approvalDetail = (taskId: number) => get<ApprovalDetail>('/app/approval/' + taskId)
-
-export const approvalPass = (taskId: number, comment?: string, approvedGateIds?: number[],
-                             qrApproved?: boolean) =>
-  post<PassResult>('/app/approval/' + taskId + '/pass', { comment, approvedGateIds, qrApproved })
-
-export const approvalReject = (taskId: number, comment: string) =>
-  post<void>('/app/approval/' + taskId + '/reject', { comment })
-
-/* ---------------- 消息 ---------------- */
-
-export const myNotifications = (params: Record<string, unknown>) =>
-  get<PageResult<NotificationItem>>('/app/notifications', params)
-
-export const unreadCount = () => get<{ unread: number }>('/app/notifications/unread-count')
-
-export const readNotification = (id: number) => post<void>('/app/notifications/' + id + '/read')
-
-export const readAllNotifications = () => post<{ updated: number }>('/app/notifications/read-all')
 
 /* ---------------- 保安工作台 ---------------- */
 

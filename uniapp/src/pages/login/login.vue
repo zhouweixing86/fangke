@@ -2,45 +2,20 @@
   <view class="page page--plain login">
     <view class="hero">
       <text class="hero-title">访客通行</text>
-      <text class="hero-sub">访客预约 · 员工审批 · 管理端</text>
+      <text class="hero-sub">管理端 · 预约审核</text>
     </view>
 
     <view class="card">
-      <view class="seg">
-        <view class="seg-item" :class="{ active: mode === 'admin' }" @click="mode = 'admin'">管理端</view>
-        <view class="seg-item" :class="{ active: mode === 'app' }" @click="mode = 'app'">员工</view>
+      <view class="field">
+        <text class="field-label">账号</text>
+        <input v-model="username" class="field-input" placeholder="管理端账号" />
       </view>
-
-      <template v-if="mode === 'app'">
-        <view class="field">
-          <text class="field-label">手机号</text>
-          <input v-model="phone" class="field-input" type="number" maxlength="11" placeholder="请输入手机号" />
-        </view>
-        <view class="field">
-          <text class="field-label">验证码</text>
-          <input v-model="code" class="field-input" type="number" maxlength="6" placeholder="6 位验证码" />
-          <text class="code-btn" :class="{ disabled: counting }" @click="sendCode">
-            {{ counting ? countdown + 's' : '获取验证码' }}
-          </text>
-        </view>
-      </template>
-
-      <template v-else>
-        <view class="field">
-          <text class="field-label">账号</text>
-          <input v-model="username" class="field-input" placeholder="管理端账号" />
-        </view>
-        <view class="field">
-          <text class="field-label">密码</text>
-          <input v-model="password" class="field-input" password placeholder="登录密码" />
-        </view>
-      </template>
+      <view class="field">
+        <text class="field-label">密码</text>
+        <input v-model="password" class="field-input" password placeholder="登录密码" />
+      </view>
 
       <button class="btn btn--primary" :loading="loading" style="margin-top: 18px" @click="submit">登录</button>
-
-      <view v-if="mode === 'app'" class="muted" style="margin-top: 14px; text-align: center">
-        员工手机号需与员工档案一致；访客请使用微信小程序预约
-      </view>
 
       <view class="muted" style="margin-top: 12px; text-align: center">
         管理端账号由系统管理员分配；访客端为微信小程序，无需在此登录
@@ -50,69 +25,16 @@
 </template>
 
 <script setup lang="ts">
-import { onUnload } from '@dcloudio/uni-app'
 import { ref } from 'vue'
-import { adminLogin, appLogin, appSendCode } from '@/api'
-import { applyAdminLogin, applyAppLogin, homePath } from '@/store/auth'
-import { alert, showToast } from '@/utils/ui'
+import { adminLogin } from '@/api'
+import { applyAdminLogin, homePath } from '@/store/auth'
+import { showToast } from '@/utils/ui'
 
-const mode = ref<'app' | 'admin'>('admin')
-const phone = ref('')
-const code = ref('')
 const username = ref('')
 const password = ref('')
 const loading = ref(false)
-const counting = ref(false)
-const countdown = ref(0)
-let timer: ReturnType<typeof setInterval> | null = null
-
-async function sendCode() {
-  if (counting.value) return
-  if (!/^1[3-9]\d{9}$/.test(phone.value)) {
-    showToast('请输入正确手机号')
-    return
-  }
-  const result = await appSendCode(phone.value)
-  counting.value = true
-  countdown.value = result.resendAfterSeconds
-  if (timer) clearInterval(timer)
-  timer = setInterval(() => {
-    countdown.value -= 1
-    if (countdown.value <= 0) {
-      counting.value = false
-      if (timer) clearInterval(timer)
-      timer = null
-    }
-  }, 1000)
-  if (result.mockCode) {
-    code.value = result.mockCode
-    await alert('开发模式验证码：' + result.mockCode + '（已自动填入）\n生产环境由短信下发。', '验证码')
-  } else {
-    showToast('验证码已发送')
-  }
-}
 
 async function submit() {
-  if (mode.value === 'app') {
-    if (!phone.value || !code.value) {
-      showToast('请填写手机号和验证码')
-      return
-    }
-    loading.value = true
-    try {
-      const result = await appLogin(phone.value, code.value)
-      // 管理端 H5 只服务员工/保安：访客走微信小程序，避免登录后无页面可进
-      if (result.role === 'APP_VISITOR') {
-        showToast('访客请使用微信小程序预约与查看通行码')
-        return
-      }
-      applyAppLogin(result)
-      uni.reLaunch({ url: homePath() })
-    } finally {
-      loading.value = false
-    }
-    return
-  }
   if (!username.value || !password.value) {
     showToast('请填写账号和密码')
     return
@@ -125,10 +47,6 @@ async function submit() {
     loading.value = false
   }
 }
-
-onUnload(() => {
-  if (timer) clearInterval(timer)
-})
 </script>
 
 <style scoped>

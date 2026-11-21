@@ -5,9 +5,11 @@ import java.util.List;
 /**
  * 审批配置（docs/10 §6 approval_config）。
  *
- * @param defaultL1User  被访人手机号匹配不到员工时的默认一级审批人（BR-A-002）
- * @param l2CandidateIds 旧：二级审批候选池（员工 ID），双审口径下不再使用，仅保留兼容
- * @param l2Role         二级复核角色（默认 GUARD=保安），该角色的后台账号都可处理（C-65）
+ * <p><b>2026-11-21 起为单级审批</b>：预约由登录管理端的人审核（{@code l2Role} 指定的角色，
+ * 默认 GUARD=保安/管理员）。员工不再登录审批，{@code defaultL1User} 与 {@code l2CandidateIds}
+ * 仅保留字段兼容历史数据。
+ *
+ * @param l2Role 审核角色（默认 GUARD），该角色的后台账号都可处理
  */
 public record ApprovalConfig(
         Long id,
@@ -21,11 +23,12 @@ public record ApprovalConfig(
 
     public static final String ROLE_GUARD = "GUARD";
 
-    /** 默认口径：被访人确认 + 保安复核（C-65）。 */
+    /** 默认口径：单级，管理端角色审核。 */
     public static ApprovalConfig defaults() {
-        return new ApprovalConfig(null, "GLOBAL", 2, null, List.of(), ROLE_GUARD, 30, 2);
+        return new ApprovalConfig(null, "GLOBAL", 1, null, List.of(), ROLE_GUARD, 30, 2);
     }
 
+    /** 是否双级：已废弃（固定单级），保留方法避免调用方报错。 */
     public boolean twoLevel() {
         return approvalLevel >= 2;
     }

@@ -310,7 +310,7 @@ export const guardDashboard = () => get<GuardDashboard>('/guard/dashboard')
 /** 保安可操作门点（人工开门要先选门；保安无 ADMIN 权限，走 /guard/gate） */
 export const listGuardGates = () => get<GateOption[]>('/guard/gate')
 
-/* ---------------- 保安复核（C-65：被访人确认 + 保安复核） ---------------- */
+/* ---------------- 预约审核（单级：管理端） ---------------- */
 
 export const guardReviewTodo = (params: Record<string, unknown>) =>
   get<PageResult<ReviewRow>>('/guard/approval/todo', params)

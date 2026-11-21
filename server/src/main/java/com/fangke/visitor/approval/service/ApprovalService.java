@@ -113,34 +113,25 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
 
     /* ---------------- 启动 / 取消 ---------------- */
 
+    /**
+     * 创建审核任务：**单级**，指派给管理端角色（默认 GUARD，即登录管理端的保安/管理员）。
+     *
+     * <p>2026-11-21 客户确认：员工不再登录审批，预约统一由管理端审核。
+     * 被访人（{@code visit_employee_id}）仅作为"拜访对象"记录，不再参与审批。
+     */
     @Override
     @Transactional
     public void start(Appointment appointment) {
         ApprovalConfig config = configRepository.loadGlobal();
-        Long assignee = appointment.getVisitEmployeeId() != null
-                ? appointment.getVisitEmployeeId() : config.defaultL1User();
-        if (assignee == null) {
-            // 被访人手机号填错 / 被访人已停用，且没配默认一级审批人时的兜底：
-            // 交给保安角色处理。否则预约会停在"待审批"却没有任何审批任务，谁都处理不了（死单）。
-            String fallbackRole = config.l2Role() == null || config.l2Role().isBlank() ? "GUARD" : config.l2Role();
-            long fallbackTaskId = taskRepository.insert(
-                    ApprovalTask.roleTask(appointment.getId(), 1, fallbackRole));
-            appointment.setStatus(Appointment.PENDING_L1);
-            appointment.setCurrentTaskId(fallbackTaskId);
-            appointmentRepository.update(appointment);
-            log.warn("预约 {} 未匹配到被访人，一级审批兜底给角色 {}（task={}）",
-                    appointment.getAppointmentNo(), fallbackRole, fallbackTaskId);
-            return;
-        }
-        long taskId = taskRepository.insert(ApprovalTask.employeeTask(appointment.getId(), 1, assignee));
+        String role = config.roleOrDefault();
+        long taskId = taskRepository.insert(ApprovalTask.roleTask(appointment.getId(), 1, role));
 
         appointment.setStatus(Appointment.PENDING_L1);
         appointment.setCurrentTaskId(taskId);
         appointmentRepository.update(appointment);
 
-        notifyPort.approvalTodo(assignee, appointment.getId());
-        log.info("创建一级审批任务 appointment={} task={} assignee={}",
-                appointment.getAppointmentNo(), taskId, assignee);
+        log.info("创建管理端审核任务 appointment={} task={} role={}",
+                appointment.getAppointmentNo(), taskId, role);
     }
 
     @Override
@@ -152,70 +143,8 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
 
     /* ---------------- 审批动作 ---------------- */
 
-    @Transactional
-    public PassResult pass(Long taskId, Long operatorId, String comment, Long nextApproverId) {
-        return pass(taskId, operatorId, comment, nextApproverId, null);
-    }
-
     /**
-     * 审批通过（一级：被访人确认）。
-     *
-     * @param approvedGateIds 审批人调整后的门点集合；{@code null} 表示不改（默认继承访客申请）。
-     *                        可增可减，申请与批准两个集合都会落库，便于留痕对比（C-64）。
-     */
-    @Transactional
-    public PassResult pass(Long taskId, Long operatorId, String comment, Long nextApproverId,
-                           List<Long> approvedGateIds) {
-        return pass(taskId, operatorId, comment, nextApproverId, approvedGateIds, null);
-    }
-
-    /**
-     * 审批通过（一级：被访人确认）。
-     *
-     * @param approvedGateIds 审批人调整后的门点集合；{@code null} 表示不改（默认继承访客申请）。
-     *                        可增可减，申请与批准两个集合都会落库，便于留痕对比（C-64）。
-     * @param qrApproved      是否同意访客的「二维码开门」申请；{@code null} 表示不改。
-     *                        同意后访客端「我的预约」才能取动态码（60 秒有效）。
-     */
-    @Transactional
-    public PassResult pass(Long taskId, Long operatorId, String comment, Long nextApproverId,
-                           List<Long> approvedGateIds, Boolean qrApproved) {
-        ApprovalTask task = requirePendingOwned(taskId, operatorId);
-        Appointment appointment = loadAppointment(task.appointmentId());
-        ApprovalConfig config = configRepository.loadGlobal();
-        applyQrDecision(appointment, qrApproved, operatorId);
-
-        List<Long> approved = approvedGateIds == null
-                ? null : appointmentGateService.saveApproved(appointment, approvedGateIds);
-        actionRepository.insert(taskId, appointment.getId(), operatorId, ApprovalTask.TYPE_EMPLOYEE,
-                ACTION_PASS, null, trim(comment), gateSnapshot(approved));
-        taskRepository.updateStatus(taskId, ApprovalTask.STATUS_PASSED);
-
-        if (task.level() == 1 && config.twoLevel()) {
-            // 双审（C-65）：二级是「门卫复核」，指派给角色而非具体人——保安轮班，谁值班谁批
-            String role = config.roleOrDefault();
-            long newTaskId = taskRepository.insert(ApprovalTask.roleTask(appointment.getId(), 2, role));
-            appointment.setStatus(Appointment.PENDING_L2);
-            appointment.setCurrentTaskId(newTaskId);
-            appointmentRepository.update(appointment);
-            log.info("一级（被访人）确认通过，转保安复核 appointment={} task={} role={}",
-                    appointment.getAppointmentNo(), newTaskId, role);
-            return new PassResult(appointment.getAppointmentNo(), appointment.getStatus(),
-                    Appointment.statusText(appointment.getStatus()), true, false);
-        }
-
-        // 加签场景：同层还有其它待处理任务时，等全部通过再进入下一级
-        if (taskRepository.findPendingByAppointmentAndLevel(appointment.getId(), task.level()).isEmpty()) {
-            return finalizeApprove(appointment, false);
-        }
-        log.info("还有同级待办，暂不推进 appointment={} level={}",
-                appointment.getAppointmentNo(), task.level());
-        return new PassResult(appointment.getAppointmentNo(), appointment.getStatus(),
-                Appointment.statusText(appointment.getStatus()), false, false);
-    }
-
-    /**
-     * 二级通过（门卫复核，C-65）。操作人是后台账号（sys_user），不是员工。
+     * 管理端审核通过（单级审批）。操作人是后台账号（sys_user），不是员工。
      */
     @Transactional
     public PassResult guardPass(Long taskId, Long operatorUserId, List<String> roles, String comment,
@@ -224,9 +153,9 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     }
 
     /**
-     * 二级（门卫）复核通过。
+     * 管理端审核通过（单级审批）。
      *
-     * @param qrApproved 是否同意二维码开门；{@code null} 表示不改（默认沿用一级的决定）
+     * @param qrApproved 是否同意二维码开门；{@code null} 表示不改
      */
     @Transactional
     public PassResult guardPass(Long taskId, Long operatorUserId, List<String> roles, String comment,
@@ -274,56 +203,6 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                 appointment.getAppointmentNo(), taskId, operatorUserId, comment.trim());
     }
 
-    @Transactional
-    public void reject(Long taskId, Long operatorId, String comment) {
-        if (comment == null || comment.isBlank()) {
-            throw new BusinessException(ErrorCode.PARAM_MISSING, "驳回必须填写原因");
-        }
-        ApprovalTask task = requirePendingOwned(taskId, operatorId);
-        Appointment appointment = loadAppointment(task.appointmentId());
-
-        actionRepository.insert(taskId, appointment.getId(), operatorId, ACTION_REJECT, null, comment.trim());
-        taskRepository.updateStatus(taskId, ApprovalTask.STATUS_REJECTED);
-        taskRepository.invalidatePending(appointment.getId());
-
-        appointment.setStatus(Appointment.REJECTED);
-        appointment.setRejectReason(comment.trim());
-        appointment.setCurrentTaskId(null);
-        appointmentRepository.update(appointment);
-
-        notifyPort.approvalResult(appointment.getId(), false, comment.trim());
-        log.info("审批驳回 appointment={} task={} operator={}", appointment.getAppointmentNo(), taskId, operatorId);
-    }
-
-    @Transactional
-    public void transfer(Long taskId, Long operatorId, Long targetUserId, String comment) {
-        if (targetUserId == null) {
-            throw new BusinessException(ErrorCode.PARAM_MISSING, "请选择转办对象");
-        }
-        if (targetUserId.equals(operatorId)) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID, "不能转办给自己");
-        }
-        ApprovalTask task = requirePendingOwned(taskId, operatorId);
-        actionRepository.insert(taskId, task.appointmentId(), operatorId, ACTION_TRANSFER, targetUserId,
-                trim(comment));
-        taskRepository.updateAssignee(taskId, targetUserId);
-        notifyPort.approvalTodo(targetUserId, task.appointmentId());
-        log.info("审批转办 task={} from={} to={}", taskId, operatorId, targetUserId);
-    }
-
-    @Transactional
-    public void countersign(Long taskId, Long operatorId, Long targetUserId) {
-        if (targetUserId == null) {
-            throw new BusinessException(ErrorCode.PARAM_MISSING, "请选择加签对象");
-        }
-        ApprovalTask task = requirePendingOwned(taskId, operatorId);
-        actionRepository.insert(taskId, task.appointmentId(), operatorId, ACTION_COUNTERSIGN, targetUserId, null);
-        long newTaskId = taskRepository.insert(
-                ApprovalTask.employeeTask(task.appointmentId(), task.level(), targetUserId));
-        notifyPort.approvalTodo(targetUserId, task.appointmentId());
-        log.info("审批加签 task={} newTask={} to={}", taskId, newTaskId, targetUserId);
-    }
-
     /** 催办：同一任务按配置间隔与次数上限限流。 */
     @Transactional
     public int remind(Long taskId, Long operatorId) {
@@ -363,32 +242,7 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         return remind(task.id(), operatorId);
     }
 
-    /* ---------------- 查询 ---------------- */
-
-    public long todoCount(Long employeeId) {
-        return taskRepository.countPending(employeeId);
-    }
-
-    public PageResult<TodoView> todoList(Long employeeId, int page, int size) {
-        int safePage = Math.max(page, 1);
-        int safeSize = Math.min(Math.max(size, 1), 100);
-        List<ApprovalTaskRepository.TodoRow> rows = taskRepository.findTodo(employeeId,
-                (safePage - 1) * safeSize, safeSize);
-        List<TodoView> list = rows.stream()
-                .map(r -> new TodoView(r.taskId(), r.level(), r.appointmentNo(), r.visitorName(),
-                        r.idCardMask(), r.purpose(),
-                        DATETIME.format(r.startTime()), DATETIME.format(r.endTime())))
-                .toList();
-        return PageResult.of(taskRepository.countPending(employeeId), safePage, safeSize, list);
-    }
-
-    public DetailView detail(Long taskId, Long employeeId) {
-        ApprovalTask task = requireExists(taskId);
-        boolean canAct = task.pending() && !task.roleTask() && task.assigneeId().equals(employeeId);
-        return buildDetail(task, canAct);
-    }
-
-    /* ---------------- 保安复核（C-65） ---------------- */
+    /* ---------------- 保安复核（原二级，现为唯一审核入口） ---------------- */
 
     public long guardTodoCount(List<String> roles) {
         String role = guardRole(roles);
@@ -479,15 +333,14 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
 
     @Transactional
     public ApprovalConfig updateConfig(ApprovalConfig config) {
-        if (config.approvalLevel() != 1 && config.approvalLevel() != 2) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID, "审批级数只能是 1 或 2");
-        }
-        if (config.twoLevel() && config.roleOrDefault().isBlank()) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID, "二级复核角色不能为空");
-        }
-        configRepository.saveGlobal(config);
-        log.info("审批配置更新 level={} defaultL1={} l2Role={}",
-                config.approvalLevel(), config.defaultL1User(), config.roleOrDefault());
+        // 单级审批：审核角色必填，级数固定 1（传 2 会被强制拉回，避免又出现"等员工审批"的死单）
+        ApprovalConfig normalized = new ApprovalConfig(config.id(), config.scope(), 1,
+                config.defaultL1User(), config.l2CandidateIds(), config.roleOrDefault(),
+                config.reminderIntervalMin(), config.reminderMaxPerTask());
+        configRepository.saveGlobal(normalized);
+        log.info("审批配置更新 level=1 审核角色={} 催办间隔={}分 上限={}次",
+                normalized.roleOrDefault(), normalized.reminderIntervalMin(),
+                normalized.reminderMaxPerTask());
         return configRepository.loadGlobal();
     }
 

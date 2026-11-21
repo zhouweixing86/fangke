@@ -129,7 +129,7 @@ const detail = ref<AppointmentRow | null>(null)
 
 const statusOptions = [
   { label: '待审批', value: 20 },
-  { label: '待二级审批', value: 25 },
+  { label: '待审核', value: 25 },
   { label: '已通过', value: 30 },
   { label: '可通行', value: 35 },
   { label: '已签到', value: 40 },

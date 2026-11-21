@@ -1,7 +1,7 @@
 {
   "pages": [
     // #ifdef MP-WEIXIN
-    // ---------- 访客端：微信小程序（无 H5、无注册，静默一键登录） ----------
+    // ---------- 访客端：微信小程序（访客唯一入口，没有 H5） ----------
     { "path": "pages/visitor/home", "style": { "navigationBarTitleText": "首页" } },
     { "path": "pages/visitor/new", "style": { "navigationBarTitleText": "预约" } },
     { "path": "pages/visitor/index", "style": { "navigationBarTitleText": "我的预约", "enablePullDownRefresh": true } },
@@ -9,18 +9,14 @@
     // #endif
 
     // #ifndef MP-WEIXIN
-    // ---------- 管理端 H5（含保安/员工移动端页面）：账号密码登录 ----------
+    // ---------- 管理端 H5（保安/管理员移动端）：仅账号密码登录，无员工/访客入口 ----------
     { "path": "pages/login/login", "style": { "navigationBarTitleText": "登录" } },
     { "path": "pages/admin/workbench", "style": { "navigationBarTitleText": "工作台", "enablePullDownRefresh": true } },
-    { "path": "pages/admin/appointments", "style": { "navigationBarTitleText": "预约查询", "enablePullDownRefresh": true } },
+    { "path": "pages/admin/appointments", "style": { "navigationBarTitleText": "预约审核", "enablePullDownRefresh": true } },
     { "path": "pages/admin/events", "style": { "navigationBarTitleText": "通行记录", "enablePullDownRefresh": true } },
     { "path": "pages/admin/devices", "style": { "navigationBarTitleText": "设备", "enablePullDownRefresh": true } },
     { "path": "pages/admin/blacklist", "style": { "navigationBarTitleText": "黑名单", "enablePullDownRefresh": true } },
     { "path": "pages/admin/report", "style": { "navigationBarTitleText": "报表" } },
-    { "path": "pages/employee/todo", "style": { "navigationBarTitleText": "待我审批", "enablePullDownRefresh": true } },
-    { "path": "pages/employee/approval", "style": { "navigationBarTitleText": "审批详情" } },
-    { "path": "pages/common/messages", "style": { "navigationBarTitleText": "消息", "enablePullDownRefresh": true } },
-    { "path": "pages/common/profile", "style": { "navigationBarTitleText": "我的" } },
     // #endif
   ],
   "globalStyle": {
