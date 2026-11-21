@@ -62,6 +62,12 @@ public class Appointment {
     private LocalDateTime endTime;
     private int mateMode;
     private int mateCount;
+    /** 访客申请二维码开门（0 否 / 1 是）：预约时访客勾选。 */
+    private boolean qrRequested;
+    /** 审批人是否同意二维码开门（0 否 / 1 是）：同意后访客端才能取码。 */
+    private boolean qrApproved;
+    private Long qrApprovedBy;
+    private LocalDateTime qrApprovedAt;
     private int approvalLevel = 1;
     private int status = PENDING_L1;
     private String rejectReason;
@@ -251,6 +257,38 @@ public class Appointment {
 
     public void setMateMode(int mateMode) {
         this.mateMode = mateMode;
+    }
+
+    public boolean isQrRequested() {
+        return qrRequested;
+    }
+
+    public void setQrRequested(boolean qrRequested) {
+        this.qrRequested = qrRequested;
+    }
+
+    public boolean isQrApproved() {
+        return qrApproved;
+    }
+
+    public void setQrApproved(boolean qrApproved) {
+        this.qrApproved = qrApproved;
+    }
+
+    public Long getQrApprovedBy() {
+        return qrApprovedBy;
+    }
+
+    public void setQrApprovedBy(Long qrApprovedBy) {
+        this.qrApprovedBy = qrApprovedBy;
+    }
+
+    public LocalDateTime getQrApprovedAt() {
+        return qrApprovedAt;
+    }
+
+    public void setQrApprovedAt(LocalDateTime qrApprovedAt) {
+        this.qrApprovedAt = qrApprovedAt;
     }
 
     public int getMateCount() {

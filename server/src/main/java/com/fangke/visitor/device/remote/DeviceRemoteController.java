@@ -117,6 +117,23 @@ public class DeviceRemoteController {
         return ApiResponse.ok(remoteService.gateHold(load(id), enabled, minutes));
     }
 
+    /** 可远程切换的开关清单（前端渲染用）。 */
+    @GetMapping("/switches")
+    public ApiResponse<Map<String, String>> switches(@PathVariable Long id) {
+        load(id);
+        return ApiResponse.ok(remoteService.safeSwitches());
+    }
+
+    /**
+     * 切换安全开关（只允许白名单，如「摄像头扫码」——访客二维码进闸必须打开它）。
+     */
+    @PostMapping("/switches")
+    @AuditLog(module = "DEVICE", action = "REMOTE_SWITCH")
+    public ApiResponse<Map<String, Object>> setSwitches(@PathVariable Long id,
+                                                        @RequestBody Map<String, Object> body) {
+        return ApiResponse.ok(remoteService.setSwitches(load(id), body));
+    }
+
     @PostMapping("/reboot")
     @AuditLog(module = "DEVICE", action = "REMOTE_REBOOT")
     public ApiResponse<Map<String, Object>> reboot(@PathVariable Long id) {

@@ -143,6 +143,17 @@
             <el-button :loading="remoteBusy === 'hold'" @click="doGateHold(false)">关闭常开</el-button>
           </div>
 
+          <el-divider content-position="left">常用开关</el-divider>
+          <div v-for="(label, key) in switchDefs" :key="key" class="switch-row">
+            <el-switch :model-value="Boolean(switchStates[key])" :loading="remoteBusy === 'switch'"
+              @change="(v: any) => toggleSwitch(key, Boolean(v))" />
+            <span class="switch-label">{{ label }}</span>
+            <span class="text-muted mono">{{ key }}</span>
+          </div>
+          <div class="text-muted" style="margin-top: 4px">
+            访客用二维码进闸需要「摄像头扫码」为开启状态。其余参数请在「本地管理」里修改。
+          </div>
+
           <el-divider content-position="left">危险操作</el-divider>
           <el-button type="danger" plain :loading="remoteBusy === 'restore'" @click="doRestore">
             恢复设备出厂参数
@@ -201,6 +212,8 @@ import {
   deviceRemoteReboot,
   deviceRemoteRestore,
   deviceRemoteSnapshot,
+  deviceRemoteSwitches,
+  deviceRemoteSetSwitches,
   deviceRemoteSyncTime,
   deviceRemoteTip,
   listDevices,
@@ -289,6 +302,10 @@ const holdMinutes = ref(10)
 const tipForm = ref({ msg: '', color: 0 })
 const remoteVersion = ref<Record<string, unknown>>({})
 const remoteParams = ref<Record<string, unknown>>({})
+/** 可远程切换的开关：key → 中文说明 */
+const switchDefs = ref<Record<string, string>>({})
+/** 开关当前值 */
+const switchStates = ref<Record<string, boolean>>({})
 
 const statusOf = (key: string) => {
   const value = remoteVersion.value[key]
@@ -313,6 +330,43 @@ async function openRemote(row: DeviceView) {
   remoteParams.value = {}
   snapshotSrc.value = ''
   await loadRemoteStatus()
+  await loadRemoteSwitches()
+}
+
+/** 读取可切换的开关清单与当前值（设备参数里取 0/1） */
+async function loadRemoteSwitches() {
+  if (!remoteRow.value) return
+  try {
+    const [defs, params] = await Promise.all([
+      deviceRemoteSwitches(remoteRow.value.id),
+      deviceRemoteParameters(remoteRow.value.id)
+    ])
+    switchDefs.value = defs
+    remoteParams.value = params
+    const next: Record<string, boolean> = {}
+    for (const key of Object.keys(defs)) {
+      const raw = params[key]
+      next[key] = raw === 1 || raw === '1' || raw === true
+    }
+    switchStates.value = next
+  } catch (error) {
+    switchDefs.value = {}
+    showRemoteError(error)
+  }
+}
+
+async function toggleSwitch(key: string, value: boolean) {
+  if (!remoteRow.value) return
+  remoteBusy.value = 'switch'
+  try {
+    await deviceRemoteSetSwitches(remoteRow.value.id, { [key]: value })
+    switchStates.value = { ...switchStates.value, [key]: value }
+    ElMessage.success(`${switchDefs.value[key] || key} 已${value ? '开启' : '关闭'}`)
+  } catch (error) {
+    showRemoteError(error)
+  } finally {
+    remoteBusy.value = ''
+  }
 }
 
 /** 本地管理：直接跳设备自己的 Web 后台（同网即可，不依赖平台） */
@@ -505,5 +559,16 @@ onMounted(async () => {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-all;
+}
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.switch-label {
+  font-size: 13px;
+  color: #303133;
 }
 </style>

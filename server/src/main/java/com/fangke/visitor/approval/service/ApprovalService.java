@@ -73,7 +73,11 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                              String visitorName, String idCardMask, String visitorType, String purpose,
                              String visitPhoneMask, String startTime, String endTime,
                              GateAssignment gates,
-                             boolean canAct, List<ActionView> actions) {
+                             boolean canAct, List<ActionView> actions,
+                             /** 访客是否申请二维码开门（审批页据 this 决定要不要显示开关） */
+                             boolean qrRequested,
+                             /** 当前是否已同意二维码开门 */
+                             boolean qrApproved) {
     }
 
     public record PassResult(String appointmentNo, int status, String statusText,
@@ -162,9 +166,24 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     @Transactional
     public PassResult pass(Long taskId, Long operatorId, String comment, Long nextApproverId,
                            List<Long> approvedGateIds) {
+        return pass(taskId, operatorId, comment, nextApproverId, approvedGateIds, null);
+    }
+
+    /**
+     * 审批通过（一级：被访人确认）。
+     *
+     * @param approvedGateIds 审批人调整后的门点集合；{@code null} 表示不改（默认继承访客申请）。
+     *                        可增可减，申请与批准两个集合都会落库，便于留痕对比（C-64）。
+     * @param qrApproved      是否同意访客的「二维码开门」申请；{@code null} 表示不改。
+     *                        同意后访客端「我的预约」才能取动态码（60 秒有效）。
+     */
+    @Transactional
+    public PassResult pass(Long taskId, Long operatorId, String comment, Long nextApproverId,
+                           List<Long> approvedGateIds, Boolean qrApproved) {
         ApprovalTask task = requirePendingOwned(taskId, operatorId);
         Appointment appointment = loadAppointment(task.appointmentId());
         ApprovalConfig config = configRepository.loadGlobal();
+        applyQrDecision(appointment, qrApproved, operatorId);
 
         List<Long> approved = approvedGateIds == null
                 ? null : appointmentGateService.saveApproved(appointment, approvedGateIds);
@@ -201,8 +220,20 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     @Transactional
     public PassResult guardPass(Long taskId, Long operatorUserId, List<String> roles, String comment,
                                 List<Long> approvedGateIds) {
+        return guardPass(taskId, operatorUserId, roles, comment, approvedGateIds, null);
+    }
+
+    /**
+     * 二级（门卫）复核通过。
+     *
+     * @param qrApproved 是否同意二维码开门；{@code null} 表示不改（默认沿用一级的决定）
+     */
+    @Transactional
+    public PassResult guardPass(Long taskId, Long operatorUserId, List<String> roles, String comment,
+                                List<Long> approvedGateIds, Boolean qrApproved) {
         ApprovalTask task = requirePendingRole(taskId, roles);
         Appointment appointment = loadAppointment(task.appointmentId());
+        applyQrDecision(appointment, qrApproved, operatorUserId);
 
         List<Long> approved = approvedGateIds == null
                 ? null : appointmentGateService.saveApproved(appointment, approvedGateIds);
@@ -411,7 +442,8 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                 visitor == null ? "" : visitor.getIdCardMask(),
                 appointment.getVisitorType(), appointment.getPurpose(), appointment.getVisitPhoneMask(),
                 DATETIME.format(appointment.getStartTime()), DATETIME.format(appointment.getEndTime()),
-                gates, canAct, actions);
+                gates, canAct, actions,
+                appointment.isQrRequested(), appointment.isQrApproved());
     }
 
     private ApprovalTask requireExists(Long taskId) {
@@ -475,6 +507,27 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     }
 
     /** 门点集合快照：写进审批动作流水，用于对比“申请 vs 批准”。 */
+    /**
+     * 处理「二维码开门」审批决定。
+     *
+     * <p>访客申请了才允许同意；不同意则显式置 0，便于访客端立刻看不到取码入口。
+     */
+    private void applyQrDecision(Appointment appointment, Boolean qrApproved, Long operatorId) {
+        if (qrApproved == null) {
+            return;
+        }
+        if (qrApproved && !appointment.isQrRequested()) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID,
+                    "访客没有申请二维码开门，不能直接同意");
+        }
+        appointment.setQrApproved(qrApproved);
+        appointment.setQrApprovedBy(qrApproved ? operatorId : null);
+        appointment.setQrApprovedAt(qrApproved ? LocalDateTime.now() : null);
+        appointmentRepository.update(appointment);
+        log.info("二维码开门审批 appointment={} approved={} operator={}",
+                appointment.getAppointmentNo(), qrApproved, operatorId);
+    }
+
     private String gateSnapshot(List<Long> gateIds) {
         if (gateIds == null || gateIds.isEmpty()) {
             return null;

@@ -82,6 +82,11 @@ export interface AppointmentView {
   periodText?: string
   plateNo?: string
   mateCount?: number
+  /** 访客是否申请二维码开门 */
+  qrRequested?: boolean
+  /** 审批人是否同意二维码开门（同意后访客端才能取码） */
+  qrApproved?: boolean
+  qrApprovedAt?: string
 }
 
 export interface QrIssueResult {
@@ -144,6 +149,10 @@ export interface ApprovalDetail {
   gates: ApprovalGateAssignment | null
   canAct: boolean
   actions: ApprovalAction[]
+  /** 访客是否申请二维码开门（true 时审批页显示「同意二维码开门」开关） */
+  qrRequested?: boolean
+  /** 当前是否已同意二维码开门 */
+  qrApproved?: boolean
 }
 
 /** 审批页门点选择：可选门点 + 访客申请集合 + 当前批准集合 */

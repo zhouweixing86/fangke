@@ -163,6 +163,13 @@
         <el-input v-model="reviewComment" type="textarea" :rows="2" style="margin-top: 12px"
           placeholder="通过可不填；拒绝放行必须填原因（如：人证不符）" />
 
+        <div v-if="reviewDetail.qrRequested" class="qr-review">
+          <div class="text-muted" style="margin-bottom: 4px">
+            访客申请用二维码进闸（60 秒动态码）
+          </div>
+          <el-checkbox v-model="reviewQrApproved">同意二维码开门</el-checkbox>
+        </div>
+
         <div v-if="reviewDetail.actions.length" style="margin-top: 14px">
           <div class="text-muted" style="margin-bottom: 4px">审批轨迹</div>
           <div v-for="(a, i) in reviewDetail.actions" :key="i" class="text-muted" style="font-size: 12px">
@@ -326,6 +333,8 @@ const reviewDetail = ref<GuardReviewDetail | null>(null)
 const reviewTaskId = ref(0)
 const reviewGateIds = ref<number[]>([])
 const reviewComment = ref('')
+/** 是否同意访客的「二维码开门」申请（仅当访客申请过时显示开关） */
+const reviewQrApproved = ref(false)
 
 /** 被访人确认的开放范围（只读展示，用于对比保安是否收窄） */
 const appliedText = computed(() => {
@@ -362,6 +371,7 @@ async function openReview(row: ReviewRow) {
   const detail = await guardReviewDetail(row.taskId)
   reviewDetail.value = detail
   reviewGateIds.value = [...(detail.gates?.approvedGateIds ?? [])]
+  reviewQrApproved.value = Boolean(detail.qrApproved)
   reviewVisible.value = true
 }
 
@@ -375,7 +385,8 @@ async function doPass() {
   try {
     const result = await guardReviewPass(reviewTaskId.value, {
       comment: reviewComment.value || undefined,
-      approvedGateIds: reviewGateIds.value
+      approvedGateIds: reviewGateIds.value,
+      qrApproved: reviewDetail.value.qrRequested ? reviewQrApproved.value : undefined
     })
     ElMessage.success(result.dispatchStarted ? '已通过，门禁授权下发中' : `已通过（${result.statusText}）`)
     reviewVisible.value = false

@@ -85,8 +85,9 @@ export const myTodo = (params: Record<string, unknown>) =>
 
 export const approvalDetail = (taskId: number) => get<ApprovalDetail>('/app/approval/' + taskId)
 
-export const approvalPass = (taskId: number, comment?: string, approvedGateIds?: number[]) =>
-  post<PassResult>('/app/approval/' + taskId + '/pass', { comment, approvedGateIds })
+export const approvalPass = (taskId: number, comment?: string, approvedGateIds?: number[],
+                             qrApproved?: boolean) =>
+  post<PassResult>('/app/approval/' + taskId + '/pass', { comment, approvedGateIds, qrApproved })
 
 export const approvalReject = (taskId: number, comment: string) =>
   post<void>('/app/approval/' + taskId + '/reject', { comment })

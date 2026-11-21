@@ -39,7 +39,12 @@ public record AppointmentView(
         String position,
         String periodText,
         String plateNo,
-        int mateCount) {
+        int mateCount,
+        /** 访客是否申请二维码开门。 */
+        boolean qrRequested,
+        /** 审批人是否同意二维码开门（同意后访客端才能取码）。 */
+        boolean qrApproved,
+        String qrApprovedAt) {
 
     private static final DateTimeFormatter DATETIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -83,6 +88,9 @@ public record AppointmentView(
                 a.getPosition(),
                 Appointment.periodText(a.getPeriod()),
                 a.getPlateNo(),
-                a.getMateCount());
+                a.getMateCount(),
+                a.isQrRequested(),
+                a.isQrApproved(),
+                a.getQrApprovedAt() == null ? null : DATETIME.format(a.getQrApprovedAt()));
     }
 }

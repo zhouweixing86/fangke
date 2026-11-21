@@ -111,6 +111,18 @@
         <textarea v-model="form.purpose" class="textarea" maxlength="50" placeholder="请输入具体事由" />
         <text class="counter">{{ form.purpose.length }} / 50</text>
       </view>
+
+      <!-- 二维码开门：需审批人同意后才可用，所以这里只是"申请" -->
+      <view class="qr-apply">
+        <label class="qr-apply__row">
+          <checkbox :checked="form.qrRequested" @click="form.qrRequested = !form.qrRequested" />
+          <text class="qr-apply__label">申请二维码开门</text>
+        </label>
+        <text class="qr-apply__tip">
+          勾选后需被访人/门卫审批同意；同意后可在「我的预约」出示二维码进闸（60 秒有效）。
+          未同意时仍按正常流程刷身份证进门。
+        </text>
+      </view>
     </view>
 
     <!-- 团体预约：同行人放最下面，填总数后自动展开姓名 + 手机号 -->
@@ -184,7 +196,8 @@ const form = reactive({
   company: '',
   position: '',
   plateNo: '',
-  purpose: ''
+  purpose: '',
+  qrRequested: false
 })
 
 const hostName = ref('')
@@ -318,6 +331,7 @@ async function submit() {
             idCard: m.idCard.trim().toUpperCase()
           }))
         : undefined,
+      qrRequested: form.qrRequested,
       consentVersion: 'v1.0'
     })
     await alert('预约单号：' + result.appointmentNo + '\n状态：' + result.statusText, '提交成功')
@@ -560,5 +574,30 @@ onShow(async () => {
 
 .submit::after {
   border: none;
+}
+.qr-apply {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: #f7f8fa;
+  border-radius: 10px;
+}
+
+.qr-apply__row {
+  display: flex;
+  align-items: center;
+}
+
+.qr-apply__label {
+  font-size: 32rpx;
+  color: #323233;
+  margin-left: 8rpx;
+}
+
+.qr-apply__tip {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: #969799;
 }
 </style>

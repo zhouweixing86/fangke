@@ -152,6 +152,55 @@ public class DeviceRemoteService {
         return toMap(call(device, "/restoreDeviceDefaultParameter", Map.of()));
     }
 
+    /**
+     * 允许从平台改的设备参数<b>白名单</b>。
+     *
+     * <p>设备参数有 100+ 项，全量开放编辑迟早会被改到失联（IP、平台地址、识别阈值…）。
+     * 这里只放行"改了不影响设备接入、且平台业务必须用"的几个开关。
+     */
+    private static final Map<String, String> SAFE_SWITCHES = Map.of(
+            "videoScanQRcode", "摄像头扫码（访客二维码进闸需要）",
+            "QROpenEnable", "二维码开门总开关",
+            "PasswordOpenEnable", "密码开门");
+
+    /** 可远程切换的开关清单（给前端渲染用）。 */
+    public Map<String, String> safeSwitches() {
+        return SAFE_SWITCHES;
+    }
+
+    /**
+     * 批量切换安全开关。
+     *
+     * @param switches 形如 {@code {videoScanQRcode: true}}；只接受白名单内的键，其余直接拒绝
+     */
+    public Map<String, Object> setSwitches(Device device, Map<String, Object> switches) {
+        if (switches == null || switches.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_MISSING, "没有要修改的开关");
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : switches.entrySet()) {
+            String key = entry.getKey();
+            if (!SAFE_SWITCHES.containsKey(key)) {
+                throw new BusinessException(ErrorCode.PARAM_INVALID,
+                        "不允许远程修改参数 " + key + "（请在设备本地后台操作）");
+            }
+            data.put(key, toDeviceFlag(entry.getValue()));
+        }
+        return toMap(call(device, "/setDeviceParameter", data));
+    }
+
+    /** 设备用 0/1 表示开关。 */
+    private int toDeviceFlag(Object value) {
+        if (value instanceof Boolean b) {
+            return b ? 1 : 0;
+        }
+        if (value instanceof Number n) {
+            return n.intValue() == 0 ? 0 : 1;
+        }
+        String text = String.valueOf(value).trim();
+        return "1".equals(text) || "true".equalsIgnoreCase(text) ? 1 : 0;
+    }
+
     /* ---------------- 内部 ---------------- */
 
     private JsonNode call(Device device, String path, Map<String, Object> data) {

@@ -113,6 +113,11 @@ export const deviceRemoteGateHold = (id: number, data: { enabled: boolean; minut
   post<Record<string, unknown>>(`/admin/device/${id}/remote/gate-hold`, data)
 export const deviceRemoteReboot = (id: number) =>
   post<Record<string, unknown>>(`/admin/device/${id}/remote/reboot`)
+/** 允许远程切换的安全开关（白名单） */
+export const deviceRemoteSwitches = (id: number) =>
+  get<Record<string, string>>(`/admin/device/${id}/remote/switches`)
+export const deviceRemoteSetSwitches = (id: number, data: Record<string, boolean>) =>
+  post<Record<string, unknown>>(`/admin/device/${id}/remote/switches`, data)
 export const deviceRemoteRestore = (id: number) =>
   post<Record<string, unknown>>(`/admin/device/${id}/remote/restore`)
 

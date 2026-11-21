@@ -136,6 +136,13 @@ public class AppointmentService {
             mateCount = Math.max(mateCount, request.groupCount() - 1);
         }
         appointment.setMateCount(mateCount);
+        // 二维码开门：访客申请 ≠ 开通，必须审批人同意（代邀由邀请人直接决定，等同自审）
+        appointment.setQrRequested(Boolean.TRUE.equals(request.qrRequested()));
+        if (appointment.isQrRequested() && source == Appointment.SOURCE_INVITE) {
+            appointment.setQrApproved(true);
+            appointment.setQrApprovedBy(v.visitEmployeeId);
+            appointment.setQrApprovedAt(LocalDateTime.now());
+        }
         appointment.setApprovalLevel(1);
         // 代邀：一级自动通过；其余进入待审批（审批任务由 M5 的 ApprovalStarter 创建）
         appointment.setStatus(source == Appointment.SOURCE_INVITE
@@ -186,7 +193,7 @@ public class AppointmentService {
                 request.visitor(), request.mates(), request.mateMode(), request.consentVersion(),
                 request.gateId(), request.gateScope(), request.gateIds(),
                 request.company(), request.position(), request.period(), request.groupCount(),
-                request.wxOpenid());
+                request.wxOpenid(), request.qrRequested());
         return doCreate(normalized, Appointment.SOURCE_ONSITE, null, ip, ua);
     }
 

@@ -26,7 +26,8 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
             SELECT id, appointment_no, source, visitor_id, visit_employee_id, visit_phone_enc, visit_phone_mask,
                    visitor_type, purpose, company, position, period, plate_no, department, gate_id, gate_scope,
                    start_time, end_time,
-                   mate_mode, mate_count, approval_level, status, reject_reason, cancel_reason,
+                   mate_mode, mate_count, qr_requested, qr_approved, qr_approved_by, qr_approved_at,
+                   approval_level, status, reject_reason, cancel_reason,
                    current_task_id, granted_at, created_at
             FROM appointment
             """;
@@ -57,6 +58,12 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
             a.setEndTime(rs.getTimestamp("end_time").toLocalDateTime());
             a.setMateMode(rs.getInt("mate_mode"));
             a.setMateCount(rs.getInt("mate_count"));
+            a.setQrRequested(rs.getBoolean("qr_requested"));
+            a.setQrApproved(rs.getBoolean("qr_approved"));
+            long qrBy = rs.getLong("qr_approved_by");
+            a.setQrApprovedBy(rs.wasNull() ? null : qrBy);
+            java.sql.Timestamp qrAt = rs.getTimestamp("qr_approved_at");
+            a.setQrApprovedAt(qrAt == null ? null : qrAt.toLocalDateTime());
             a.setApprovalLevel(rs.getInt("approval_level"));
             a.setStatus(rs.getInt("status"));
             a.setRejectReason(rs.getString("reject_reason"));
@@ -87,8 +94,10 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
                     INSERT INTO appointment (appointment_no, source, visitor_id, visit_employee_id,
                     visit_phone_enc, visit_phone_mask, visitor_type, purpose, company, position, period,
                     plate_no, department,
-                        gate_id, gate_scope, start_time, end_time, mate_mode, mate_count, approval_level, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        gate_id, gate_scope, start_time, end_time, mate_mode, mate_count,
+                        qr_requested, qr_approved, qr_approved_by, qr_approved_at,
+                        approval_level, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, Statement.RETURN_GENERATED_KEYS);
             int i = 1;
             ps.setString(i++, a.getAppointmentNo());
@@ -110,6 +119,10 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
             ps.setTimestamp(i++, Timestamp.valueOf(a.getEndTime()));
             ps.setInt(i++, a.getMateMode());
             ps.setInt(i++, a.getMateCount());
+            ps.setBoolean(i++, a.isQrRequested());
+            ps.setBoolean(i++, a.isQrApproved());
+            setNullableLong(ps, i++, a.getQrApprovedBy());
+            ps.setTimestamp(i++, a.getQrApprovedAt() == null ? null : Timestamp.valueOf(a.getQrApprovedAt()));
             ps.setInt(i++, a.getApprovalLevel());
             ps.setInt(i, a.getStatus());
             return ps;
@@ -128,6 +141,7 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
                             visitor_type = ?, purpose = ?, company = ?, position = ?, period = ?,
                             plate_no = ?, department = ?,
                             start_time = ?, end_time = ?, mate_mode = ?, mate_count = ?,
+                            qr_requested = ?, qr_approved = ?, qr_approved_by = ?, qr_approved_at = ?,
                             approval_level = ?, status = ?, reject_reason = ?, cancel_reason = ?,
                             current_task_id = ?, granted_at = ?
                         WHERE id = ?
@@ -136,7 +150,10 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
                 a.getVisitorType(), a.getPurpose(), a.getCompany(), a.getPosition(), a.getPeriod(),
                 a.getPlateNo(), a.getDepartment(),
                 Timestamp.valueOf(a.getStartTime()), Timestamp.valueOf(a.getEndTime()),
-                a.getMateMode(), a.getMateCount(), a.getApprovalLevel(), a.getStatus(),
+                a.getMateMode(), a.getMateCount(),
+                a.isQrRequested(), a.isQrApproved(), a.getQrApprovedBy(),
+                a.getQrApprovedAt() == null ? null : Timestamp.valueOf(a.getQrApprovedAt()),
+                a.getApprovalLevel(), a.getStatus(),
                 a.getRejectReason(), a.getCancelReason(), a.getCurrentTaskId(),
                 a.getGrantedAt() == null ? null : Timestamp.valueOf(a.getGrantedAt()), a.getId());
     }

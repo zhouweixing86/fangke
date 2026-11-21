@@ -36,16 +36,29 @@ public record AppointmentCreateRequest(
         String position,
         Integer period,
         Integer groupCount,
-        String wxOpenid) {
+        String wxOpenid,
+        /** 访客是否申请二维码开门（null/false 不申请）。需审批人同意后访客端才能取码。 */
+        Boolean qrRequested) {
 
     public record VisitorInfo(String name, String idCard, String phone, String company, String position) {
-
         /** 兼容只有 4 个参数的旧调用。 */
         public VisitorInfo(String name, String idCard, String phone, String company) {
             this(name, idCard, phone, company, null);
         }
     }
-
     public record MateInfo(String name, String phone, String idCard) {
+    }
+
+    /** 兼容不传「申请二维码开门」的旧调用。 */
+    public AppointmentCreateRequest(String visitPhone, String department, String visitorType,
+                                    String purpose, String plateNo, LocalDate startDate,
+                                    LocalTime startTime, LocalTime endTime, VisitorInfo visitor,
+                                    List<MateInfo> mates, Integer mateMode, String consentVersion,
+                                    Long gateId, Integer gateScope, List<Long> gateIds,
+                                    String company, String position, Integer period,
+                                    Integer groupCount, String wxOpenid) {
+        this(visitPhone, department, visitorType, purpose, plateNo, startDate, startTime, endTime,
+                visitor, mates, mateMode, consentVersion, gateId, gateScope, gateIds,
+                company, position, period, groupCount, wxOpenid, null);
     }
 }

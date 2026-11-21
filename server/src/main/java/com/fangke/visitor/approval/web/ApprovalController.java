@@ -65,8 +65,9 @@ public class ApprovalController {
         String comment = body == null ? null : asString(body.get("comment"));
         Long nextApproverId = body == null ? null : asLong(body.get("nextApproverId"));
         List<Long> approvedGateIds = body == null ? null : asLongList(body.get("approvedGateIds"));
+        Boolean qrApproved = body == null ? null : asBoolean(body.get("qrApproved"));
         return ApiResponse.ok(approvalService.pass(taskId, currentEmployee(request), comment,
-                nextApproverId, approvedGateIds));
+                nextApproverId, approvedGateIds, qrApproved));
     }
 
     @PostMapping("/approval/{taskId}/reject")
@@ -140,6 +141,24 @@ public class ApprovalController {
         } catch (NumberFormatException e) {
             throw new BusinessException(ErrorCode.PARAM_INVALID, "期望数字：" + value);
         }
+    }
+
+    /** 「同意二维码开门」标志：{@code null} 表示不改。 */
+    private Boolean asBoolean(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        String text = String.valueOf(value).trim();
+        if ("true".equalsIgnoreCase(text) || "1".equals(text)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(text) || "0".equals(text)) {
+            return false;
+        }
+        throw new BusinessException(ErrorCode.PARAM_INVALID, "qrApproved 必须是布尔值");
     }
 
     /**

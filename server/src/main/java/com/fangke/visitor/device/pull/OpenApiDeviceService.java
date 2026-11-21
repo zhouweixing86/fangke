@@ -359,8 +359,7 @@ public class OpenApiDeviceService {
                 default -> PullCommandRepository.TYPE_ADD_PERSON;
             };
         }
-        PersonView view = findByIdno(device, idno);
-        String personNo = view == null ? idno : view.personNo();
+        String personNo = personNoByIdno(device, idno);
         int affected = commandRepository.markDoneByPerson(device.getId(), cmdType, personNo, status, msg);
         // 黑名单指令的 personNo 存的是证件号：同一个人既是员工/访客又被拉黑时，
         // findByIdno 会解析出人员编号，按编号匹配不到，这里再用证件号兜一次
@@ -463,6 +462,35 @@ public class OpenApiDeviceService {
             return idCard == null || idCard.isBlank() ? v.getPersonNo() : idCard;
         }
         return personNo;
+    }
+
+    /**
+     * 证件号 → 人员编号（设备回执匹配队列指令用）。
+     *
+     * <p>顺序：生效授权（白名单在册）→ 员工档案 → 访客档案 → 原样返回证件号（黑名单指令就是这种）。
+     * 停用员工的删除回执走"授权已撤销"，靠员工档案这一层兜住，否则指令会一直卡在"执行中"。
+     */
+    private String personNoByIdno(Device device, String idno) {
+        if (idno == null || idno.isBlank()) {
+            return idno;
+        }
+        PersonView view = findByIdno(device, idno);
+        if (view != null) {
+            return view.personNo();
+        }
+        String plain = idno.trim();
+        for (String candidate : new String[]{plain, plain.toUpperCase()}) {
+            String hmac = crypto.hmac(candidate);
+            Optional<Employee> employee = employeeRepository.findByIdCardHmac(hmac);
+            if (employee.isPresent()) {
+                return employee.get().getPersonNo();
+            }
+            Optional<Visitor> visitor = visitorRepository.findByIdCardHmac(hmac);
+            if (visitor.isPresent()) {
+                return visitor.get().getPersonNo();
+            }
+        }
+        return idno;
     }
 
     private PersonView findByIdno(Device device, String idno) {

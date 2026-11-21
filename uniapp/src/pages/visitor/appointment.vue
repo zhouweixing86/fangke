@@ -21,6 +21,10 @@
         <view class="row"><text class="row-label">同行人</text><text>{{ detail.mateModeText }}</text></view>
       </view>
 
+      <view v-if="qrPending" class="card" style="margin-top: 10px">
+        <view class="muted">已申请二维码开门，等待被访人/门卫审批同意。同意后这里会出现「生成通行码」。</view>
+      </view>
+
       <button v-if="canShowQr" class="btn btn--primary btn--block" :loading="qrLoading" @click="refreshQr">
         {{ qr ? '刷新通行码' : '生成通行码' }}
       </button>
@@ -33,7 +37,7 @@
           <template v-if="remain > 0">剩余 {{ remain }} 秒，过期自动刷新</template>
           <template v-else>正在刷新…</template>
         </view>
-        <view class="muted">保安扫码核验；60 秒内可重复使用</view>
+        <view class="muted">把二维码对准闸机扫码区（或请保安扫码核验）；60 秒内可重复使用</view>
       </view>
 
       <button v-if="detail.canCancel" class="btn btn--danger btn--block" style="margin-top: 10px"
@@ -70,8 +74,15 @@ let timer: ReturnType<typeof setInterval> | null = null
 
 const canShowQr = computed(() => {
   const status = detail.value?.status ?? 0
+  // 二维码开门必须审批人同意；仅"申请"了但没同意时不给取码入口
+  if (!detail.value?.qrApproved) return false
   return status === 30 || status === 35 || status === 40
 })
+
+/** 申请了二维码但还没被同意：给个说明，避免用户以为功能坏了 */
+const qrPending = computed(() =>
+  Boolean(detail.value?.qrRequested) && !detail.value?.qrApproved
+)
 
 function shortTime(value: string) {
   return value ? value.slice(11, 16) : ''

@@ -67,8 +67,9 @@ public class GuardApprovalController {
         RoleGuard.requireGuardOrAdmin(request);
         String comment = body == null ? null : asString(body.get("comment"));
         List<Long> approvedGateIds = body == null ? null : asLongList(body.get("approvedGateIds"));
+        Boolean qrApproved = body == null ? null : asBoolean(body.get("qrApproved"));
         return ApiResponse.ok(approvalService.guardPass(taskId, RoleGuard.currentUserId(request),
-                RoleGuard.roles(request), comment, approvedGateIds));
+                RoleGuard.roles(request), comment, approvedGateIds, qrApproved));
     }
 
     /** 复核驳回（拒绝放行）：必须填原因，预约单直接驳回。 */
@@ -85,6 +86,24 @@ public class GuardApprovalController {
 
     private String asString(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    /** 「同意二维码开门」标志：{@code null} 表示不改。 */
+    private Boolean asBoolean(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        String text = String.valueOf(value).trim();
+        if ("true".equalsIgnoreCase(text) || "1".equals(text)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(text) || "0".equals(text)) {
+            return false;
+        }
+        throw new BusinessException(ErrorCode.PARAM_INVALID, "qrApproved 必须是布尔值");
     }
 
     private List<Long> asLongList(Object value) {

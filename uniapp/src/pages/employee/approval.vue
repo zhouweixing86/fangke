@@ -42,6 +42,21 @@
         </view>
       </view>
 
+      <view v-if="detail.qrRequested" class="card">
+        <view class="card-title">
+          <text>二维码开门</text>
+          <text class="tag" :class="qrApproved ? 'tag--ok' : 'tag--info'">
+            {{ qrApproved ? '已同意' : '未同意' }}
+          </text>
+        </view>
+        <view class="muted">访客申请用二维码进闸（60 秒动态码）。同意后访客端「我的预约」才能生成通行码。</view>
+        <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px">
+          <checkbox :checked="qrApproved" :disabled="!detail.canAct"
+            @click="qrApproved = !qrApproved" />
+          <text>同意二维码开门</text>
+        </label>
+      </view>
+
       <view v-if="detail.canAct" class="card">
         <view class="card-title">审批意见</view>
         <textarea v-model="comment" class="opinion" maxlength="200" placeholder="通过可不填；驳回必填原因" />
@@ -76,6 +91,8 @@ const comment = ref('')
 const acting = ref(false)
 /** 审批人要批准的门点：默认等于访客申请集合，可增可减 */
 const approvedGateIds = ref<number[]>([])
+/** 是否同意访客的「二维码开门」申请（只在该预约申请过时才有意义） */
+const qrApproved = ref(false)
 
 const appliedText = computed(() => {
   const gates = detail.value?.gates
@@ -90,6 +107,7 @@ const appliedText = computed(() => {
 async function load() {
   detail.value = await approvalDetail(taskId.value)
   approvedGateIds.value = [...(detail.value.gates?.approvedGateIds ?? [])]
+  qrApproved.value = Boolean(detail.value.qrApproved)
 }
 
 function onGateChange(e: any) {
@@ -112,7 +130,8 @@ async function onPass() {
   acting.value = true
   try {
     const result = await approvalPass(taskId.value, comment.value || undefined,
-      detail.value?.gates ? approvedGateIds.value : undefined)
+      detail.value?.gates ? approvedGateIds.value : undefined,
+      detail.value?.qrRequested ? qrApproved.value : undefined)
     await alert(
       result.needSecondLevel
         ? '预约 ' + result.appointmentNo + ' 已确认接待，转保安复核（' + result.statusText + '）'

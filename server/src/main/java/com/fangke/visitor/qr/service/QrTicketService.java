@@ -124,6 +124,13 @@ public class QrTicketService {
     @Transactional
     public IssueResult issue(String appointmentNo, Long operatorId, String channel) {
         Appointment appointment = loadAppointment(appointmentNo);
+        // 访客自己取码必须已被审批人同意；保安/管理端是核验通道，不受此限
+        if (CHANNEL_APP.equals(channel) && !appointment.isQrApproved()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN,
+                    appointment.isQrRequested()
+                            ? "二维码开门尚未被审批人同意，暂时不能取码"
+                            : "该预约没有申请二维码开门，请联系审批人开通");
+        }
         Instant now = Instant.now();
 
         GrantChecker.State state = grantChecker.check(appointmentNo, null, now);

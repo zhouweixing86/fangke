@@ -323,6 +323,10 @@ export interface GuardReviewDetail {
   } | null
   canAct: boolean
   actions: ReviewAction[]
+  /** 访客是否申请二维码开门 */
+  qrRequested?: boolean
+  /** 当前是否已同意二维码开门 */
+  qrApproved?: boolean
 }
 
 export interface OnsiteRow {
