@@ -82,7 +82,10 @@ fangke:
   device:
     max-retry: 3
     queue-backlog-limit: 200
-    # 访客下发时使用的设备侧分组
+    # 访客下发时使用的名单类型：white 白名单 / visitor 访客 / black 黑名单
+    # 员工固定按 white 下发。访客默认也用 white —— 本机固件（V1.11248/2.2.122）实测
+    # 不支持 visitor：下发后不会进白名单，反而被当成黑名单，访客会被拒。
+    # 现场靠 company=访客系统 / department=访客 区分员工与访客。
     visitor-user-type: ${DEVICE_VISITOR_USER_TYPE:white}
 
     # 新终端（HTTP 客户端 / 轮询版）：设备主动来拉，平台只能通过心跳下发 action

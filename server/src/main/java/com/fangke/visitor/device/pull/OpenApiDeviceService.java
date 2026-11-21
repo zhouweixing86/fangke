@@ -294,14 +294,16 @@ public class OpenApiDeviceService {
             return null;
         }
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("usertype", "white");
+        // 名单类型：员工固定 white；访客用配置项（默认 visitor，但本机固件实测不支持，见 §12.8）
+        boolean employee = view.subjectType() == AccessGrant.SUBJECT_EMPLOYEE;
+        data.put("usertype", employee ? "white" : props.getDevice().getVisitorUserType());
         data.put("name", view.name());
         data.put("idno", view.idno());
         data.put("peoplestartdate", DATETIME.format(deviceValidFrom(view.validFrom())));
         data.put("peopleenddate", DATETIME.format(deviceValidTo(view.validTo())));
         data.put("timegroupid", 0);
         data.put("group", "访客系统");
-        data.put("groupSuffix", view.subjectType() == AccessGrant.SUBJECT_EMPLOYEE ? "员工" : "访客");
+        data.put("groupSuffix", employee ? "员工" : "访客");
         // 访客没有照片：passAlgo=true 表示该名单不需要图片
         data.put("passAlgo", view.photoBase64() == null);
         if (view.photoBase64() != null) {
@@ -517,7 +519,7 @@ public class OpenApiDeviceService {
             // 员工没有身份证时用品编号当唯一标识（协议只要求 idno 不重复）
             String idno = idCard == null || idCard.isBlank() ? e.getPersonNo() : idCard;
             return new PersonView(grant.personNo(), idno, e.getName(), grant.validFrom(), grant.validTo(),
-                    grant.subjectType(), grant.id().intValue(), facePhoto(e.getId()));
+                    grant.subjectType(), personVer(grant), facePhoto(e.getId()));
         }
         Optional<Visitor> visitor = visitorRepository.findById(grant.subjectId());
         if (visitor.isEmpty()) {
@@ -527,7 +529,7 @@ public class OpenApiDeviceService {
         String idCard = v.getIdCardEnc() == null ? null : crypto.decrypt(v.getIdCardEnc());
         String idno = idCard == null || idCard.isBlank() ? v.getPersonNo() : idCard;
         return new PersonView(grant.personNo(), idno, v.getName(), grant.validFrom(), grant.validTo(),
-                grant.subjectType(), grant.id().intValue(), visitorPhoto(v));
+                grant.subjectType(), personVer(grant), visitorPhoto(v));
     }
 
     /**
@@ -639,6 +641,20 @@ public class OpenApiDeviceService {
      * 统一切到 2037-12-31（仍在 32 位有符号时间戳范围内），对业务等同于永久。
      */
     static final LocalDateTime DEVICE_MAX_VALID_TO = LocalDateTime.of(2037, 12, 31, 23, 59, 59);
+
+    /**
+     * 名单版本号基数。
+     *
+     * <p>设备用 {@code personVer} 判断"这个人要不要重新拉详情"，值没变就跳过。
+     * 下发口径变化时（例如名单类型从统一 white 改成访客 visitor）递增这个基数，
+     * 强制设备刷新一遍，否则设备会认为名单没变化、继续用旧类型。
+     */
+    private static final int PERSON_VER_BASE = 1000;
+
+    private int personVer(AccessGrant grant) {
+        Long id = grant.id();
+        return PERSON_VER_BASE + (id == null ? 0 : id.intValue());
+    }
 
     /** 起始日期为空按"很久以前"下发，避免设备把空值当成"未生效"。 */
     private static final LocalDateTime DEVICE_MIN_VALID_FROM = LocalDateTime.of(2000, 1, 1, 0, 0);

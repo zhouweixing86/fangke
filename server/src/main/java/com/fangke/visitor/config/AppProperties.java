@@ -202,7 +202,13 @@ public class AppProperties {
         private int maxRetry = 3;
         /** 单台设备指令队列积压上限，超过判定 4004。 */
         private int queueBacklogLimit = 200;
-        /** 访客下发时使用的 usertype（设备侧分组，默认按白名单下发）。 */
+        /**
+         * 访客下发时使用的 usertype。
+         *
+         * <p>设备文档写的是 white/black/visitor，但**本机固件实测不支持 visitor**：
+         * 下发后不进白名单、反而命中黑名单（访客会被拒）。因此默认仍用 white，
+         * 员工与访客靠 company/department 字段区分。
+         */
         private String visitorUserType = "white";
 
         /* ---------------- 新终端：HTTP 客户端（轮询）通道 ---------------- */

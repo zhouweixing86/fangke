@@ -208,7 +208,8 @@ class OpenApiDeviceServiceTest {
 
         assertEquals(1, index.size());
         assertEquals("110101199003070011", index.get(0).get("idno"));
-        assertEquals(1, index.get(0).get("personVer"));
+        // personVer = PERSON_VER_BASE(1000) + 授权 id，基数用于下发口径变化时强制设备刷新
+        assertEquals(1001, index.get(0).get("personVer"));
     }
 
     @Test
@@ -225,7 +226,8 @@ class OpenApiDeviceServiceTest {
 
         Map<String, Object> detail = service.personDetail(device(), "110101199003070011");
 
-        assertEquals("white", detail.get("usertype"));
+        assertEquals("white", detail.get("usertype"),
+                "本机固件不支持 visitor 类型，访客仍按 white 下发（见 application.yml 注释）");
         assertEquals("张三", detail.get("name"));
         assertEquals(true, detail.get("passAlgo"));
         assertTrue(String.valueOf(detail.get("peoplestartdate")).startsWith("2026-11-19"));

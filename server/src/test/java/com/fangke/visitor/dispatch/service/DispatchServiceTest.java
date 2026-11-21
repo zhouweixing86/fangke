@@ -513,7 +513,7 @@ class DispatchServiceTest {
         assertEquals(ID_CARD, payload.getIdCard());
         assertEquals(visitor.getPersonNo(), payload.getPersonNo());
         assertEquals("white", payload.getUserType(),
-                "实测固件对 visitor 不落库，默认按白名单下发（06 §0.3 第 6 条）");
+                "本机固件不支持 visitor，访客按 white 下发，靠 company/department 区分");
         assertFalse(payload.requiresPhoto(), "访客下发不带照片");
         assertEquals(appointment.getStartTime().toLocalDate(), payload.getValidFrom());
     }
