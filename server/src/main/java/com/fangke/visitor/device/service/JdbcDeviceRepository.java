@@ -6,6 +6,7 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
@@ -185,5 +186,13 @@ public class JdbcDeviceRepository implements DeviceRepository {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(1) FROM device WHERE gate_id = ? AND status = 1", Integer.class, gateId);
         return count == null ? 0 : count;
+    }
+
+    @Override
+    @Transactional
+    public void deleteById(Long deviceId) {
+        jdbc.update("DELETE FROM device_cmd WHERE device_id = ?", deviceId);
+        jdbc.update("DELETE FROM person_device_state WHERE device_id = ?", deviceId);
+        jdbc.update("DELETE FROM device WHERE id = ?", deviceId);
     }
 }

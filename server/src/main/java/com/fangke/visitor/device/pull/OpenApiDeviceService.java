@@ -404,8 +404,24 @@ public class OpenApiDeviceService {
                 event.temperature(), event.mateFlag(), event.abnormalFlag(), event.source(),
                 event.rawJson());
 
-        Optional<Long> inserted = accessEventRepository.insertIfAbsent(withUuid);
-        if (inserted.isEmpty()) {
+        // 二维码：平台核验时已经写过一条（device_sn=GUARD-QR），设备再回传同一次扫码就合并进去，
+        // 否则一次扫码会在通行记录里出现两条（平台一条、设备一条）
+        if (event.identifyType() == OpenApiRecordMapper.IDENTIFY_QR) {
+            Optional<Long> platformEvent =
+                    accessEventRepository.findPlatformQrEvent(device.getGateId(), event.eventTime());
+            if (platformEvent.isPresent()) {
+                String photo = text(data, "scenePhoto");
+                if (photo != null && !photo.isBlank()) {
+                    captureUploader.uploadAsync(platformEvent.get(), device.getDeviceSn(),
+                            withUuid.eventUuid(), photo);
+                }
+                log.info("二维码记录已合并到平台核验记录 device={} eventId={}",
+                        device.getDeviceSn(), platformEvent.get());
+                return platformEvent.get();
+            }
+        }
+
+        Optional<Long> inserted = accessEventRepository.insertIfAbsent(withUuid);        if (inserted.isEmpty()) {
             log.debug("重复记录已忽略 device={} tableID={} id={}", device.getDeviceSn(), tableId, id);
             return null;
         }

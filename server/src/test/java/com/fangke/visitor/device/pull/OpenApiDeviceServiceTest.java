@@ -52,6 +52,7 @@ class OpenApiDeviceServiceTest {
     private DeviceRepository deviceRepo;
     private AccessGrantRepository grantRepo;
     private VisitorRepository visitorRepo;
+    private AccessEventRepository eventRepo;
     private CryptoService crypto;
     private OpenApiDeviceService service;
     private GateService gateService;
@@ -71,13 +72,14 @@ class OpenApiDeviceServiceTest {
         deviceRepo = mock(DeviceRepository.class);
         grantRepo = mock(AccessGrantRepository.class);
         visitorRepo = mock(VisitorRepository.class);
+        eventRepo = mock(AccessEventRepository.class);
 
         gateService = new GateService(InMemoryGateRepository.withUnassigned(), props);
         service = new OpenApiDeviceService(deviceRepo, cmdRepo, grantRepo, visitorRepo,
                 mock(com.fangke.visitor.appointment.repository.BlacklistRepository.class),
                 mock(com.fangke.visitor.admin.repository.AdminBlacklistRepository.class),
                 mock(EmployeeRepository.class), mock(EmployeeFaceRepository.class),
-                mock(StorageService.class), crypto, mock(AccessEventRepository.class),
+                mock(StorageService.class), crypto, eventRepo,
                 mock(VisitRecorder.class), mock(CaptureUploader.class),
                 mock(QrTicketService.class), gateService, props);
     }
@@ -250,6 +252,19 @@ class OpenApiDeviceServiceTest {
         service.syncWhiteResult(device(), "110101199003070011", 0, 0, "ok");
 
         assertEquals(2, cmdRepo.rows.get(0).status());
+    }
+
+    @Test
+    @DisplayName("二维码记录：设备回传的扫码记录合并到平台核验记录，不重复入库")
+    void mergeDeviceQrRecordIntoPlatformEvent() throws Exception {
+        when(eventRepo.findPlatformQrEvent(any(), any())).thenReturn(Optional.of(99L));
+        var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(
+                "{\"time\":\"2026-11-21 16:32:49\",\"openType\":5,\"inout\":1,\"resultStatus\":1}");
+
+        Long eventId = service.receiveRecord(device(), node, node.toString());
+
+        assertEquals(99L, eventId, "同一门点 60 秒内的二维码扫码应合并到平台那条记录");
+        verify(eventRepo, org.mockito.Mockito.never()).insertIfAbsent(any());
     }
 
     private AccessGrant grant(Long id, int subjectType, Long subjectId, String personNo) {

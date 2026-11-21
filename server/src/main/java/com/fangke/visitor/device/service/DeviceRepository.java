@@ -61,4 +61,11 @@ public interface DeviceRepository {
 
     /** 门点下的设备数量（门点停用前要先清空，避免设备无门可投递）。 */
     int countByGate(Long gateId);
+
+    /**
+     * 删除设备档案，连同它的指令队列与人员状态。
+     *
+     * <p>只给「登记错了 / 换下来的旧机器」用；在线设备请先断电或断网，避免删掉正在跑的设备。
+     */
+    void deleteById(Long deviceId);
 }

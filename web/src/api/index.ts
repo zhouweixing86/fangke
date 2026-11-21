@@ -75,6 +75,9 @@ export const getDevice = (id: number) => get<DeviceView>(`/admin/device/${id}`)
 export const updateDevice = (id: number, data: Record<string, unknown>) =>
   put<DeviceView>(`/admin/device/${id}`, data)
 
+/** 删除设备档案（登记错了/换下来的旧机器；最近 5 分钟有心跳的会被拒绝） */
+export const deleteDevice = (id: number) => del<{ deleted: boolean }>(`/admin/device/${id}`)
+
 /** 远程开门：指令随设备下一次心跳下发（通常 30 秒内） */
 export const openDeviceDoor = (id: number) => post<{ opened: boolean }>(`/admin/device/${id}/door/open`)
 

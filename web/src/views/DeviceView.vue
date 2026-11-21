@@ -40,12 +40,18 @@
         <template #default="{ row }">{{ row.personCount }} / {{ row.capacity || '-' }}</template>
       </el-table-column>
       <el-table-column prop="lastHeartbeat" label="最近心跳" width="160" />
-      <el-table-column label="操作" width="230" fixed="right">
+      <el-table-column label="操作" width="290" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">档案</el-button>
           <el-button link type="primary" @click="openDoor(row)">开门</el-button>
           <el-button link type="primary" @click="openRemote(row)">远程管理</el-button>
           <el-button link type="primary" @click="openLocal(row)">本地管理</el-button>
+          <el-popconfirm title="删除这台设备的档案？历史通行记录会保留" confirm-button-text="删除"
+            @confirm="doDelete(row)">
+            <template #reference>
+              <el-button link type="danger">删除</el-button>
+            </template>
+          </el-popconfirm>
         </template>
       </el-table-column>
     </el-table>
@@ -227,6 +233,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import {
+  deleteDevice,
   deviceRemoteDeletePerson,
   deviceRemoteGateHold,
   deviceRemoteInfo,
@@ -304,8 +311,18 @@ async function submitEdit() {
   }
 }
 
-async function openDoor(row: DeviceView) {
-  await ElMessageBox.confirm(
+/** 删除档案：登记错/换下来的旧机器；最近 5 分钟有心跳的会被后端拒绝 */
+async function doDelete(row: DeviceView) {
+  try {
+    await deleteDevice(row.id)
+    ElMessage.success(`已删除「${row.deviceName || row.deviceSn}」`)
+    await load()
+  } catch (error) {
+    showRemoteError(error)
+  }
+}
+
+async function openDoor(row: DeviceView) {  await ElMessageBox.confirm(
     `确认远程打开「${row.deviceName}」？指令随设备下一次心跳生效（当前心跳间隔 5 秒，最长等一个间隔）。`,
     '远程开门',
     { type: 'warning' }

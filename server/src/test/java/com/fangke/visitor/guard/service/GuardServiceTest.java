@@ -148,6 +148,11 @@ class GuardServiceTest {
             events.add(event);
             return Optional.of((long) events.size());
         }
+
+        @Override
+        public Optional<Long> findPlatformQrEvent(Long gateId, java.time.LocalDateTime eventTime) {
+            return Optional.empty();
+        }
     }
 
     static class FakeVisitRepo implements VisitRecordRepository {

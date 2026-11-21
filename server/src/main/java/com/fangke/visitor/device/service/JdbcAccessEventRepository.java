@@ -29,6 +29,23 @@ public class JdbcAccessEventRepository implements AccessEventRepository {
     }
 
     @Override
+    public Optional<Long> findPlatformQrEvent(Long gateId, java.time.LocalDateTime eventTime) {
+        if (eventTime == null) {
+            return Optional.empty();
+        }
+        Timestamp from = Timestamp.valueOf(eventTime.minusSeconds(60));
+        Timestamp to = Timestamp.valueOf(eventTime.plusSeconds(60));
+        String sql = "SELECT id FROM access_event WHERE device_sn = 'GUARD-QR' AND identify_type = 5 "
+                + "AND result_status = 1 AND event_time BETWEEN ? AND ? "
+                + (gateId == null ? "AND gate_id IS NULL " : "AND gate_id = ? ")
+                + "ORDER BY id DESC LIMIT 1";
+        var ids = gateId == null
+                ? jdbc.queryForList(sql, Long.class, from, to)
+                : jdbc.queryForList(sql, Long.class, from, to, gateId);
+        return ids.stream().findFirst();
+    }
+
+    @Override
     public Optional<Long> insertIfAbsent(AccessEvent e) {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         int affected = jdbc.update(connection -> {

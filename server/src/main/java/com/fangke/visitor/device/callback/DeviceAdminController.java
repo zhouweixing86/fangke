@@ -13,6 +13,7 @@ import com.fangke.visitor.device.model.DeviceCapability;
 import com.fangke.visitor.device.service.DeviceCapabilityService;
 import com.fangke.visitor.device.service.DeviceRepository;
 import com.fangke.visitor.gate.service.GateService;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -71,6 +72,26 @@ public class DeviceAdminController {
     @GetMapping("/{id}")
     public ApiResponse<Map<String, Object>> detail(@PathVariable Long id) {
         return ApiResponse.ok(toView(load(id)));
+    }
+
+    /**
+     * 删除设备档案（登记错了、换下来的旧机器）。
+     *
+     * <p>在线设备不允许删：那种机器通常正在跑，删了名单/记录就对不上了；先断电或断网再删。
+     * 历史通行记录不删（它们挂在 device_sn 上，仍可追溯）。
+     */
+    @DeleteMapping("/{id}")
+    @AuditLog(module = "DEVICE", action = "DELETE")
+    public ApiResponse<Map<String, Object>> delete(@PathVariable Long id) {
+        Device device = load(id);
+        // online_state 只会被心跳置 1、没有任务会置回 0，所以按心跳时间判断更准
+        LocalDateTime lastBeat = device.getLastHeartbeat();
+        if (lastBeat != null && lastBeat.isAfter(LocalDateTime.now().minusMinutes(5))) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID,
+                    "设备最近 5 分钟还有心跳（" + device.getDeviceSn() + "），请先断电或断网再删除");
+        }
+        deviceRepository.deleteById(id);
+        return ApiResponse.ok(Map.of("deleted", true, "deviceSn", device.getDeviceSn()));
     }
 
     /**

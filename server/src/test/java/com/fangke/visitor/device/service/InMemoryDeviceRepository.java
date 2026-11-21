@@ -127,4 +127,9 @@ public class InMemoryDeviceRepository implements DeviceRepository {
                 .filter(d -> gateId.equals(d.getGateId()) && d.getStatus() == 1)
                 .count();
     }
+
+    @Override
+    public void deleteById(Long deviceId) {
+        devices.values().removeIf(d -> d.getId().equals(deviceId));
+    }
 }
