@@ -134,6 +134,24 @@ public class DeviceRemoteController {
         return ApiResponse.ok(remoteService.setSwitches(load(id), body));
     }
 
+    public record PersonDeleteRequest(String idno, String usertype) {
+    }
+
+    /**
+     * 删除设备本地名单里的一条（运维手段）。
+     *
+     * <p>正常增删走授权与心跳指令；这里是给"库里已删、设备还留着"的孤儿名单兜底。
+     */
+    @PostMapping("/person/delete")
+    @AuditLog(module = "DEVICE", action = "REMOTE_DELETE_PERSON")
+    public ApiResponse<Map<String, Object>> deletePerson(@PathVariable Long id,
+                                                         @RequestBody PersonDeleteRequest request) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.PARAM_MISSING, "请求体不能为空");
+        }
+        return ApiResponse.ok(remoteService.deleteLocalPerson(load(id), request.idno(), request.usertype()));
+    }
+
     @PostMapping("/reboot")
     @AuditLog(module = "DEVICE", action = "REMOTE_REBOOT")
     public ApiResponse<Map<String, Object>> reboot(@PathVariable Long id) {

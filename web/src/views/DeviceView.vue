@@ -154,6 +154,19 @@
             访客用二维码进闸需要「摄像头扫码」为开启状态。其余参数请在「本地管理」里修改。
           </div>
 
+          <el-divider content-position="left">名单清理</el-divider>
+          <div class="tip-row">
+            <el-input v-model="cleanIdno" placeholder="身份证号 / 人员编号" maxlength="18" style="width: 230px" />
+            <el-select v-model="cleanType" style="width: 110px">
+              <el-option value="white" label="白名单" />
+              <el-option value="black" label="黑名单" />
+            </el-select>
+            <el-button :loading="remoteBusy === 'clean'" @click="doDeletePerson">从设备删除</el-button>
+          </div>
+          <div class="text-muted" style="margin-top: 4px">
+            用于清理「平台已删、设备还留着」的孤儿名单。正常增删请走员工停用/黑名单失效。
+          </div>
+
           <el-divider content-position="left">危险操作</el-divider>
           <el-button type="danger" plain :loading="remoteBusy === 'restore'" @click="doRestore">
             恢复设备出厂参数
@@ -205,6 +218,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import {
+  deviceRemoteDeletePerson,
   deviceRemoteGateHold,
   deviceRemoteInfo,
   deviceRemoteOpen,
@@ -306,6 +320,9 @@ const remoteParams = ref<Record<string, unknown>>({})
 const switchDefs = ref<Record<string, string>>({})
 /** 开关当前值 */
 const switchStates = ref<Record<string, boolean>>({})
+/** 名单清理：证件号 + 类型 */
+const cleanIdno = ref('')
+const cleanType = ref('white')
 
 const statusOf = (key: string) => {
   const value = remoteVersion.value[key]
@@ -355,8 +372,7 @@ async function loadRemoteSwitches() {
   }
 }
 
-async function toggleSwitch(key: string, value: boolean) {
-  if (!remoteRow.value) return
+async function toggleSwitch(key: string, value: boolean) {  if (!remoteRow.value) return
   remoteBusy.value = 'switch'
   try {
     await deviceRemoteSetSwitches(remoteRow.value.id, { [key]: value })
@@ -512,6 +528,33 @@ async function doRestore() {
   try {
     await deviceRemoteRestore(remoteRow.value.id)
     ElMessage.success('恢复指令已下发')
+  } catch (error) {
+    showRemoteError(error)
+  } finally {
+    remoteBusy.value = ''
+  }
+}
+
+/** 从设备本地名单删掉一条（清理孤儿名单） */
+async function doDeletePerson() {
+  if (!remoteRow.value) return
+  const idno = cleanIdno.value.trim()
+  if (!idno) {
+    ElMessage.warning('请填写要删除的证件号')
+    return
+  }
+  await ElMessageBox.confirm(
+    `从设备本地${cleanType.value === 'black' ? '黑名单' : '白名单'}删除「${idno}」？\n` +
+      `仅清理设备侧数据，不影响平台档案。`,
+    '名单清理',
+    { type: 'warning' }
+  )
+  remoteBusy.value = 'clean'
+  try {
+    await deviceRemoteDeletePerson(remoteRow.value.id, { idno, usertype: cleanType.value })
+    ElMessage.success('已从设备删除')
+    cleanIdno.value = ''
+    await loadRemoteStatus()
   } catch (error) {
     showRemoteError(error)
   } finally {

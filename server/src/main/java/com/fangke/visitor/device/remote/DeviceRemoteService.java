@@ -201,6 +201,28 @@ public class DeviceRemoteService {
         return "1".equals(text) || "true".equalsIgnoreCase(text) ? 1 : 0;
     }
 
+    /**
+     * 从设备本地名单里删掉一条（运维手段）。
+     *
+     * <p>正常增删都走授权与指令队列；但库里数据被清理、设备换人、指令丢了时会留下孤儿名单，
+     * 现场需要能直接清掉。这里只做"删单条"，不提供"改名/改有效期"，避免绕过业务。
+     *
+     * @param usertype white / black / visitor
+     */
+    public Map<String, Object> deleteLocalPerson(Device device, String idno, String usertype) {
+        if (idno == null || idno.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_MISSING, "证件号不能为空");
+        }
+        String type = (usertype == null || usertype.isBlank()) ? "white" : usertype.trim().toLowerCase();
+        if (!java.util.Set.of("white", "black", "visitor").contains(type)) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "usertype 只能是 white / black / visitor");
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("idno", idno.trim().toUpperCase());
+        data.put("usertype", type);
+        return toMap(call(device, "/deleteDeviceWhiteList", data));
+    }
+
     /* ---------------- 内部 ---------------- */
 
     private JsonNode call(Device device, String path, Map<String, Object> data) {
