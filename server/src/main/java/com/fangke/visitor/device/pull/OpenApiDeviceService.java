@@ -422,18 +422,15 @@ public class OpenApiDeviceService {
                 grant.subjectType(), grant.id().intValue(), visitorPhoto(v));
     }
 
-    /** 访客照片 → base64（V14 自助采集后才有）；未采集返回 null，由 passAlgo 兜底。 */
+    /**
+     * 访客照片：<b>永远不下发</b>。
+     *
+     * <p>业务要求访客必须刷身份证进门、不允许刷脸，所以这里固定返回 null，
+     * 让 {@code passAlgo=true}——设备只按证件号建名单，不做人脸比对。
+     * 即使数据库里残留了历史照片（旧版本访客自助采集的），也不会再推到设备。
+     */
     private String visitorPhoto(Visitor v) {
-        String key = v.getFaceOssKey();
-        if (key == null || key.isBlank() || !storageService.configured()) {
-            return null;
-        }
-        try {
-            return Base64.getEncoder().encodeToString(storageService.getObject(key));
-        } catch (Exception e) {
-            log.warn("读取访客 {} 照片失败，本次按无照片下发：{}", v.getId(), e.getMessage());
-            return null;
-        }
+        return null;
     }
 
     /** 员工人脸照片 → base64（优先压缩件）；失败返回 null 由 passAlgo 兜底。 */

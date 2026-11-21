@@ -65,8 +65,8 @@
       </view>
 
       <view class="row">
-        <text class="label">身份证号</text>
-        <input v-model="form.idCard" class="input" maxlength="18" placeholder="选填，用于门禁刷证核验" />
+        <text class="label required">身份证号</text>
+        <input v-model="form.idCard" class="input" maxlength="18" placeholder="必填，到闸机需刷身份证进门" />
       </view>
 
       <view class="row">
@@ -136,6 +136,10 @@
           <text class="mate-label">手机号</text>
           <input v-model="mate.phone" class="input" type="number" maxlength="11" placeholder="选填" />
         </view>
+        <view class="mate-row">
+          <text class="mate-label required">身份证号</text>
+          <input v-model="mate.idCard" class="input" maxlength="18" placeholder="必填，刷身份证进门" />
+        </view>
       </view>
 
       <view v-if="mates.length === 0" class="ph tips">填写同行人总数后自动展开</view>
@@ -157,6 +161,7 @@ type Mode = 'personal' | 'group'
 interface Mate {
   name: string
   phone: string
+  idCard: string
 }
 
 const mode = ref<Mode>('personal')
@@ -216,7 +221,7 @@ function syncMates() {
   mateTotal.value = total ? String(total) : ''
   const next: Mate[] = []
   for (let i = 0; i < total; i++) {
-    next.push(mates.value[i] ?? { name: '', phone: '' })
+    next.push(mates.value[i] ?? { name: '', phone: '', idCard: '' })
   }
   mates.value = next
 }
@@ -269,16 +274,18 @@ async function submit() {
   if (!form.name) return showToast('请填写姓名')
   if (!/^1\d{10}$/.test(form.phone.trim())) return showToast('请填写正确的手机号')
   if (!form.company.trim()) return showToast('请填写公司')
+  // 身份证必填：访客只能刷身份证进门（不支持刷脸），没有证件号就到不了闸机
+  const idCard = form.idCard.trim().toUpperCase()
+  if (!idCard) return showToast('请填写身份证号（到闸机需刷身份证进门）')
+  if (!/^\d{17}[0-9X]$/.test(idCard)) return showToast('身份证号需为 18 位')
   if (mode.value === 'group') {
     if (mates.value.some((m) => !m.name.trim())) return showToast('请填写同行人姓名')
+    if (mates.value.some((m) => !m.idCard.trim())) return showToast('请填写同行人身份证号')
+    const bad = mates.value.find((m) => !/^\d{17}[0-9X]$/.test(m.idCard.trim().toUpperCase()))
+    if (bad) return showToast('同行人「' + bad.name + '」身份证号需为 18 位')
   }
   if (gates.value.length > 1 && gateScope.value === 1 && selectedGateIds.value.length === 0) {
     return showToast('请至少选择一个门点')
-  }
-  // 身份证选填：填了才做 18 位格式初筛（校验位以后端为准）
-  const idCard = form.idCard.trim().toUpperCase()
-  if (idCard && !/^\d{17}[0-9X]$/.test(idCard)) {
-    return showToast('身份证号需为 18 位')
   }
 
   const useGates = gates.value.length > 1 && gateScope.value === 1
@@ -299,13 +306,17 @@ async function submit() {
       gateIds: useGates ? selectedGateIds.value : undefined,
       visitor: {
         name: form.name.trim(),
-        idCard: idCard || undefined,
+        idCard,
         phone: form.phone.trim(),
         company: form.company.trim(),
         position: form.position || undefined
       },
       mates: mode.value === 'group'
-        ? mates.value.map((m) => ({ name: m.name.trim(), phone: m.phone.trim() || undefined }))
+        ? mates.value.map((m) => ({
+            name: m.name.trim(),
+            phone: m.phone.trim() || undefined,
+            idCard: m.idCard.trim().toUpperCase()
+          }))
         : undefined,
       consentVersion: 'v1.0'
     })

@@ -57,39 +57,6 @@ export const lookupEmployee = (phone: string) =>
 
 export const appMe = () => get<AppMe>('/app/me')
 
-/**
- * 访客自助上传人脸（采集后才能刷脸进门）。
- * 走 uni.uploadFile 而不是 axios，避免三端对 Blob/FormData 支持不一致。
- */
-export const uploadVisitorFace = (filePath: string) =>
-  new Promise<{ visitorId: number; faceStatus: number; devices: number; success: number; fail: number }>(
-    (resolve, reject) => {
-      uni.uploadFile({
-        url: API_BASE + '/api/app/me/face',
-        filePath,
-        name: 'file',
-        header: { Authorization: 'Bearer ' + getToken() },
-        success: (res) => {
-          try {
-            const body = JSON.parse(res.data as string)
-            if (body.code === 0) {
-              resolve(body.data)
-            } else {
-              showToast(body.message || '上传失败')
-              reject(new Error(body.message || '上传失败'))
-            }
-          } catch (e) {
-            reject(e)
-          }
-        },
-        fail: (e) => {
-          showToast('上传失败，请检查网络')
-          reject(e)
-        }
-      })
-    }
-  )
-
 export const adminLogin = (username: string, password: string) =>
   post<AdminLoginResult>('/auth/login', { username, password })
 

@@ -310,17 +310,24 @@ class AppointmentServiceTest {
     }
 
     @Test
-    @DisplayName("随行模式同行人可不填身份证，且写入 mate 记录")
-    void matesTogether() {
+    @DisplayName("随行模式下同行人身份证同样必填（访客只能刷证进门）")
+    void matesTogetherRequireIdCard() {
         AppointmentView view = service.create(
                 request("商务", LocalDate.now().plusDays(1), Appointment.MATE_TOGETHER,
-                        List.of(new AppointmentCreateRequest.MateInfo("李四", null, null))),
+                        List.of(new AppointmentCreateRequest.MateInfo("李四", null, "340104199001011239"))),
                 Appointment.SOURCE_SELF, "ip", "ua");
 
         assertEquals(1, view.mates().size());
         assertEquals("李四", view.mates().get(0).name());
         assertEquals(2, appointmentRepo.mates.size(), "主访客 + 1 同行人");
         assertTrue(appointmentRepo.mates.stream().anyMatch(AppointmentMate::main));
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.create(
+                        request("商务", LocalDate.now().plusDays(1), Appointment.MATE_TOGETHER,
+                                List.of(new AppointmentCreateRequest.MateInfo("王五", null, null))),
+                        Appointment.SOURCE_SELF, "ip", "ua"));
+        assertEquals(ErrorCode.MATE_ID_CARD_REQUIRED.code(), e.getCode());
     }
 
     @Test

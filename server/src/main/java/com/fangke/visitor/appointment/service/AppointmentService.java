@@ -247,8 +247,11 @@ public class AppointmentService {
             throw new BusinessException(ErrorCode.PARAM_MISSING, "访客信息不能为空");
         }
         String name = EmployeeValidator.requireText(request.visitor().name(), "访客姓名");
-        // 身份证选填：不填仍可预约（通行改走人脸/二维码），填了则校验校验位
+        // 访客只能刷身份证进门（不采集人脸），所以证件号必填——没有证件号就没有通行凭证
         String idCard = EmployeeValidator.validateIdCard(request.visitor().idCard());
+        if (idCard == null) {
+            throw new BusinessException(ErrorCode.PARAM_MISSING, "访客身份证号必填（到闸机需刷身份证进门）");
+        }
         String visitorPhone = EmployeeValidator.validatePhone(request.visitor().phone());
         String visitPhone = EmployeeValidator.validatePhone(request.visitPhone());
         if (visitPhone == null) {
@@ -326,9 +329,11 @@ public class AppointmentService {
         for (AppointmentCreateRequest.MateInfo mate : mates) {
             String mateName = EmployeeValidator.requireText(mate.name(), "同行人姓名");
             String mateIdCard = EmployeeValidator.validateIdCard(mate.idCard());
-            if (mateMode == Appointment.MATE_SEPARATE && mateIdCard == null) {
+            // 访客一律刷身份证进门（不允许刷脸/不采集人脸），所以同行人也必须留下证件号，
+            // 否则这个人到了闸机前根本没有可用的通行凭证
+            if (mateIdCard == null) {
                 throw new BusinessException(ErrorCode.MATE_ID_CARD_REQUIRED,
-                        "同行人「" + mateName + "」需要填写身份证号（各自刷证模式）");
+                        "同行人「" + mateName + "」需要填写身份证号");
             }
             EmployeeValidator.validatePhone(mate.phone());
             normalizedMates.add(new AppointmentCreateRequest.MateInfo(mateName, mate.phone(), mateIdCard));
