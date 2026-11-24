@@ -105,7 +105,7 @@ public class AuthInterceptor implements HandlerInterceptor {
             case "access", "traffic" -> "event:read";
             case "sync", "dispatch" -> "batch:read";
             case "report" -> "report:read";
-            case "user", "role", "roles", "wx-role-qr" -> "user:read";
+            case "user", "role", "roles", "wx-role-qr", "wx-bindings" -> "user:read";
             case "audit" -> "audit:read";
             case "approval" -> "approval:read";
             case "job", "config", "notification", "ops" -> "ops:read";

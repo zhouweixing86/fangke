@@ -111,14 +111,25 @@
         </el-form-item>
         <el-form-item label="页面权限">
           <div class="perm-groups">
-            <div v-for="(items, group) in groupedPerms" :key="group" class="perm-group">
-              <div class="perm-group-title">{{ group }}</div>
-              <el-checkbox-group v-model="roleForm.perms">
-                <el-checkbox v-for="item in items" :key="item.perm" :value="item.perm">
-                  {{ item.name }}
-                </el-checkbox>
-              </el-checkbox-group>
-            </div>
+            <el-collapse v-model="permOpenGroups">
+              <el-collapse-item v-for="(items, group) in groupedPerms" :key="group" :name="group">
+                <template #title>
+                  <span class="perm-group-title">{{ group }}</span>
+                  <el-tag size="small" type="info" class="perm-count">
+                    已选 {{ selectedInGroup(items) }} / {{ items.length }}
+                  </el-tag>
+                </template>
+                <div class="perm-actions">
+                  <el-button link type="primary" size="small" @click.stop="selectGroup(items, true)">全选本组</el-button>
+                  <el-button link size="small" @click.stop="selectGroup(items, false)">清空本组</el-button>
+                </div>
+                <el-checkbox-group v-model="roleForm.perms">
+                  <el-checkbox v-for="item in items" :key="item.perm" :value="item.perm">
+                    {{ item.name }}
+                  </el-checkbox>
+                </el-checkbox-group>
+              </el-collapse-item>
+            </el-collapse>
           </div>
         </el-form-item>
         <el-form-item label="状态">
@@ -364,6 +375,28 @@ const roleForm = reactive<{
   enabled: boolean
 }>({ id: null, roleCode: '', roleName: '', description: '', perms: [], enabled: true })
 
+/** C-78：权限按分组折叠，默认只展开「已选过」的分组 */
+const permOpenGroups = ref<string[]>([])
+
+function selectedInGroup(items: PermissionItem[]) {
+  return items.filter((item) => roleForm.perms.includes(item.perm)).length
+}
+
+function selectGroup(items: PermissionItem[], checked: boolean) {
+  const codes = items.map((item) => item.perm)
+  const rest = roleForm.perms.filter((perm) => !codes.includes(perm))
+  roleForm.perms = checked ? [...rest, ...codes] : rest
+}
+
+function openGroupsFor(perms: string[]) {
+  const groups = Object.entries(groupedPerms.value)
+    .filter(([, items]) => items.some((item) => perms.includes(item.perm)))
+    .map(([group]) => group)
+  permOpenGroups.value = groups.length
+    ? groups
+    : [Object.keys(groupedPerms.value)[0]].filter(Boolean)
+}
+
 async function loadRoleTab() {
   roleLoading.value = true
   try {
@@ -396,6 +429,7 @@ function openRoleCreate() {
     perms: ['appointment:read'],
     enabled: true
   })
+  openGroupsFor(roleForm.perms)
   roleVisible.value = true
 }
 
@@ -408,6 +442,7 @@ function openRoleEdit(row: RoleRow) {
     perms: row.roleCode === 'ADMIN' ? ['*'] : [...(row.perms || [])],
     enabled: row.status !== 0
   })
+  openGroupsFor(roleForm.perms)
   roleVisible.value = true
 }
 
@@ -480,13 +515,17 @@ onMounted(async () => {
   width: 100%;
 }
 
-.perm-group {
-  margin-bottom: 10px;
+.perm-group-title {
+  font-size: 13px;
+  color: var(--el-text-color-primary);
+  font-weight: 500;
 }
 
-.perm-group-title {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  margin-bottom: 4px;
+.perm-count {
+  margin-left: 10px;
+}
+
+.perm-actions {
+  margin-bottom: 6px;
 }
 </style>

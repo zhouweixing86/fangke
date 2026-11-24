@@ -119,6 +119,25 @@ public class WxBindService {
         return repository.roleCodes(bindingId);
     }
 
+    /** 管理端：微信身份（绑定）列表。 */
+    public List<WxBindingRepository.BindingRow> listBindings(String keyword) {
+        return repository.listBindings(keyword);
+    }
+
+    /** 撤销某人的一个角色。 */
+    public void revokeRole(long bindingId, String roleCode) {
+        if (repository.deleteRole(bindingId, roleCode) == 0) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "该微信没有这个角色：" + roleCode);
+        }
+        log.info("撤销微信角色 binding={} 角色={}", bindingId, roleCode);
+    }
+
+    /** 彻底解绑（清空该微信的全部身份）。 */
+    public void revokeBinding(long bindingId) {
+        repository.deleteBinding(bindingId);
+        log.info("解除微信绑定 binding={}", bindingId);
+    }
+
     private String newToken() {
         byte[] bytes = new byte[16];
         RANDOM.nextBytes(bytes);

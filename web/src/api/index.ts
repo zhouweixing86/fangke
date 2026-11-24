@@ -49,6 +49,7 @@ import type {
   VehicleEventRow,
   VehiclePlateSnapshot,
   WxRoleQr,
+  WxBindingRow,
   VehiclePlateSyncResult
 } from './types'
 
@@ -312,6 +313,15 @@ export const deleteRole = (id: number) => del<void>(`/admin/roles/${id}`)
 export const listWxRoleQr = () => get<WxRoleQr[]>('/admin/wx-role-qr')
 export const regenerateWxRoleQr = (roleId: number) =>
   post<WxRoleQr>(`/admin/wx-role-qr/${roleId}/regenerate`)
+
+/* ---------------- 微信身份（绑定）管理（C-77） ---------------- */
+
+export const listWxBindings = (keyword?: string) =>
+  get<WxBindingRow[]>('/admin/wx-bindings', { keyword })
+export const revokeWxRole = (bindingId: number, roleCode: string) =>
+  del<void>(`/admin/wx-bindings/${bindingId}/roles/${roleCode}`)
+export const revokeWxBinding = (bindingId: number) =>
+  del<void>(`/admin/wx-bindings/${bindingId}`)
 
 /* ---------------- 来访登记 + 基础字典（V26） ---------------- */
 

@@ -5,6 +5,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Types;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -172,5 +173,49 @@ public class WxBindingRepository {
         Long count = jdbc.queryForObject("SELECT COUNT(1) FROM wx_binding_role WHERE role_id = ?",
                 Long.class, roleId);
         return count == null ? 0 : count;
+    }
+
+    /* ---------------- 管理端：微信身份列表与撤销（C-77） ---------------- */
+
+    /** 绑定 + 角色汇总行。 */
+    public record BindingRow(long id, String openid, String name, String phoneMask, Long employeeId,
+                             String roleCodes, String createdAt) {
+    }
+
+    public List<BindingRow> listBindings(String keyword) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT b.id, b.openid, b.name, b.phone_mask, b.employee_id, b.created_at,
+                       (SELECT GROUP_CONCAT(br.role_code ORDER BY br.id) FROM wx_binding_role br
+                         WHERE br.binding_id = b.id) AS role_codes
+                FROM wx_binding b
+                WHERE b.status = 1
+                """);
+        List<Object> args = new ArrayList<>();
+        if (keyword != null && !keyword.isBlank()) {
+            sql.append(" AND (b.name LIKE ? OR b.phone_mask LIKE ?)");
+            args.add("%" + keyword.trim() + "%");
+            args.add("%" + keyword.trim() + "%");
+        }
+        sql.append(" ORDER BY b.id DESC LIMIT 500");
+        return jdbc.query(sql.toString(), (rs, i) -> new BindingRow(
+                rs.getLong("id"),
+                rs.getString("openid"),
+                rs.getString("name"),
+                rs.getString("phone_mask"),
+                rs.getObject("employee_id") == null ? null : rs.getLong("employee_id"),
+                rs.getString("role_codes"),
+                rs.getTimestamp("created_at").toLocalDateTime().toString().replace('T', ' ')), args.toArray());
+    }
+
+    /** 撤销某人的某一个角色（该微信失去该角色，其余角色保留）。 */
+    public int deleteRole(long bindingId, String roleCode) {
+        return jdbc.update("DELETE FROM wx_binding_role WHERE binding_id = ? AND role_code = ?",
+                bindingId, roleCode);
+    }
+
+    /** 彻底解绑：该微信失去全部身份（下次登录回到普通访客）。 */
+    public void deleteBinding(long bindingId) {
+        jdbc.update("DELETE FROM wx_binding_role WHERE binding_id = ?", bindingId);
+        jdbc.update("DELETE FROM wx_binding WHERE id = ?", bindingId);
     }
 }

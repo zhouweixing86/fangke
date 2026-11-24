@@ -454,6 +454,18 @@ export interface WxRoleQr {
   bindCount: number
 }
 
+/** 微信身份（绑定）行（C-77） */
+export interface WxBindingRow {
+  id: number
+  openid: string
+  name: string
+  phoneMask: string
+  employeeId: number | null
+  /** 已授予的角色编码，逗号分隔 */
+  roleCodes: string | null
+  createdAt: string
+}
+
 /* ---------------- 来访登记 + 基础字典（V26） ---------------- */
 
 export type VisitDictType = 'CAUSE' | 'AREA' | 'POST'

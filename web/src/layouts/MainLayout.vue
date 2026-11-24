@@ -2,12 +2,24 @@
   <el-container class="layout">
     <el-aside width="210px" class="aside">
       <div class="logo">访客管理系统</div>
-      <el-menu :default-active="activeMenu" router background-color="#1f2d3d" text-color="#c0c4cc"
-        active-text-color="#409eff">
-        <el-menu-item v-for="item in menus" :key="item.path" :index="item.path">
-          <el-icon><component :is="item.icon" /></el-icon>
-          <span>{{ item.title }}</span>
-        </el-menu-item>
+      <el-menu :default-active="activeMenu" :default-openeds="openedGroups" router unique-opened
+        background-color="#1f2d3d" text-color="#c0c4cc" active-text-color="#409eff">
+        <template v-for="node in visibleMenu" :key="node.key || node.path">
+          <el-sub-menu v-if="node.children" :index="node.key!">
+            <template #title>
+              <el-icon><component :is="node.icon" /></el-icon>
+              <span>{{ node.title }}</span>
+            </template>
+            <el-menu-item v-for="child in node.children" :key="child.path" :index="child.path!">
+              <el-icon><component :is="child.icon" /></el-icon>
+              <span>{{ child.title }}</span>
+            </el-menu-item>
+          </el-sub-menu>
+          <el-menu-item v-else :index="node.path!">
+            <el-icon><component :is="node.icon" /></el-icon>
+            <span>{{ node.title }}</span>
+          </el-menu-item>
+        </template>
       </el-menu>
     </el-aside>
     <el-container>
@@ -103,29 +115,97 @@ interface MenuItem {
   icon: string
   /** C-73：页面权限码；ADMIN 全量，其他角色按 sys_role.perms 显示 */
   perm: string
+  key?: string
+  children?: undefined
 }
 
-const allMenus: MenuItem[] = [
+/** C-78：菜单按业务分组，避免左侧一长串 */
+interface MenuGroup {
+  key: string
+  title: string
+  icon: string
+  children: MenuItem[]
+  path?: undefined
+  perm?: undefined
+}
+
+type MenuNode = MenuItem | MenuGroup
+
+const menuTree: MenuNode[] = [
   { path: '/', title: '保安工作台', icon: 'Monitor', perm: 'dashboard:read' },
-  { path: '/visit', title: '来访登记', icon: 'Postcard', perm: 'visit:read' },
-  { path: '/devices', title: '设备管理', icon: 'Cpu', perm: 'device:read' },
-  { path: '/gates', title: '门点管理', icon: 'Place', perm: 'gate:read' },
-  { path: '/depts', title: '部门管理', icon: 'OfficeBuilding', perm: 'dept:read' },
-  { path: '/employees', title: '员工管理', icon: 'User', perm: 'employee:read' },
-  { path: '/blacklist', title: '黑名单', icon: 'CircleClose', perm: 'blacklist:read' },
-  { path: '/appointments', title: '预约查询', icon: 'Calendar', perm: 'appointment:read' },
-  { path: '/events', title: '通行记录', icon: 'Document', perm: 'event:read' },
-  { path: '/batches', title: '下发批次', icon: 'Upload', perm: 'batch:read' },
-  { path: '/report', title: '报表统计', icon: 'DataAnalysis', perm: 'report:read' },
-  { path: '/users', title: '账号管理', icon: 'Avatar', perm: 'user:read' },
-  { path: '/audit', title: '审计日志', icon: 'Tickets', perm: 'audit:read' },
-  { path: '/ops', title: '运维中心', icon: 'SetUp', perm: 'ops:read' },
-  { path: '/approval-config', title: '审批配置', icon: 'Setting', perm: 'approval:read' },
-  { path: '/role-qr', title: '角色二维码', icon: 'Grid', perm: 'user:read' }
+  {
+    key: 'visit',
+    title: '访客与通行',
+    icon: 'Postcard',
+    children: [
+      { path: '/visit', title: '来访登记', icon: 'Postcard', perm: 'visit:read' },
+      { path: '/dict', title: '基础字典', icon: 'Collection', perm: 'visit:read' },
+      { path: '/appointments', title: '预约查询', icon: 'Calendar', perm: 'appointment:read' },
+      { path: '/events', title: '通行记录', icon: 'Document', perm: 'event:read' },
+      { path: '/blacklist', title: '黑名单', icon: 'CircleClose', perm: 'blacklist:read' }
+    ]
+  },
+  {
+    key: 'base',
+    title: '基础资料',
+    icon: 'OfficeBuilding',
+    children: [
+      { path: '/employees', title: '员工管理', icon: 'User', perm: 'employee:read' },
+      { path: '/depts', title: '部门管理', icon: 'OfficeBuilding', perm: 'dept:read' },
+      { path: '/gates', title: '门点管理', icon: 'Place', perm: 'gate:read' },
+      { path: '/devices', title: '设备管理', icon: 'Cpu', perm: 'device:read' }
+    ]
+  },
+  {
+    key: 'approval',
+    title: '审批与身份',
+    icon: 'Setting',
+    children: [
+      { path: '/approval-config', title: '审批配置', icon: 'Setting', perm: 'approval:read' },
+      { path: '/role-qr', title: '角色二维码', icon: 'Grid', perm: 'user:read' },
+      { path: '/wx-bindings', title: '微信身份', icon: 'Avatar', perm: 'user:read' }
+    ]
+  },
+  {
+    key: 'security',
+    title: '权限与审计',
+    icon: 'Lock',
+    children: [
+      { path: '/users', title: '账号管理', icon: 'Avatar', perm: 'user:read' },
+      { path: '/audit', title: '审计日志', icon: 'Tickets', perm: 'audit:read' }
+    ]
+  },
+  {
+    key: 'report',
+    title: '报表与运维',
+    icon: 'DataAnalysis',
+    children: [
+      { path: '/report', title: '报表统计', icon: 'DataAnalysis', perm: 'report:read' },
+      { path: '/batches', title: '下发批次', icon: 'Upload', perm: 'batch:read' },
+      { path: '/ops', title: '运维中心', icon: 'SetUp', perm: 'ops:read' }
+    ]
+  }
 ]
 
-const menus = computed(() => allMenus.filter((item) => auth.hasPerm(item.perm)))
+/** 只保留有权限的节点；空分组自动隐藏 */
+const visibleMenu = computed<MenuNode[]>(() =>
+  menuTree
+    .map((node) => {
+      if (!node.children) return node
+      const children = node.children.filter((child) => auth.hasPerm(child.perm))
+      return { ...node, children }
+    })
+    .filter((node) => (node.children ? node.children.length > 0 : auth.hasPerm((node as MenuItem).perm)))
+)
+
 const activeMenu = computed(() => (route.path === '' ? '/' : route.path))
+
+/** 刷新时自动展开当前页所在分组 */
+const openedGroups = computed(() =>
+  visibleMenu.value
+    .filter((node) => node.children?.some((child) => child.path === activeMenu.value))
+    .map((node) => node.key!)
+)
 
 function roleLabel(role: string) {
   if (role === 'ADMIN') return '系统管理员'

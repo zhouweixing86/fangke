@@ -109,6 +109,18 @@ const router = createRouter({
           name: 'role-qr',
           component: () => import('@/views/RoleQrView.vue'),
           meta: { title: '角色二维码', adminOnly: true }
+        },
+        {
+          path: 'wx-bindings',
+          name: 'wx-bindings',
+          component: () => import('@/views/WxBindingView.vue'),
+          meta: { title: '微信身份', adminOnly: true }
+        },
+        {
+          path: 'dict',
+          name: 'dict',
+          component: () => import('@/views/DictView.vue'),
+          meta: { title: '基础字典', adminOnly: true }
         }
       ]
     },
@@ -139,7 +151,9 @@ const ROUTE_PERMS: Record<string, string> = {
   events: 'event:read',
   batches: 'batch:read',
   'approval-config': 'approval:read',
-  'role-qr': 'user:read'
+  'role-qr': 'user:read',
+  'wx-bindings': 'user:read',
+  dict: 'visit:read'
 }
 
 /** 落地页顺序：第一个有权限的页面 */
