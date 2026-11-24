@@ -22,9 +22,22 @@ export const useAuthStore = defineStore('auth', {
     isLoggedIn: (state) => !!state.token,
     displayName: (state) => state.user?.displayName || state.user?.username || '',
     roles: (state) => state.user?.roles ?? [],
+    permissions: (state) => state.user?.permissions ?? [],
     isAdmin: (state) => (state.user?.roles ?? []).includes('ADMIN'),
     isGuard: (state) =>
-      (state.user?.roles ?? []).some((role) => role === 'GUARD' || role === 'ADMIN')
+      (state.user?.roles ?? []).some((role) => role === 'GUARD' || role === 'ADMIN'),
+    /**
+     * C-73 权限判定：ADMIN 全量；其余看 permissions（支持 module:* 通配）。
+     * 用法：auth.hasPerm('appointment:read')
+     */
+    hasPerm: (state) => (perm: string) => {
+      const roles = state.user?.roles ?? []
+      if (roles.includes('ADMIN')) return true
+      const perms = state.user?.permissions ?? []
+      if (perms.includes('*') || perms.includes(perm)) return true
+      const module = perm.includes(':') ? perm.slice(0, perm.indexOf(':')) : perm
+      return perms.includes(`${module}:*`)
+    }
   },
   actions: {
     async login(username: string, password: string) {

@@ -41,14 +41,14 @@ public class GuardApprovalController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
             HttpServletRequest request) {
-        RoleGuard.requireGuardOrAdmin(request);
+        RoleGuard.requireApprovalUser(request);
         return ApiResponse.ok(approvalService.guardTodoList(RoleGuard.roles(request),
                 RoleGuard.currentUserId(request), page, size));
     }
 
     @GetMapping("/count")
     public ApiResponse<Map<String, Object>> count(HttpServletRequest request) {
-        RoleGuard.requireGuardOrAdmin(request);
+        RoleGuard.requireApprovalUser(request);
         return ApiResponse.ok(Map.of("pending", approvalService.guardTodoCount(
                 RoleGuard.roles(request), RoleGuard.currentUserId(request))));
     }
@@ -56,7 +56,7 @@ public class GuardApprovalController {
     @GetMapping("/{taskId}")
     public ApiResponse<ApprovalService.DetailView> detail(@PathVariable Long taskId,
                                                           HttpServletRequest request) {
-        RoleGuard.requireGuardOrAdmin(request);
+        RoleGuard.requireApprovalUser(request);
         return ApiResponse.ok(approvalService.guardDetail(taskId, RoleGuard.roles(request),
                 RoleGuard.currentUserId(request)));
     }
@@ -67,7 +67,7 @@ public class GuardApprovalController {
     public ApiResponse<ApprovalService.PassResult> pass(@PathVariable Long taskId,
                                                          @RequestBody(required = false) Map<String, Object> body,
                                                          HttpServletRequest request) {
-        RoleGuard.requireGuardOrAdmin(request);
+        RoleGuard.requireApprovalUser(request);
         String comment = body == null ? null : asString(body.get("comment"));
         List<Long> approvedGateIds = body == null ? null : asLongList(body.get("approvedGateIds"));
         Boolean qrApproved = body == null ? null : asBoolean(body.get("qrApproved"));
@@ -81,7 +81,7 @@ public class GuardApprovalController {
     public ApiResponse<Void> reject(@PathVariable Long taskId,
                                     @RequestBody(required = false) Map<String, Object> body,
                                     HttpServletRequest request) {
-        RoleGuard.requireGuardOrAdmin(request);
+        RoleGuard.requireApprovalUser(request);
         approvalService.guardReject(taskId, RoleGuard.currentUserId(request),
                 RoleGuard.roles(request), body == null ? null : asString(body.get("comment")));
         return ApiResponse.ok();

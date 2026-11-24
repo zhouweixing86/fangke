@@ -27,7 +27,18 @@ import static org.mockito.Mockito.when;
 class AuthInterceptorTest {
 
     private final JwtService jwtService = mock(JwtService.class);
-    private final AuthInterceptor interceptor = new AuthInterceptor(jwtService);
+    private final AuthInterceptor interceptor = new AuthInterceptor(jwtService, roleService());
+
+    /** 真实权限服务 + 假角色仓储：ADMIN 全量、GUARD 只读审批/预约、VISITOR_ADMIN 只读预约。 */
+    private com.fangke.visitor.admin.service.RoleAdminService roleService() {
+        var repo = mock(com.fangke.visitor.admin.repository.RoleAdminRepository.class);
+        when(repo.permissionsOfRoles(List.of("ADMIN"))).thenReturn(List.of("*"));
+        when(repo.permissionsOfRoles(List.of("GUARD")))
+                .thenReturn(List.of("guard:*", "appointment:read", "event:read"));
+        when(repo.permissionsOfRoles(List.of("VISITOR_ADMIN")))
+                .thenReturn(List.of("appointment:read"));
+        return new com.fangke.visitor.admin.service.RoleAdminService(repo);
+    }
 
     private MockHttpServletRequest request(String uri, String token) {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", uri);
@@ -67,7 +78,7 @@ class AuthInterceptorTest {
         BusinessException e = assertThrows(BusinessException.class,
                 () -> interceptor.preHandle(request, new MockHttpServletResponse(), new Object()));
         assertEquals(ErrorCode.FORBIDDEN.code(), e.getCode());
-        assertTrue(e.getMessage().contains("管理员"));
+        assertTrue(e.getMessage().contains("blacklist:read"));
     }
 
     @Test
@@ -80,12 +91,17 @@ class AuthInterceptorTest {
     }
 
     @Test
-    @DisplayName("别名 VISITOR_ADMIN 也不能进管理端（只认 ADMIN）")
-    void visitorAdminForbidden() {
+    @DisplayName("角色权限生效：有 appointment:read 可看预约，没有 blacklist:read 进不去黑名单")
+    void rolePermissionGatesAdminApi() {
         stubToken("va-token", List.of("VISITOR_ADMIN"));
 
-        assertThrows(BusinessException.class, () -> interceptor.preHandle(
-                request("/api/admin/appointment", "va-token"), new MockHttpServletResponse(), new Object()));
+        assertTrue(interceptor.preHandle(request("/api/admin/appointment", "va-token"),
+                new MockHttpServletResponse(), new Object()));
+
+        BusinessException e = assertThrows(BusinessException.class, () -> interceptor.preHandle(
+                request("/api/admin/blacklist", "va-token"), new MockHttpServletResponse(), new Object()));
+        assertEquals(ErrorCode.FORBIDDEN.code(), e.getCode());
+        assertTrue(e.getMessage().contains("blacklist:read"));
     }
 
     @Test

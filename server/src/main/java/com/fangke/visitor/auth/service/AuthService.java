@@ -28,7 +28,7 @@ public class AuthService {
     private static final Duration LOCK_DURATION = Duration.ofMinutes(10);
 
     public record LoginResult(String token, String username, String displayName,
-                              List<String> roles, long expiresInSeconds) {
+                              List<String> roles, List<String> permissions, long expiresInSeconds) {
     }
 
     private record Attempt(int count, Instant lastAttempt) {
@@ -36,12 +36,15 @@ public class AuthService {
 
     private final SysUserRepository repository;
     private final JwtService jwtService;
+    private final com.fangke.visitor.admin.service.RoleAdminService roleAdminService;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private final Map<String, Attempt> attempts = new ConcurrentHashMap<>();
 
-    public AuthService(SysUserRepository repository, JwtService jwtService) {
+    public AuthService(SysUserRepository repository, JwtService jwtService,
+                       com.fangke.visitor.admin.service.RoleAdminService roleAdminService) {
         this.repository = repository;
         this.jwtService = jwtService;
+        this.roleAdminService = roleAdminService;
     }
 
     public LoginResult login(String username, String password) {
@@ -67,9 +70,11 @@ public class AuthService {
 
         attempts.remove(key);
         List<String> roles = repository.findRoles(user.id());
+        List<String> permissions = roleAdminService.permissionsOfRoles(roles);
         String token = jwtService.issue(user.id(), user.username(), roles);
-        log.info("登录成功 username={} roles={}", user.username(), roles);
-        return new LoginResult(token, user.username(), user.realName(), roles, jwtService.ttlSeconds());
+        log.info("登录成功 username={} roles={} perms={}", user.username(), roles, permissions);
+        return new LoginResult(token, user.username(), user.realName(), roles, permissions,
+                jwtService.ttlSeconds());
     }
 
     /** 初始化管理员用（只在账号表为空时调用）。 */

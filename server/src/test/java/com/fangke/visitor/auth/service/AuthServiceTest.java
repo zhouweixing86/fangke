@@ -56,12 +56,21 @@ class AuthServiceTest {
     private FakeRepo repo;
     private AuthService service;
 
+    /** 权限服务桩：测试只关心"登录返回角色"，权限按 ADMIN 全量给。 */
+    private com.fangke.visitor.admin.service.RoleAdminService roleService() {
+        var roleRepo = org.mockito.Mockito.mock(
+                com.fangke.visitor.admin.repository.RoleAdminRepository.class);
+        org.mockito.Mockito.when(roleRepo.permissionsOfRoles(org.mockito.ArgumentMatchers.anyList()))
+                .thenReturn(List.of("*"));
+        return new com.fangke.visitor.admin.service.RoleAdminService(roleRepo);
+    }
+
     @BeforeEach
     void setUp() {
         repo = new FakeRepo();
         AppProperties props = new AppProperties();
         props.getJwt().setSecret("unit-jwt-secret");
-        service = new AuthService(repo, new JwtService(props));
+        service = new AuthService(repo, new JwtService(props), roleService());
 
         long id = repo.insert("admin", service.encode("Admin@123456"), "系统管理员", 1);
         repo.bindRole(id, "ADMIN");

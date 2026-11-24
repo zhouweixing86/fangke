@@ -1,5 +1,7 @@
 <template>
   <div class="page-card">
+    <el-tabs v-model="tab">
+      <el-tab-pane label="账号" name="user">
     <div class="toolbar">
       <el-input v-model="query.keyword" placeholder="账号 / 姓名" clearable style="width: 220px"
         @keyup.enter="search" />
@@ -48,6 +50,86 @@
       <el-pagination v-model:current-page="page" v-model:page-size="size" :total="total"
         layout="total, prev, pager, next" @current-change="load" />
     </div>
+      </el-tab-pane>
+
+      <el-tab-pane label="角色管理" name="role">
+        <div class="toolbar">
+          <el-button :icon="Refresh" @click="loadRoleTab">刷新</el-button>
+          <span class="spacer" />
+          <el-button type="primary" :icon="Plus" @click="openRoleCreate">新增角色</el-button>
+        </div>
+        <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
+          title="角色决定账号能看到哪些页面：勾了哪个模块，登录后左侧就会出现对应菜单，接口也按同一权限校验。一个账号可分配多个角色，权限取并集。" />
+
+        <el-table v-loading="roleLoading" :data="roleRows" border stripe>
+          <el-table-column prop="roleName" label="角色名称" width="150" />
+          <el-table-column prop="roleCode" label="编码" width="150" />
+          <el-table-column prop="description" label="说明" min-width="180" />
+          <el-table-column label="页面权限" min-width="300">
+            <template #default="{ row }">
+              <el-tag v-for="p in permText(row.perms)" :key="p" size="small" class="perm-tag">{{ p }}</el-tag>
+              <span v-if="!row.perms || row.perms.length === 0" class="text-muted">未分配（看不到任何页面）</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="在用账号" width="90">
+            <template #default="{ row }">{{ row.userCount }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="80">
+            <template #default="{ row }">
+              <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
+                {{ row.status === 1 ? '启用' : '停用' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="150" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openRoleEdit(row)">编辑</el-button>
+              <el-popconfirm v-if="!row.builtin" title="删除这个角色？" confirm-button-text="删除"
+                @confirm="removeRole(row)">
+                <template #reference>
+                  <el-button link type="danger">删除</el-button>
+                </template>
+              </el-popconfirm>
+              <span v-else class="text-muted" style="font-size: 12px">内置</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+    </el-tabs>
+
+    <el-dialog v-model="roleVisible" :title="roleForm.id ? '编辑角色' : '新增角色'" width="640px">
+      <el-form :model="roleForm" label-width="90px">
+        <el-form-item label="角色名称" required>
+          <el-input v-model="roleForm.roleName" maxlength="64" placeholder="如：行政审批员" />
+        </el-form-item>
+        <el-form-item label="角色编码" required>
+          <el-input v-model="roleForm.roleCode" :disabled="!!roleForm.id" maxlength="32"
+            placeholder="大写字母/数字/下划线，如 HR_APPROVER" />
+        </el-form-item>
+        <el-form-item label="说明">
+          <el-input v-model="roleForm.description" type="textarea" :rows="2" maxlength="255" />
+        </el-form-item>
+        <el-form-item label="页面权限">
+          <div class="perm-groups">
+            <div v-for="(items, group) in groupedPerms" :key="group" class="perm-group">
+              <div class="perm-group-title">{{ group }}</div>
+              <el-checkbox-group v-model="roleForm.perms">
+                <el-checkbox v-for="item in items" :key="item.perm" :value="item.perm">
+                  {{ item.name }}
+                </el-checkbox>
+              </el-checkbox-group>
+            </div>
+          </div>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-switch v-model="roleForm.enabled" active-text="启用" inactive-text="停用" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="roleVisible = false">取消</el-button>
+        <el-button type="primary" :loading="roleSaving" @click="saveRole">保存</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="formVisible" :title="form.id ? '编辑账号' : '新增账号'" width="560px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
@@ -99,18 +181,24 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
 import {
   createAdminUser,
+  createRole,
+  deleteRole,
   listAdminUsers,
   listRoles,
   resetUserPassword,
+  rolePermissions,
   updateAdminUser,
+  updateRole,
   updateUserStatus
 } from '@/api'
-import type { AdminUserRow, RoleRow } from '@/api/types'
+import type { AdminUserRow, PermissionItem, RoleRow } from '@/api/types'
+
+const tab = ref<'user' | 'role'>('user')
 
 const rows = ref<AdminUserRow[]>([])
 const roles = ref<RoleRow[]>([])
@@ -248,6 +336,131 @@ async function changeStatus(row: AdminUserRow, status: number) {
   await load()
 }
 
+/* ---------------- 角色管理（C-73） ---------------- */
+
+const roleLoading = ref(false)
+const roleSaving = ref(false)
+const roleRows = ref<RoleRow[]>([])
+const roleVisible = ref(false)
+const permissionItems = ref<PermissionItem[]>([])
+
+const groupedPerms = computed(() => {
+  const map: Record<string, PermissionItem[]> = {}
+  for (const item of permissionItems.value) {
+    if (!map[item.group]) {
+      map[item.group] = []
+    }
+    map[item.group].push(item)
+  }
+  return map
+})
+
+const roleForm = reactive<{
+  id: number | null
+  roleCode: string
+  roleName: string
+  description: string
+  perms: string[]
+  enabled: boolean
+}>({ id: null, roleCode: '', roleName: '', description: '', perms: [], enabled: true })
+
+async function loadRoleTab() {
+  roleLoading.value = true
+  try {
+    const [list, perms] = await Promise.all([listRoles(), rolePermissions()])
+    roleRows.value = list
+    permissionItems.value = perms
+    roles.value = list
+  } finally {
+    roleLoading.value = false
+  }
+}
+
+/** 权限码转中文：* → 全部；module:* → 模块全部；module:read → 模块名 */
+function permText(perms?: string[]) {
+  if (!perms || perms.length === 0) return []
+  return perms.map((perm) => {
+    if (perm === '*') return '全部权限'
+    const [module, action] = perm.split(':')
+    const name = permissionItems.value.find((p) => p.module === module)?.name ?? module
+    return action === '*' ? `${name}（全部）` : name
+  })
+}
+
+function openRoleCreate() {
+  Object.assign(roleForm, {
+    id: null,
+    roleCode: '',
+    roleName: '',
+    description: '',
+    perms: ['appointment:read'],
+    enabled: true
+  })
+  roleVisible.value = true
+}
+
+function openRoleEdit(row: RoleRow) {
+  Object.assign(roleForm, {
+    id: row.id,
+    roleCode: row.roleCode,
+    roleName: row.roleName,
+    description: row.description || '',
+    perms: row.roleCode === 'ADMIN' ? ['*'] : [...(row.perms || [])],
+    enabled: row.status !== 0
+  })
+  roleVisible.value = true
+}
+
+async function saveRole() {
+  if (!roleForm.roleName.trim()) {
+    ElMessage.warning('请填写角色名称')
+    return
+  }
+  if (!roleForm.id && !roleForm.roleCode.trim()) {
+    ElMessage.warning('请填写角色编码')
+    return
+  }
+  roleSaving.value = true
+  try {
+    if (roleForm.id) {
+      await updateRole(roleForm.id, {
+        roleName: roleForm.roleName.trim(),
+        description: roleForm.description,
+        perms: roleForm.perms,
+        status: roleForm.enabled ? 1 : 0
+      })
+    } else {
+      await createRole({
+        roleCode: roleForm.roleCode.trim().toUpperCase(),
+        roleName: roleForm.roleName.trim(),
+        description: roleForm.description,
+        perms: roleForm.perms
+      })
+    }
+    ElMessage.success('角色已保存，相关账号重新登录后生效')
+    roleVisible.value = false
+    await loadRoleTab()
+  } finally {
+    roleSaving.value = false
+  }
+}
+
+async function removeRole(row: RoleRow) {
+  try {
+    await deleteRole(row.id)
+    ElMessage.success('角色已删除')
+    await loadRoleTab()
+  } catch {
+    // 错误已由 http 层提示
+  }
+}
+
+watch(tab, (value) => {
+  if (value === 'role' && roleRows.value.length === 0) {
+    loadRoleTab()
+  }
+})
+
 onMounted(async () => {
   roles.value = await listRoles()
   await load()
@@ -257,5 +470,23 @@ onMounted(async () => {
 <style scoped>
 .role-tag {
   margin: 0 6px 0 0;
+}
+
+.perm-tag {
+  margin: 0 6px 4px 0;
+}
+
+.perm-groups {
+  width: 100%;
+}
+
+.perm-group {
+  margin-bottom: 10px;
+}
+
+.perm-group-title {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 4px;
 }
 </style>

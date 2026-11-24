@@ -10,6 +10,8 @@ export interface LoginResult {
   username: string
   displayName: string
   roles: string[]
+  /** 角色权限并集（C-73），如 ["appointment:read","guard:*"]；ADMIN 为 ["*"] */
+  permissions?: string[]
   expiresInSeconds: number
 }
 
@@ -420,6 +422,21 @@ export interface RoleRow {
   id: number
   roleCode: string
   roleName: string
+  /** C-73：角色描述、权限码、是否内置、状态、在用账号数 */
+  description?: string
+  perms?: string[]
+  builtin?: boolean
+  status?: number
+  sort?: number
+  userCount?: number
+}
+
+/** 可分配的页面权限（C-73） */
+export interface PermissionItem {
+  module: string
+  name: string
+  group: string
+  perm: string
 }
 
 export interface AuditRow {

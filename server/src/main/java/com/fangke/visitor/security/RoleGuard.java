@@ -23,8 +23,36 @@ public final class RoleGuard {
     }
 
     public static void requireGuardOrAdmin(HttpServletRequest request) {
-        if (!hasRole(request, "GUARD") && !hasRole(request, "ADMIN")) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "需要保安或管理员角色");
+        if (hasRole(request, "GUARD") || hasRole(request, "ADMIN")
+                || hasPerm(request, "dashboard:read") || hasPerm(request, "guard:*")) {
+            return;
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN,
+                "需要保安/管理员角色，或「保安工作台」页面权限");
+    }
+
+    /** 当前账号是否具备某权限（支持 module:* 与 *，C-73）。 */
+    public static boolean hasPerm(HttpServletRequest request, String perm) {
+        Object perms = request.getAttribute(AuthInterceptor.ATTR_PERMS);
+        if (!(perms instanceof List<?> list)) {
+            return false;
+        }
+        if (list.contains("*") || list.contains(perm)) {
+            return true;
+        }
+        String module = perm.contains(":") ? perm.substring(0, perm.indexOf(':')) : perm;
+        return list.contains(module + ":*");
+    }
+
+    /**
+     * 审批接口专用：任何**已登录后台账号**都能进。
+     *
+     * <p>多级审批的节点可以配任意角色（C-73 后角色可自定义），所以这里不能写死 GUARD；
+     * 具体能看到哪些任务由 {@code approval_task.assignee_role} 过滤，越权看不到别人的待办。
+     */
+    public static void requireApprovalUser(HttpServletRequest request) {
+        if (currentUserId(request) == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
     }
 

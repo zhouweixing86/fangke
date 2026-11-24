@@ -32,6 +32,7 @@ import type {
   OnsiteRow,
   PageResult,
   PendingRow,
+  PermissionItem,
   QrIssueResult,
   QrVerifyResult,
   ReportDailyResult,
@@ -290,7 +291,17 @@ export const listBatchItems = (id: number, params: Record<string, unknown>) =>
 
 /* ---------------- 账号与角色 ---------------- */
 
-export const listRoles = () => get<RoleRow[]>('/admin/role')
+export const listRoles = () => get<RoleRow[]>('/admin/roles')
+
+/* ---------------- 角色与权限（C-73） ---------------- */
+
+/** 可分配的页面权限清单 */
+export const rolePermissions = () => get<PermissionItem[]>('/admin/roles/permissions')
+export const createRole = (data: Record<string, unknown>) =>
+  post<{ id: number }>('/admin/roles', data)
+export const updateRole = (id: number, data: Record<string, unknown>) =>
+  put<void>(`/admin/roles/${id}`, data)
+export const deleteRole = (id: number) => del<void>(`/admin/roles/${id}`)
 
 export const listAdminUsers = (params: Record<string, unknown>) =>
   get<PageResult<AdminUserRow>>('/admin/user', params)

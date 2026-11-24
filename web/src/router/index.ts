@@ -100,9 +100,43 @@ const router = createRouter({
         }
       ]
     },
+    {
+      path: '/no-permission',
+      name: 'no-permission',
+      component: () => import('@/views/NoPermissionView.vue'),
+      meta: { title: '无访问权限' }
+    },
     { path: '/:pathMatch(.*)*', redirect: '/' }
   ]
 })
+
+/** 页面权限（C-73）：路由名 → 权限码，与后端 sys_role.perms 一致 */
+const ROUTE_PERMS: Record<string, string> = {
+  guard: 'dashboard:read',
+  devices: 'device:read',
+  gates: 'gate:read',
+  depts: 'dept:read',
+  employees: 'employee:read',
+  blacklist: 'blacklist:read',
+  users: 'user:read',
+  audit: 'audit:read',
+  ops: 'ops:read',
+  report: 'report:read',
+  appointments: 'appointment:read',
+  events: 'event:read',
+  batches: 'batch:read',
+  'approval-config': 'approval:read'
+}
+
+/** 落地页顺序：第一个有权限的页面 */
+const HOME_PATHS: [string, string][] = [
+  ['/', 'dashboard:read'],
+  ['/appointments', 'appointment:read'],
+  ['/devices', 'device:read'],
+  ['/events', 'event:read'],
+  ['/report', 'report:read'],
+  ['/users', 'user:read']
+]
 
 router.beforeEach((to) => {
   const auth = useAuthStore()
@@ -112,12 +146,13 @@ router.beforeEach((to) => {
   if (!auth.isLoggedIn) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
-  // 保安的落地页是工作台，其余角色是设备页；被拦时回到自己的落地页，避免互相重定向成环
-  const home = auth.isGuard ? '/' : '/devices'
-  const blocked =
-    (to.meta.guardOnly && !auth.isGuard) || (to.meta.adminOnly && !auth.isAdmin)
-  if (blocked && to.path !== home) {
-    return { path: home }
+  if (to.path === '/no-permission') {
+    return true
+  }
+  const perm = ROUTE_PERMS[String(to.name ?? '')]
+  if (perm && !auth.hasPerm(perm)) {
+    const home = HOME_PATHS.find(([, code]) => auth.hasPerm(code))?.[0] || '/no-permission'
+    return to.path === home ? true : { path: home }
   }
   return true
 })

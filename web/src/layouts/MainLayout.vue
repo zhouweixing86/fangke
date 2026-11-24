@@ -101,32 +101,28 @@ interface MenuItem {
   path: string
   title: string
   icon: string
-  guardOnly?: boolean
-  adminOnly?: boolean
+  /** C-73：页面权限码；ADMIN 全量，其他角色按 sys_role.perms 显示 */
+  perm: string
 }
 
 const allMenus: MenuItem[] = [
-  { path: '/', title: '保安工作台', icon: 'Monitor', guardOnly: true },
-  { path: '/devices', title: '设备管理', icon: 'Cpu', adminOnly: true },
-  { path: '/gates', title: '门点管理', icon: 'Place', adminOnly: true },
-  { path: '/depts', title: '部门管理', icon: 'OfficeBuilding', adminOnly: true },
-  { path: '/employees', title: '员工管理', icon: 'User', adminOnly: true },
-  { path: '/blacklist', title: '黑名单', icon: 'CircleClose', adminOnly: true },
-  { path: '/appointments', title: '预约查询', icon: 'Calendar', adminOnly: true },
-  { path: '/events', title: '通行记录', icon: 'Document', adminOnly: true },
-  { path: '/batches', title: '下发批次', icon: 'Upload', adminOnly: true },
-  { path: '/report', title: '报表统计', icon: 'DataAnalysis', adminOnly: true },
-  { path: '/users', title: '账号管理', icon: 'Avatar', adminOnly: true },
-  { path: '/audit', title: '审计日志', icon: 'Tickets', adminOnly: true },
-  { path: '/ops', title: '运维中心', icon: 'SetUp', adminOnly: true },
-  { path: '/approval-config', title: '审批配置', icon: 'Setting', adminOnly: true }
+  { path: '/', title: '保安工作台', icon: 'Monitor', perm: 'dashboard:read' },
+  { path: '/devices', title: '设备管理', icon: 'Cpu', perm: 'device:read' },
+  { path: '/gates', title: '门点管理', icon: 'Place', perm: 'gate:read' },
+  { path: '/depts', title: '部门管理', icon: 'OfficeBuilding', perm: 'dept:read' },
+  { path: '/employees', title: '员工管理', icon: 'User', perm: 'employee:read' },
+  { path: '/blacklist', title: '黑名单', icon: 'CircleClose', perm: 'blacklist:read' },
+  { path: '/appointments', title: '预约查询', icon: 'Calendar', perm: 'appointment:read' },
+  { path: '/events', title: '通行记录', icon: 'Document', perm: 'event:read' },
+  { path: '/batches', title: '下发批次', icon: 'Upload', perm: 'batch:read' },
+  { path: '/report', title: '报表统计', icon: 'DataAnalysis', perm: 'report:read' },
+  { path: '/users', title: '账号管理', icon: 'Avatar', perm: 'user:read' },
+  { path: '/audit', title: '审计日志', icon: 'Tickets', perm: 'audit:read' },
+  { path: '/ops', title: '运维中心', icon: 'SetUp', perm: 'ops:read' },
+  { path: '/approval-config', title: '审批配置', icon: 'Setting', perm: 'approval:read' }
 ]
 
-const menus = computed(() =>
-  allMenus.filter(
-    (item) => (!item.guardOnly || auth.isGuard) && (!item.adminOnly || auth.isAdmin)
-  )
-)
+const menus = computed(() => allMenus.filter((item) => auth.hasPerm(item.perm)))
 const activeMenu = computed(() => (route.path === '' ? '/' : route.path))
 
 function roleLabel(role: string) {
