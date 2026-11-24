@@ -14,6 +14,7 @@ import com.fangke.visitor.common.PageResult;
 import com.fangke.visitor.employee.service.EmployeeValidator;
 import com.fangke.visitor.gate.service.GateService;
 import com.fangke.visitor.security.CryptoService;
+import com.fangke.visitor.visit.repository.AreaLookup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -52,6 +53,7 @@ public class AppointmentService {
     private final ApprovalStarter approvalStarter;
     private final GateService gateService;
     private final AppointmentGateService appointmentGateService;
+    private final AreaLookup areaLookup;
 
     public AppointmentService(AppointmentRepository appointmentRepository,
                               VisitorRepository visitorRepository,
@@ -61,7 +63,8 @@ public class AppointmentService {
                               CryptoService crypto,
                               ApprovalStarter approvalStarter,
                               GateService gateService,
-                              AppointmentGateService appointmentGateService) {
+                              AppointmentGateService appointmentGateService,
+                              AreaLookup areaLookup) {
         this.appointmentRepository = appointmentRepository;
         this.visitorRepository = visitorRepository;
         this.visitorService = visitorService;
@@ -71,6 +74,7 @@ public class AppointmentService {
         this.approvalStarter = approvalStarter;
         this.gateService = gateService;
         this.appointmentGateService = appointmentGateService;
+        this.areaLookup = areaLookup;
     }
 
     /* ---------------- 创建 ---------------- */
@@ -119,6 +123,7 @@ public class AppointmentService {
         appointment.setVisitPhoneMask(CryptoService.maskPhone(v.visitPhone));
         appointment.setVisitorType(v.visitorType);
         appointment.setPurpose(v.purpose);
+        appointment.setAreaId(v.areaId);
         appointment.setCompany(v.company);
         appointment.setPosition(v.position);
         appointment.setPeriod(v.period);
@@ -195,7 +200,7 @@ public class AppointmentService {
                 request.visitor(), request.mates(), request.mateMode(), request.consentVersion(),
                 request.gateId(), request.gateScope(), request.gateIds(),
                 request.company(), request.position(), request.period(), request.groupCount(),
-                request.wxOpenid(), request.qrRequested());
+                request.wxOpenid(), request.qrRequested(), request.areaId());
         return doCreate(normalized, Appointment.SOURCE_ONSITE, null, ip, ua);
     }
 
@@ -248,7 +253,7 @@ public class AppointmentService {
                              String purpose, String company, String position, int period, String plateNo,
                              LocalDate date, LocalTime startTime,
                              LocalTime endTime, int mateMode, List<AppointmentCreateRequest.MateInfo> mates,
-                             String consentVersion) {
+                             String consentVersion, Long areaId) {
     }
 
     private Validated validate(AppointmentCreateRequest request, int source) {
@@ -371,9 +376,14 @@ public class AppointmentService {
         if (position != null && position.length() > 64) {
             throw new BusinessException(ErrorCode.PARAM_TOO_LONG, "职务最多 64 字");
         }
+        // 区域（C-75）：可不传（兼容旧版小程序），传了必须是启用中的区域
+        Long areaId = request.areaId();
+        if (areaId != null && areaLookup.areaName(areaId).isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "来访区域不存在或已停用：" + areaId);
+        }
         return new Validated(name, idCard, visitorPhone, visitPhone, visitEmployeeId, visitorType,
                 trimToNull(purpose), company, position, period, trimToNull(plateNo), date,
-                startTime, endTime, mateMode, normalizedMates, consentVersion);
+                startTime, endTime, mateMode, normalizedMates, consentVersion, areaId);
     }
 
     private AppointmentView toView(Appointment a, Visitor visitor) {
@@ -385,7 +395,8 @@ public class AppointmentService {
                 appointmentRepository.findMates(a.getId()),
                 gateService.nameOf(gateId),
                 appointmentGateService.namesOf(appointmentGateService.appliedGateIds(a)),
-                appointmentGateService.namesOf(appointmentGateService.approvedGateIds(a)));
+                appointmentGateService.namesOf(appointmentGateService.approvedGateIds(a)),
+                areaLookup.areaName(a.getAreaId()).orElse(null));
     }
 
     private String nextAppointmentNo() {

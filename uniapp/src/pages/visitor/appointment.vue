@@ -12,6 +12,7 @@
         <view class="row"><text class="row-label">访客</text><text>{{ detail.visitorName }}</text></view>
         <view class="row"><text class="row-label">证件号</text><text>{{ detail.visitorIdCardMask }}</text></view>
         <view class="row"><text class="row-label">事由</text><text>{{ detail.purpose || '-' }}</text></view>
+        <view class="row"><text class="row-label">来访区域</text><text>{{ detail.areaName || '-' }}</text></view>
         <view class="row"><text class="row-label">到访日期</text><text>{{ detail.visitDate }}</text></view>
         <view class="row"><text class="row-label">到访门点</text><text>{{ gateText }}</text></view>
         <view class="row">

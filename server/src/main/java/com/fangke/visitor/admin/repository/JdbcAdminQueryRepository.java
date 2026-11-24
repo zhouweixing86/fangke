@@ -16,6 +16,7 @@ public class JdbcAdminQueryRepository implements AdminQueryRepository {
 
     private static final String APPOINTMENT_SELECT = """
             SELECT a.id, a.appointment_no, v.name AS visitor_name, v.id_card_mask, a.visitor_type, a.purpose,
+                   a.area_id, ad.name AS area_name,
                    a.start_time, a.end_time, a.status, a.source, a.reject_reason, a.gate_id, a.gate_scope,
                    a.created_at,
                    (SELECT g.status FROM access_grant g WHERE g.appointment_id = a.id
@@ -28,12 +29,15 @@ public class JdbcAdminQueryRepository implements AdminQueryRepository {
                      WHERE ag.appointment_id = a.id AND ag.stage = 2) AS approved_gates
             FROM appointment a
             LEFT JOIN visitor v ON v.id = a.visitor_id
+            LEFT JOIN visit_dict ad ON ad.id = a.area_id AND ad.dict_type = 'AREA'
             """;
 
     private static final RowMapper<AppointmentRow> APPOINTMENT_MAPPER = (rs, i) -> {
         Integer grantStatus = (Integer) rs.getObject("grant_status");
         long gateId = rs.getLong("gate_id");
         Long gateIdOrNull = rs.wasNull() ? null : gateId;
+        long areaId = rs.getLong("area_id");
+        Long areaIdOrNull = rs.wasNull() ? null : areaId;
         return new AppointmentRow(
                 rs.getLong("id"),
                 rs.getString("appointment_no"),
@@ -41,6 +45,8 @@ public class JdbcAdminQueryRepository implements AdminQueryRepository {
                 rs.getString("id_card_mask"),
                 rs.getString("visitor_type"),
                 rs.getString("purpose"),
+                areaIdOrNull,
+                rs.getString("area_name"),
                 rs.getTimestamp("start_time").toLocalDateTime(),
                 rs.getTimestamp("end_time").toLocalDateTime(),
                 rs.getInt("status"),
@@ -61,10 +67,10 @@ public class JdbcAdminQueryRepository implements AdminQueryRepository {
     }
 
     @Override
-    public List<AppointmentRow> searchAppointments(String keyword, Integer status, LocalDate from,
-                                                   LocalDate to, int offset, int limit) {
+    public List<AppointmentRow> searchAppointments(String keyword, Integer status, Long areaId,
+                                                   LocalDate from, LocalDate to, int offset, int limit) {
         List<Object> args = new ArrayList<>();
-        String where = appointmentWhere(keyword, status, from, to, args);
+        String where = appointmentWhere(keyword, status, areaId, from, to, args);
         args.add(limit);
         args.add(offset);
         return jdbc.query(APPOINTMENT_SELECT + where + " ORDER BY a.id DESC LIMIT ? OFFSET ?",
@@ -72,9 +78,9 @@ public class JdbcAdminQueryRepository implements AdminQueryRepository {
     }
 
     @Override
-    public long countAppointments(String keyword, Integer status, LocalDate from, LocalDate to) {
+    public long countAppointments(String keyword, Integer status, Long areaId, LocalDate from, LocalDate to) {
         List<Object> args = new ArrayList<>();
-        String where = appointmentWhere(keyword, status, from, to, args);
+        String where = appointmentWhere(keyword, status, areaId, from, to, args);
         Long count = jdbc.queryForObject("SELECT COUNT(1) FROM appointment a "
                 + "LEFT JOIN visitor v ON v.id = a.visitor_id" + where, Long.class, args.toArray());
         return count == null ? 0 : count;
@@ -126,12 +132,16 @@ public class JdbcAdminQueryRepository implements AdminQueryRepository {
 
     /* ---------------- 条件拼装 ---------------- */
 
-    private String appointmentWhere(String keyword, Integer status, LocalDate from, LocalDate to,
+    private String appointmentWhere(String keyword, Integer status, Long areaId, LocalDate from, LocalDate to,
                                     List<Object> args) {
         StringBuilder sb = new StringBuilder(" WHERE 1=1");
         if (status != null) {
             sb.append(" AND a.status = ?");
             args.add(status);
+        }
+        if (areaId != null) {
+            sb.append(" AND a.area_id = ?");
+            args.add(areaId);
         }
         if (StringUtils.hasText(keyword)) {
             sb.append(" AND (a.appointment_no LIKE ? OR v.name LIKE ? OR v.id_card_mask LIKE ?)");

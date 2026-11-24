@@ -11,7 +11,8 @@ import java.util.Optional;
 public interface AdminQueryRepository {
 
     record AppointmentRow(Long id, String appointmentNo, String visitorName, String idCardMask,
-                          String visitorType, String purpose, LocalDateTime startTime, LocalDateTime endTime,
+                          String visitorType, String purpose, Long areaId, String areaName,
+                          LocalDateTime startTime, LocalDateTime endTime,
                           int status, int source, String rejectReason, Long gateId, int gateScope,
                           String appliedGates, String approvedGates, Integer grantStatus,
                           LocalDateTime createdAt) {
@@ -22,10 +23,10 @@ public interface AdminQueryRepository {
                     String failReason, String idCardMask, int mediaCount) {
     }
 
-    List<AppointmentRow> searchAppointments(String keyword, Integer status, LocalDate from, LocalDate to,
-                                            int offset, int limit);
+    List<AppointmentRow> searchAppointments(String keyword, Integer status, Long areaId,
+                                            LocalDate from, LocalDate to, int offset, int limit);
 
-    long countAppointments(String keyword, Integer status, LocalDate from, LocalDate to);
+    long countAppointments(String keyword, Integer status, Long areaId, LocalDate from, LocalDate to);
 
     Optional<AppointmentRow> findAppointment(Long id);
 

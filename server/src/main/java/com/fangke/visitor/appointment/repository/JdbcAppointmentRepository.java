@@ -24,7 +24,7 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
 
     private static final String SELECT = """
             SELECT id, appointment_no, source, visitor_id, visit_employee_id, visit_phone_enc, visit_phone_mask,
-                   visitor_type, purpose, company, position, period, plate_no, department, gate_id, gate_scope,
+                   visitor_type, purpose, area_id, company, position, period, plate_no, department, gate_id, gate_scope,
                    start_time, end_time,
                    mate_mode, mate_count, qr_requested, qr_approved, qr_approved_by, qr_approved_at,
                    approval_level, status, reject_reason, cancel_reason,
@@ -46,6 +46,8 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
             a.setVisitPhoneMask(rs.getString("visit_phone_mask"));
             a.setVisitorType(rs.getString("visitor_type"));
             a.setPurpose(rs.getString("purpose"));
+            long areaId = rs.getLong("area_id");
+            a.setAreaId(rs.wasNull() ? null : areaId);
             a.setCompany(rs.getString("company"));
             a.setPosition(rs.getString("position"));
             a.setPeriod(rs.getInt("period"));
@@ -92,12 +94,12 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
         jdbc.update(connection -> {
             PreparedStatement ps = connection.prepareStatement("""
                     INSERT INTO appointment (appointment_no, source, visitor_id, visit_employee_id,
-                    visit_phone_enc, visit_phone_mask, visitor_type, purpose, company, position, period,
+                    visit_phone_enc, visit_phone_mask, visitor_type, purpose, area_id, company, position, period,
                     plate_no, department,
                         gate_id, gate_scope, start_time, end_time, mate_mode, mate_count,
                         qr_requested, qr_approved, qr_approved_by, qr_approved_at,
                         approval_level, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, Statement.RETURN_GENERATED_KEYS);
             int i = 1;
             ps.setString(i++, a.getAppointmentNo());
@@ -108,6 +110,7 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
             ps.setString(i++, a.getVisitPhoneMask());
             ps.setString(i++, a.getVisitorType());
             ps.setString(i++, a.getPurpose());
+            setNullableLong(ps, i++, a.getAreaId());
             ps.setString(i++, a.getCompany());
             ps.setString(i++, a.getPosition());
             ps.setInt(i++, a.getPeriod());
@@ -138,7 +141,7 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
     public void update(Appointment a) {
         jdbc.update("""
                         UPDATE appointment SET visit_employee_id = ?, visit_phone_enc = ?, visit_phone_mask = ?,
-                            visitor_type = ?, purpose = ?, company = ?, position = ?, period = ?,
+                            visitor_type = ?, purpose = ?, area_id = ?, company = ?, position = ?, period = ?,
                             plate_no = ?, department = ?,
                             start_time = ?, end_time = ?, mate_mode = ?, mate_count = ?,
                             qr_requested = ?, qr_approved = ?, qr_approved_by = ?, qr_approved_at = ?,
@@ -147,7 +150,7 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
                         WHERE id = ?
                         """,
                 a.getVisitEmployeeId(), a.getVisitPhoneEnc(), a.getVisitPhoneMask(),
-                a.getVisitorType(), a.getPurpose(), a.getCompany(), a.getPosition(), a.getPeriod(),
+                a.getVisitorType(), a.getPurpose(), a.getAreaId(), a.getCompany(), a.getPosition(), a.getPeriod(),
                 a.getPlateNo(), a.getDepartment(),
                 Timestamp.valueOf(a.getStartTime()), Timestamp.valueOf(a.getEndTime()),
                 a.getMateMode(), a.getMateCount(),

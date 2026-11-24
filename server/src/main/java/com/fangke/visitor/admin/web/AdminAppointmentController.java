@@ -41,6 +41,7 @@ public class AdminAppointmentController {
     public ApiResponse<PageResult<Map<String, Object>>> list(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) Long areaId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(defaultValue = "1") int page,
@@ -48,9 +49,9 @@ public class AdminAppointmentController {
         int safePage = Math.max(page, 1);
         int safeSize = Math.min(Math.max(size, 1), 100);
         List<Map<String, Object>> list = queryRepository
-                .searchAppointments(keyword, status, from, to, (safePage - 1) * safeSize, safeSize)
+                .searchAppointments(keyword, status, areaId, from, to, (safePage - 1) * safeSize, safeSize)
                 .stream().map(this::toView).toList();
-        long total = queryRepository.countAppointments(keyword, status, from, to);
+        long total = queryRepository.countAppointments(keyword, status, areaId, from, to);
         return ApiResponse.ok(PageResult.of(total, safePage, safeSize, list));
     }
 
@@ -69,6 +70,8 @@ public class AdminAppointmentController {
         view.put("idCardMask", row.idCardMask() == null ? "" : row.idCardMask());
         view.put("visitorType", row.visitorType() == null ? "" : row.visitorType());
         view.put("purpose", row.purpose() == null ? "" : row.purpose());
+        view.put("areaId", row.areaId());
+        view.put("areaName", row.areaName() == null ? "" : row.areaName());
         view.put("startTime", DATETIME.format(row.startTime()));
         view.put("endTime", DATETIME.format(row.endTime()));
         view.put("status", row.status());

@@ -90,6 +90,10 @@ public class AppAuthInterceptor implements HandlerInterceptor {
         if ("GET".equalsIgnoreCase(method) && path.startsWith("/api/app/gate")) {
             return true;
         }
+        // 预约页的事由/区域下拉（C-75），名称不敏感
+        if ("GET".equalsIgnoreCase(method) && path.startsWith("/api/app/dict")) {
+            return true;
+        }
         return "POST".equalsIgnoreCase(method) && "/api/app/appointment".equals(path);
     }
 

@@ -38,7 +38,9 @@ public record AppointmentCreateRequest(
         Integer groupCount,
         String wxOpenid,
         /** 访客是否申请二维码开门（null/false 不申请）。需审批人同意后访客端才能取码。 */
-        Boolean qrRequested) {
+        Boolean qrRequested,
+        /** 来访区域（visit_dict AREA，C-75）；不传表示未指定（兼容旧版小程序）。*/
+        Long areaId) {
 
     public record VisitorInfo(String name, String idCard, String phone, String company, String position) {
         /** 兼容只有 4 个参数的旧调用。 */
@@ -59,6 +61,6 @@ public record AppointmentCreateRequest(
                                     Integer groupCount, String wxOpenid) {
         this(visitPhone, department, visitorType, purpose, plateNo, startDate, startTime, endTime,
                 visitor, mates, mateMode, consentVersion, gateId, gateScope, gateIds,
-                company, position, period, groupCount, wxOpenid, null);
+                company, position, period, groupCount, wxOpenid, null, null);
     }
 }

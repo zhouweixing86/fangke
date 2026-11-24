@@ -106,6 +106,19 @@
         </view>
       </template>
 
+      <!-- 来访区域：基础字典 AREA，访客到园区哪个区域（C-75） -->
+      <picker v-if="areaOptions.length" :range="areaOptions" :value="areaIndex < 0 ? 0 : areaIndex" @change="onArea">
+        <view class="row">
+          <text class="label">来访区域</text>
+          <view class="row-value">
+            <text :class="form.areaId ? '' : 'ph'">
+              {{ form.areaId ? areaOptions[areaIndex] : '请选择' }}
+            </text>
+            <text class="arrow">›</text>
+          </view>
+        </view>
+      </picker>
+
       <view class="purpose">
         <text class="label">具体事由</text>
         <textarea v-model="form.purpose" class="textarea" maxlength="50" placeholder="请输入具体事由" />
@@ -164,8 +177,8 @@
 <script setup lang="ts">
 import { onShow } from '@dcloudio/uni-app'
 import { computed, reactive, ref } from 'vue'
-import { createAppointment, listAppGates, lookupEmployee } from '@/api'
-import type { GateOption } from '@/api/types'
+import { createAppointment, appDictOptions, listAppGates, lookupEmployee } from '@/api'
+import type { GateOption, VisitDictOption } from '@/api/types'
 import { visitorOpenid } from '@/utils/visitor'
 import { alert, showToast } from '@/utils/ui'
 
@@ -198,6 +211,7 @@ const form = reactive({
   position: '',
   plateNo: '',
   purpose: '',
+  areaId: undefined as number | undefined,
   qrRequested: false
 })
 
@@ -211,6 +225,10 @@ const gateOptions = ['全部门点', '指定门点']
 const gateIndex = ref(0)
 const gateScope = computed(() => (gateIndex.value === 0 ? 2 : 1))
 const selectedGateIds = ref<number[]>([])
+
+const areas = ref<VisitDictOption[]>([])
+const areaOptions = computed(() => areas.value.map((a) => a.name))
+const areaIndex = ref(-1)
 
 function pad(n: number) {
   return String(n).padStart(2, '0')
@@ -251,6 +269,11 @@ function onDate(e: any) {
 
 function onGateScope(e: any) {
   gateIndex.value = Number(e.detail.value) || 0
+}
+
+function onArea(e: any) {
+  areaIndex.value = Number(e.detail.value) || 0
+  form.areaId = areas.value[areaIndex.value]?.id
 }
 
 function toggleGate(id: number) {
@@ -301,6 +324,7 @@ async function submit() {
   if (gates.value.length > 1 && gateScope.value === 1 && selectedGateIds.value.length === 0) {
     return showToast('请至少选择一个门点')
   }
+  if (areaOptions.value.length > 0 && !form.areaId) return showToast('请选择来访区域')
 
   const useGates = gates.value.length > 1 && gateScope.value === 1
   submitting.value = true
@@ -311,6 +335,7 @@ async function submit() {
       visitPhone: form.visitPhone.trim(),
       visitorType: form.visitorType,
       purpose: form.purpose || undefined,
+      areaId: form.areaId,
       plateNo: form.plateNo || undefined,
       company: form.company.trim(),
       position: form.position || undefined,
@@ -354,6 +379,12 @@ onShow(async () => {
     }
   } catch {
     // 门点拉取失败不阻塞页面，提交时再提示
+  }
+  try {
+    const dict = await appDictOptions()
+    areas.value = dict.AREA ?? []
+  } catch {
+    // 区域字典拉不到就不显示该控件（后端 areaId 可选，不阻塞提交）
   }
 })
 </script>

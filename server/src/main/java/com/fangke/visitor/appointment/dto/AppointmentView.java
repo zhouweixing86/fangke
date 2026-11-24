@@ -19,6 +19,8 @@ public record AppointmentView(
         String visitorIdCardMask,
         String visitorType,
         String purpose,
+        Long areaId,
+        String areaName,
         String visitPhoneMask,
         String department,
         Long gateId,
@@ -54,7 +56,8 @@ public record AppointmentView(
 
     public static AppointmentView of(Appointment a, String visitorName, String visitorIdCardMask,
                                      List<AppointmentMate> mates, String gateName,
-                                     List<String> appliedGateNames, List<String> approvedGateNames) {
+                                     List<String> appliedGateNames, List<String> approvedGateNames,
+                                     String areaName) {
         List<Mate> mateViews = mates.stream()
                 .filter(m -> !m.main())
                 .map(m -> new Mate(m.name(), m.idCardMask(), false))
@@ -68,6 +71,8 @@ public record AppointmentView(
                 visitorIdCardMask,
                 a.getVisitorType(),
                 a.getPurpose(),
+                a.getAreaId(),
+                areaName,
                 a.getVisitPhoneMask(),
                 a.getDepartment(),
                 a.getGateId(),

@@ -215,7 +215,8 @@ class AppointmentServiceTest {
         GateService gateService = new GateService(InMemoryGateRepository.withUnassigned(), props);
         service = new AppointmentService(appointmentRepo, visitorRepo, visitorService, resolver,
                 blacklist, crypto, ApprovalStarter.noop(), gateService,
-                new AppointmentGateService(new InMemoryAppointmentGateRepository(), gateService));
+                new AppointmentGateService(new InMemoryAppointmentGateRepository(), gateService),
+                areaId -> areaId != null && areaId == 1L ? Optional.of("一号库房") : Optional.empty());
     }
 
     private AppointmentCreateRequest request(String visitorType, LocalDate date, Integer mateMode,
@@ -248,6 +249,36 @@ class AppointmentServiceTest {
         assertTrue(view.canCancel());
         assertEquals(9L, appointmentRepo.store.values().iterator().next().getVisitEmployeeId());
         assertEquals(1, visitorRepo.consents.size());
+    }
+
+    @Test
+    @DisplayName("区域关联：预约带区域时返回区域名，落库 area_id")
+    void createWithArea() {
+        AppointmentCreateRequest withArea = new AppointmentCreateRequest(
+                VISIT_PHONE, "行政部", "商务", "技术交流", "",
+                LocalDate.now().plusDays(1), LocalTime.of(9, 0), LocalTime.of(11, 0),
+                new AppointmentCreateRequest.VisitorInfo("李四", VISITOR_ID, "13900139001", "某某科技"),
+                List.of(), 0, "v1.0", null, null, null, null, null, null, null, null, null, 1L);
+
+        AppointmentView view = service.create(withArea, Appointment.SOURCE_SELF, "ip", "ua");
+
+        assertEquals(1L, view.areaId());
+        assertEquals("一号库房", view.areaName());
+        assertEquals(1L, appointmentRepo.store.values().iterator().next().getAreaId());
+    }
+
+    @Test
+    @DisplayName("区域关联：不存在的区域被拒（4001）")
+    void invalidAreaRejected() {
+        AppointmentCreateRequest badArea = new AppointmentCreateRequest(
+                VISIT_PHONE, "行政部", "商务", "技术交流", "",
+                LocalDate.now().plusDays(1), LocalTime.of(9, 0), LocalTime.of(11, 0),
+                new AppointmentCreateRequest.VisitorInfo("李四", VISITOR_ID, "13900139001", "某某科技"),
+                List.of(), 0, "v1.0", null, null, null, null, null, null, null, null, null, 99L);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.create(badArea, Appointment.SOURCE_SELF, "ip", "ua"));
+        assertEquals(ErrorCode.PARAM_INVALID.code(), e.getCode());
     }
 
     @Test

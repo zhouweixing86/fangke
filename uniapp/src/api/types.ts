@@ -32,6 +32,13 @@ export interface GateOption {
   gateTypeText: string
 }
 
+/** 基础字典项（预约页的事由/区域下拉，C-75） */
+export interface VisitDictOption {
+  id: number
+  name: string
+  sort: number
+}
+
 export interface AppMe {
   role: string
   subjectId: number
@@ -60,6 +67,9 @@ export interface AppointmentView {
   visitorIdCardMask: string
   visitorType: string
   purpose: string
+  /** 来访区域（C-75） */
+  areaId?: number | null
+  areaName?: string
   visitPhoneMask: string
   department: string
   gateId?: number

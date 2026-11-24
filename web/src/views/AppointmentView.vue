@@ -6,6 +6,9 @@
       <el-select v-model="query.status" placeholder="状态" clearable style="width: 150px">
         <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
       </el-select>
+      <el-select v-model="query.areaId" placeholder="来访区域" clearable style="width: 150px">
+        <el-option v-for="a in areaOptions" :key="a.id" :label="a.name" :value="a.id" />
+      </el-select>
       <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="到访起"
         end-placeholder="到访止" style="width: 260px" />
       <el-button type="primary" @click="search">查询</el-button>
@@ -18,6 +21,9 @@
       <el-table-column prop="idCardMask" label="证件号" width="180" />
       <el-table-column prop="visitorType" label="类型" width="80" />
       <el-table-column prop="purpose" label="事由" min-width="130" />
+      <el-table-column label="区域" width="120">
+        <template #default="{ row }">{{ row.areaName || '-' }}</template>
+      </el-table-column>
       <el-table-column prop="startTime" label="开始" width="150" />
       <el-table-column prop="endTime" label="结束" width="150" />
       <el-table-column prop="sourceText" label="来源" width="110" />
@@ -55,6 +61,7 @@
         <el-descriptions-item label="访客">{{ detail?.visitorName }}（{{ detail?.visitorType }}）</el-descriptions-item>
         <el-descriptions-item label="证件号">{{ detail?.idCardMask }}</el-descriptions-item>
         <el-descriptions-item label="事由">{{ detail?.purpose || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="来访区域">{{ detail?.areaName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="到访时间">{{ detail?.startTime }} ~ {{ detail?.endTime }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="statusType(detail?.status ?? 0)" size="small">{{ detail?.statusText }}</el-tag>
@@ -112,9 +119,10 @@ import {
   issueAppointmentQr,
   listAppointments,
   revokeAppointmentQr,
-  revokeGrant
+  revokeGrant,
+  visitDictOptions
 } from '@/api'
-import type { AppointmentRow } from '@/api/types'
+import type { AppointmentRow, VisitDict } from '@/api/types'
 
 const rows = ref<AppointmentRow[]>([])
 const total = ref(0)
@@ -122,7 +130,12 @@ const page = ref(1)
 const size = ref(20)
 const loading = ref(false)
 const dateRange = ref<[string, string] | null>(null)
-const query = reactive<{ keyword: string; status: number | undefined }>({ keyword: '', status: undefined })
+const query = reactive<{ keyword: string; status: number | undefined; areaId: number | undefined }>({
+  keyword: '',
+  status: undefined,
+  areaId: undefined
+})
+const areaOptions = ref<VisitDict[]>([])
 
 const detailVisible = ref(false)
 const detail = ref<AppointmentRow | null>(null)
@@ -162,6 +175,7 @@ async function load() {
     const result = await listAppointments({
       keyword: query.keyword || undefined,
       status: query.status,
+      areaId: query.areaId,
       from: dateRange.value?.[0],
       to: dateRange.value?.[1],
       page: page.value,
@@ -271,7 +285,19 @@ async function revokeQr(row: AppointmentRow) {
   ElMessage.success(`已撤销 ${result.revoked} 张有效的码`)
 }
 
-onMounted(load)
+async function loadAreas() {
+  try {
+    const options = await visitDictOptions()
+    areaOptions.value = options.AREA ?? []
+  } catch {
+    // 区域字典取不到不影响预约列表本身
+  }
+}
+
+onMounted(async () => {
+  await loadAreas()
+  await load()
+})
 onBeforeUnmount(stopCountdown)
 </script>
 

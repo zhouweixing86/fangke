@@ -180,6 +180,9 @@ export interface AppointmentRow {
   idCardMask: string
   visitorType: string
   purpose: string
+  /** 来访区域（visit_dict AREA，C-75）；历史单据为空 */
+  areaId: number | null
+  areaName: string
   startTime: string
   endTime: string
   status: number

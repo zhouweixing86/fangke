@@ -19,7 +19,8 @@ import type {
   ReportDaily,
   ReportOverview,
   ReviewDetail,
-  ReviewRow
+  ReviewRow,
+  VisitDictOption
 } from './types'
 
 /* ---------------- 登录（只有管理端；访客走微信小程序静默登录） ---------------- */
@@ -57,6 +58,10 @@ export const appointmentDetail = (no: string) => get<AppointmentView>('/app/appo
 
 /** 可选门点（厂区多门点时访客要选从哪个门进） */
 export const listAppGates = () => get<GateOption[]>('/app/gate')
+
+/** 预约页基础字典：事由 / 区域（C-75） */
+export const appDictOptions = () =>
+  get<{ CAUSE: VisitDictOption[]; AREA: VisitDictOption[] }>('/app/dict/options')
 
 export const createAppointment = (payload: Record<string, unknown>) =>
   post<AppointmentView>('/app/appointment', payload)

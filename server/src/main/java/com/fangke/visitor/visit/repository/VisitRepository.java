@@ -18,7 +18,7 @@ import java.util.Optional;
  * 来访登记 + 基础字典仓储（V26）。
  */
 @Repository
-public class VisitRepository {
+public class VisitRepository implements AreaLookup {
 
     private final JdbcTemplate jdbc;
 
@@ -73,6 +73,16 @@ public class VisitRepository {
 
     public Optional<VisitDict> findDict(Long id) {
         return jdbc.query("SELECT * FROM visit_dict WHERE id = ?", DICT_MAPPER, id).stream().findFirst();
+    }
+
+    @Override
+    public Optional<String> areaName(Long areaId) {
+        if (areaId == null) {
+            return Optional.empty();
+        }
+        return findDict(areaId)
+                .filter(d -> VisitDict.TYPE_AREA.equals(d.dictType()) && d.status() == 1)
+                .map(VisitDict::name);
     }
 
     public boolean existsDict(String type, String name, Long excludeId) {

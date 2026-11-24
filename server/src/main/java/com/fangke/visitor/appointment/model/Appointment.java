@@ -46,6 +46,8 @@ public class Appointment {
     private String visitPhoneMask;
     private String visitorType;
     private String purpose;
+    /** 来访区域（visit_dict AREA，C-75）；历史单据为空 */
+    private Long areaId;
     /** 来访公司（团体预约时为负责人公司） */
     private String company;
     /** 来访人职务 */
@@ -169,6 +171,14 @@ public class Appointment {
 
     public void setPurpose(String purpose) {
         this.purpose = purpose;
+    }
+
+    public Long getAreaId() {
+        return areaId;
+    }
+
+    public void setAreaId(Long areaId) {
+        this.areaId = areaId;
     }
 
     public String getCompany() {
