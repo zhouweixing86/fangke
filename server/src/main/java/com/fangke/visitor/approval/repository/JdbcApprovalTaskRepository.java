@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,17 +21,24 @@ import java.util.Optional;
 public class JdbcApprovalTaskRepository implements ApprovalTaskRepository {
 
     private static final String SELECT = """
-            SELECT id, appointment_id, level, assignee_id, status, reminder_count, last_reminder_at,
-                   finished_at, created_at, assignee_type, assignee_role
+            SELECT id, appointment_id, template_id, node_id, node_name, level, assignee_id, status,
+                   reminder_count, last_reminder_at, finished_at, created_at, assignee_type, assignee_role
             FROM approval_task
             """;
 
     private static final RowMapper<ApprovalTask> MAPPER = new RowMapper<>() {
         @Override
         public ApprovalTask mapRow(ResultSet rs, int rowNum) throws SQLException {
+            long templateId = rs.getLong("template_id");
+            Long template = rs.wasNull() ? null : templateId;
+            long nodeId = rs.getLong("node_id");
+            Long node = rs.wasNull() ? null : nodeId;
             return new ApprovalTask(
                     rs.getLong("id"),
                     rs.getLong("appointment_id"),
+                    template,
+                    node,
+                    rs.getString("node_name"),
                     rs.getInt("level"),
                     rs.getLong("assignee_id"),
                     rs.getInt("status"),
@@ -52,6 +60,7 @@ public class JdbcApprovalTaskRepository implements ApprovalTaskRepository {
             new ApprovalTaskRepository.TodoRow(
                     rs.getLong("task_id"),
                     rs.getInt("level"),
+                    rs.getString("node_name"),
                     rs.getLong("appointment_id"),
                     rs.getString("appointment_no"),
                     rs.getString("visitor_name"),
@@ -70,15 +79,19 @@ public class JdbcApprovalTaskRepository implements ApprovalTaskRepository {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbc.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(
-                    "INSERT INTO approval_task (appointment_id, level, assignee_id, status, "
-                            + "assignee_type, assignee_role) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO approval_task (appointment_id, template_id, node_id, node_name, level, "
+                            + "assignee_id, status, assignee_type, assignee_role) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     Statement.RETURN_GENERATED_KEYS);
             ps.setLong(1, task.appointmentId());
-            ps.setInt(2, task.level());
-            ps.setLong(3, task.assigneeId());
-            ps.setInt(4, task.status());
-            ps.setInt(5, task.assigneeType());
-            ps.setString(6, task.assigneeRole());
+            setNullableLong(ps, 2, task.templateId());
+            setNullableLong(ps, 3, task.nodeId());
+            ps.setString(4, task.nodeName());
+            ps.setInt(5, task.level());
+            ps.setLong(6, task.assigneeId());
+            ps.setInt(7, task.status());
+            ps.setInt(8, task.assigneeType());
+            ps.setString(9, task.assigneeRole());
             return ps;
         }, keyHolder);
         Number key = keyHolder.getKey();
@@ -114,17 +127,28 @@ public class JdbcApprovalTaskRepository implements ApprovalTaskRepository {
     }
 
     @Override
-    public long countPendingByRole(String role) {
-        Long count = jdbc.queryForObject(
-                "SELECT COUNT(1) FROM approval_task WHERE assignee_role = ? AND status = 1 AND assignee_type = 2",
-                Long.class, role);
+    public long countPendingByRoles(List<String> roles, Long adminUserId) {
+        List<String> safeRoles = roles == null ? List.of() : roles;
+        String placeholders = safeRoles.isEmpty() ? "NULL"
+                : String.join(",", java.util.Collections.nCopies(safeRoles.size(), "?"));
+        List<Object> args = new ArrayList<>();
+        args.add(adminUserId == null ? -1L : adminUserId);
+        args.addAll(safeRoles);
+        Long count = jdbc.queryForObject("""
+                        SELECT COUNT(1) FROM approval_task
+                        WHERE status = 1 AND (
+                            (assignee_type = 3 AND assignee_id = ?)
+                            OR (assignee_type = 2 AND assignee_role IN (%s))
+                        )
+                        """.formatted(placeholders),
+                Long.class, args.toArray());
         return count == null ? 0 : count;
     }
 
     @Override
     public List<TodoRow> findTodo(Long assigneeId, int offset, int limit) {
         return jdbc.query("""
-                        SELECT t.id AS task_id, t.level, a.id AS appointment_id, a.appointment_no,
+                        SELECT t.id AS task_id, t.level, t.node_name, a.id AS appointment_id, a.appointment_no,
                                v.name AS visitor_name, v.id_card_mask, a.purpose, a.start_time, a.end_time,
                                t.created_at
                         FROM approval_task t
@@ -138,19 +162,30 @@ public class JdbcApprovalTaskRepository implements ApprovalTaskRepository {
     }
 
     @Override
-    public List<TodoRow> findTodoByRole(String role, int offset, int limit) {
+    public List<TodoRow> findTodoByRoles(List<String> roles, Long adminUserId, int offset, int limit) {
+        List<String> safeRoles = roles == null ? List.of() : roles;
+        String placeholders = safeRoles.isEmpty() ? "NULL"
+                : String.join(",", java.util.Collections.nCopies(safeRoles.size(), "?"));
+        List<Object> args = new ArrayList<>();
+        args.add(adminUserId == null ? -1L : adminUserId);
+        args.addAll(safeRoles);
+        args.add(limit);
+        args.add(offset);
         return jdbc.query("""
-                        SELECT t.id AS task_id, t.level, a.id AS appointment_id, a.appointment_no,
+                        SELECT t.id AS task_id, t.level, t.node_name, a.id AS appointment_id, a.appointment_no,
                                v.name AS visitor_name, v.id_card_mask, a.purpose, a.start_time, a.end_time,
                                t.created_at
                         FROM approval_task t
                         JOIN appointment a ON a.id = t.appointment_id
                         LEFT JOIN visitor v ON v.id = a.visitor_id
-                        WHERE t.assignee_role = ? AND t.status = 1 AND t.assignee_type = 2
+                        WHERE t.status = 1 AND (
+                            (t.assignee_type = 3 AND t.assignee_id = ?)
+                            OR (t.assignee_type = 2 AND t.assignee_role IN (%s))
+                        )
                         ORDER BY t.created_at
                         LIMIT ? OFFSET ?
-                        """,
-                TASK_ROW_MAPPER, role, limit, offset);
+                        """.formatted(placeholders),
+                TASK_ROW_MAPPER, args.toArray());
     }
 
     @Override
@@ -188,5 +223,14 @@ public class JdbcApprovalTaskRepository implements ApprovalTaskRepository {
                         """,
                 (rs, i) -> rs.getLong(1),
                 Timestamp.valueOf(createdBefore), Timestamp.valueOf(lastRemindBefore), limit);
+    }
+
+    private static void setNullableLong(PreparedStatement ps, int index, Long value)
+            throws SQLException {
+        if (value == null) {
+            ps.setNull(index, java.sql.Types.BIGINT);
+        } else {
+            ps.setLong(index, value);
+        }
     }
 }

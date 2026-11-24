@@ -63,6 +63,15 @@ public class NotifyService {
     }
 
     /**
+     * 后台账号通知（管理端消息中心）：审批抄送等，只发站内，不占短信额度。
+     */
+    public boolean notifyAdmin(Long adminUserId, String templateCode, NotifyTemplates.Content content,
+                               String bizType, String bizNo, String dedupSuffix) {
+        return notify(Notification.RECEIVER_ADMIN, adminUserId, templateCode, content,
+                bizType, bizNo, dedupSuffix, false);
+    }
+
+    /**
      * @return 站内消息是否新插入（false 表示已存在同内容通知，被去重）
      */
     public boolean notify(int receiverType, Long receiverId, String templateCode,

@@ -10,6 +10,7 @@ import type {
   EventRow,
   GateOption,
   GuardDashboard,
+  MyNotification,
   OnsiteRow,
   PageResult,
   PendingRow,
@@ -95,6 +96,20 @@ export const guardReviewPass = (
 
 export const guardReviewReject = (taskId: number, comment: string) =>
   post<void>(`/guard/approval/${taskId}/reject`, { comment })
+
+/* ---------------- 我的消息（审批抄送） ---------------- */
+
+export const listMyNotifications = (params: Record<string, unknown>) =>
+  get<PageResult<MyNotification>>('/admin/notification/mine', params)
+
+export const myUnreadCount = () =>
+  get<{ unread: number }>('/admin/notification/mine/unread-count')
+
+export const readMyNotification = (id: number) =>
+  post<void>(`/admin/notification/mine/${id}/read`)
+
+export const readAllMyNotifications = () =>
+  post<{ updated: number }>('/admin/notification/mine/read-all')
 
 /* ---------------- 管理端 ---------------- */
 

@@ -7,10 +7,13 @@ import com.fangke.visitor.notify.repository.NotificationRepository;
 import com.fangke.visitor.security.RoleGuard;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,11 +52,58 @@ public class AdminNotifyController {
         return ApiResponse.ok(PageResult.of(total, safePage, safeSize, list));
     }
 
+    /* ---------------- 我的消息（管理端消息中心） ---------------- */
+
+    /**
+     * 当前登录账号的消息：审批抄送等站内通知。
+     *
+     * <p>收件人按 {@code receiver_type=3（后台账号）} 存，所以只能用"当前账号"查，不能跨账号看。
+     */
+    @GetMapping("/mine")
+    public ApiResponse<PageResult<Map<String, Object>>> mine(
+            @RequestParam(required = false) Boolean unread,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            HttpServletRequest request) {
+        Long userId = RoleGuard.currentUserId(request);
+        int safePage = Math.max(page, 1);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        List<Map<String, Object>> list = repository
+                .list(Notification.RECEIVER_ADMIN, userId, unread, (safePage - 1) * safeSize, safeSize)
+                .stream().map(this::toView).toList();
+        long total = repository.count(Notification.RECEIVER_ADMIN, userId, unread);
+        return ApiResponse.ok(PageResult.of(total, safePage, safeSize, list));
+    }
+
+    @GetMapping("/mine/unread-count")
+    public ApiResponse<Map<String, Object>> mineUnreadCount(HttpServletRequest request) {
+        Long userId = RoleGuard.currentUserId(request);
+        return ApiResponse.ok(Map.of("unread", repository.unreadCount(Notification.RECEIVER_ADMIN, userId)));
+    }
+
+    @PostMapping("/mine/{id}/read")
+    public ApiResponse<Void> markMineRead(@PathVariable Long id, HttpServletRequest request) {
+        Long userId = RoleGuard.currentUserId(request);
+        repository.markRead(id, Notification.RECEIVER_ADMIN, userId, LocalDateTime.now());
+        return ApiResponse.ok();
+    }
+
+    @PostMapping("/mine/read-all")
+    public ApiResponse<Map<String, Object>> markAllMineRead(HttpServletRequest request) {
+        Long userId = RoleGuard.currentUserId(request);
+        int updated = repository.markAllRead(Notification.RECEIVER_ADMIN, userId, LocalDateTime.now());
+        return ApiResponse.ok(Map.of("updated", updated));
+    }
+
     private Map<String, Object> toView(Notification n) {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("id", n.id());
         view.put("receiverType", n.receiverType());
-        view.put("receiverTypeText", n.receiverType() == Notification.RECEIVER_EMPLOYEE ? "员工" : "访客");
+        view.put("receiverTypeText", switch (n.receiverType()) {
+            case Notification.RECEIVER_EMPLOYEE -> "员工";
+            case Notification.RECEIVER_ADMIN -> "后台账号";
+            default -> "访客";
+        });
         view.put("receiverId", n.receiverId());
         view.put("channel", n.channel());
         view.put("channelText", n.channel() == Notification.CHANNEL_INAPP ? "站内" : "短信");

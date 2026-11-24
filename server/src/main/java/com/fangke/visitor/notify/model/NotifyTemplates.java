@@ -20,6 +20,8 @@ public final class NotifyTemplates {
     public static final String APPOINTMENT_EXPIRED = "APPOINTMENT_EXPIRED";
     /** 员工：访客已到场。 */
     public static final String VISIT_CHECKIN = "VISIT_CHECKIN";
+    /** 后台账号：审批抄送（只读知会）。 */
+    public static final String APPROVAL_CC = "APPROVAL_CC";
 
     public record Content(String title, String content) {
     }
@@ -32,6 +34,14 @@ public final class NotifyTemplates {
         return new Content("新的访客审批",
                 String.format("%s 申请 %s 到访（%s），事由：%s。请及时审批。",
                         safe(visitorName), timeRange, appointmentNo, safe(purpose)));
+    }
+
+    /** 抄送：流程走到某节点（或提交时），只通知不阻断。 */
+    public static Content approvalCc(String visitorName, String appointmentNo,
+                                     String timeRange, String stage) {
+        return new Content("访客审批抄送",
+                String.format("%s 的来访（%s，%s）%s，抄送知会。",
+                        safe(visitorName), appointmentNo, timeRange, stage));
     }
 
     public static Content approvalPassed(String visitorName, String timeRange) {

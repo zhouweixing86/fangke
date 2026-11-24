@@ -80,7 +80,7 @@ public class Appointment {
         return switch (status) {
             case DRAFT -> "草稿";
             case PENDING_L1 -> "待审批";
-            case PENDING_L2 -> "待保安复核";
+            case PENDING_L2 -> "审批中（后续节点）";
             case APPROVED -> "已通过";
             case GRANTED -> "可通行";
             case CHECKED_IN -> "已签到";

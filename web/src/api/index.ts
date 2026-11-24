@@ -4,6 +4,9 @@ import type {
   AdminUserRow,
   AppointmentRow,
   ApprovalConfig,
+  ApprovalTemplateView,
+  RoleOption,
+  MyNotification,
   AuditOptions,
   AuditRow,
   BlacklistEnforceResult,
@@ -199,6 +202,31 @@ export const listEmployeeFaces = (id: number) =>
 export const getApprovalConfig = () => get<ApprovalConfig>('/admin/approval/config')
 export const updateApprovalConfig = (data: Record<string, unknown>) =>
   put<ApprovalConfig>('/admin/approval/config', data)
+
+/* ---------------- 审批模板（多级 + 抄送，V24） ---------------- */
+
+export const listApprovalTemplates = () =>
+  get<ApprovalTemplateView[]>('/admin/approval/template')
+export const approvalRoles = () => get<RoleOption[]>('/admin/approval/template/roles')
+export const createApprovalTemplate = (data: Record<string, unknown>) =>
+  post<ApprovalTemplateView>('/admin/approval/template', data)
+export const updateApprovalTemplate = (id: number, data: Record<string, unknown>) =>
+  put<ApprovalTemplateView>(`/admin/approval/template/${id}`, data)
+export const toggleApprovalTemplate = (id: number, enabled: boolean) =>
+  put<ApprovalTemplateView>(`/admin/approval/template/${id}/enabled`, { enabled })
+export const deleteApprovalTemplate = (id: number) =>
+  del<void>(`/admin/approval/template/${id}`)
+
+/* ---------------- 我的消息（管理端消息中心） ---------------- */
+
+export const listMyNotifications = (params: Record<string, unknown>) =>
+  get<PageResult<MyNotification>>('/admin/notification/mine', params)
+export const myUnreadCount = () =>
+  get<{ unread: number }>('/admin/notification/mine/unread-count')
+export const readMyNotification = (id: number) =>
+  post<void>(`/admin/notification/mine/${id}/read`)
+export const readAllMyNotifications = () =>
+  post<{ updated: number }>('/admin/notification/mine/read-all')
 
 /* ---------------- 预约 / 授权下发 ---------------- */
 

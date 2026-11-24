@@ -7,11 +7,16 @@ import com.fangke.visitor.appointment.repository.AppointmentRepository;
 import com.fangke.visitor.appointment.repository.VisitorRepository;
 import com.fangke.visitor.appointment.service.AppointmentGateService;
 import com.fangke.visitor.appointment.service.ApprovalStarter;
+import com.fangke.visitor.approval.model.ApprovalCc;
 import com.fangke.visitor.approval.model.ApprovalConfig;
+import com.fangke.visitor.approval.model.ApprovalNode;
 import com.fangke.visitor.approval.model.ApprovalTask;
+import com.fangke.visitor.approval.model.ApprovalTemplate;
 import com.fangke.visitor.approval.repository.ApprovalActionRepository;
 import com.fangke.visitor.approval.repository.ApprovalConfigRepository;
 import com.fangke.visitor.approval.repository.ApprovalTaskRepository;
+import com.fangke.visitor.approval.repository.ApprovalTemplateRepository;
+import com.fangke.visitor.admin.repository.AdminUserRepository;
 import com.fangke.visitor.common.BusinessException;
 import com.fangke.visitor.common.ErrorCode;
 import com.fangke.visitor.common.PageResult;
@@ -52,8 +57,9 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     private static final int ACTION_COUNTERSIGN = 4;
     private static final int ACTION_REMIND = 5;
     private static final int ACTION_SKIP = 6;
+    private static final int ACTION_CC = 7;
 
-    public record TodoView(long taskId, int level, String appointmentNo, String visitorName,
+    public record TodoView(long taskId, int level, String nodeName, String appointmentNo, String visitorName,
                            String idCardMask, String purpose, String startTime, String endTime) {
     }
 
@@ -69,7 +75,7 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                                  List<Long> appliedGateIds, List<Long> approvedGateIds) {
     }
 
-    public record DetailView(long taskId, int level, int status, String statusText,
+    public record DetailView(long taskId, int level, String nodeName, int status, String statusText,
                              String appointmentNo, int appointmentStatus, String appointmentStatusText,
                              String visitorName, String idCardMask, String visitorType, String purpose,
                              String visitPhoneMask, String startTime, String endTime,
@@ -78,7 +84,11 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                              /** 访客是否申请二维码开门（审批页据 this 决定要不要显示开关） */
                              boolean qrRequested,
                              /** 当前是否已同意二维码开门 */
-                             boolean qrApproved) {
+                             boolean qrApproved,
+                             /** 本节点是否允许调整门点（模板节点配置） */
+                             boolean allowEditGates,
+                             /** 本节点是否允许审批二维码 */
+                             boolean allowQr) {
     }
 
     public record PassResult(String appointmentNo, int status, String statusText,
@@ -86,30 +96,39 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     }
 
     private final ApprovalConfigRepository configRepository;
+    private final ApprovalTemplateRepository templateRepository;
     private final ApprovalTaskRepository taskRepository;
     private final ApprovalActionRepository actionRepository;
     private final AppointmentRepository appointmentRepository;
     private final VisitorRepository visitorRepository;
+    private final AdminUserRepository adminUserRepository;
     private final NotifyPort notifyPort;
+    private final CcPort ccPort;
     private final DispatchTrigger dispatchTrigger;
     private final AppointmentGateService appointmentGateService;
     private final DeviceQrConfigService qrConfigService;
 
     public ApprovalService(ApprovalConfigRepository configRepository,
+                           ApprovalTemplateRepository templateRepository,
                            ApprovalTaskRepository taskRepository,
                            ApprovalActionRepository actionRepository,
                            AppointmentRepository appointmentRepository,
                            VisitorRepository visitorRepository,
+                           AdminUserRepository adminUserRepository,
                            NotifyPort notifyPort,
+                           CcPort ccPort,
                            DispatchTrigger dispatchTrigger,
                            AppointmentGateService appointmentGateService,
                            DeviceQrConfigService qrConfigService) {
         this.configRepository = configRepository;
+        this.templateRepository = templateRepository;
         this.taskRepository = taskRepository;
         this.actionRepository = actionRepository;
         this.appointmentRepository = appointmentRepository;
         this.visitorRepository = visitorRepository;
+        this.adminUserRepository = adminUserRepository;
         this.notifyPort = notifyPort;
+        this.ccPort = ccPort;
         this.dispatchTrigger = dispatchTrigger;
         this.appointmentGateService = appointmentGateService;
         this.qrConfigService = qrConfigService;
@@ -118,24 +137,63 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     /* ---------------- 启动 / 取消 ---------------- */
 
     /**
-     * 创建审核任务：**单级**，指派给管理端角色（默认 GUARD，即登录管理端的保安/管理员）。
+     * 创建审批任务：按**启用的全局模板**建第 1 个节点的任务。
      *
-     * <p>2026-11-21 客户确认：员工不再登录审批，预约统一由管理端审核。
-     * 被访人（{@code visit_employee_id}）仅作为"拜访对象"记录，不再参与审批。
+     * <p>没有模板（或模板没配节点）时退回单级角色审批（用 {@code approval_config.l2_role}），
+     * 保证升级后即使没配流程也能正常走。
      */
     @Override
     @Transactional
     public void start(Appointment appointment) {
-        ApprovalConfig config = configRepository.loadGlobal();
-        String role = config.roleOrDefault();
-        long taskId = taskRepository.insert(ApprovalTask.roleTask(appointment.getId(), 1, role));
+        ApprovalTemplate template = templateRepository.findEnabledGlobal().orElse(null);
+        ApprovalNode first = template == null ? null : template.firstNode();
+        if (template == null || first == null) {
+            ApprovalConfig config = configRepository.loadGlobal();
+            String role = config.roleOrDefault();
+            long taskId = taskRepository.insert(ApprovalTask.roleTask(appointment.getId(), 1, role,
+                    null, null, "管理端审核"));
+            appointment.setStatus(Appointment.PENDING_L1);
+            appointment.setCurrentTaskId(taskId);
+            appointmentRepository.update(appointment);
+            log.warn("未配置审批模板，退回单级审批 appointment={} role={}",
+                    appointment.getAppointmentNo(), role);
+            return;
+        }
 
-        appointment.setStatus(Appointment.PENDING_L1);
-        appointment.setCurrentTaskId(taskId);
+        long firstTaskId = createNodeTasks(appointment, template, first);
+        appointment.setStatus(first.seq() <= 1 ? Appointment.PENDING_L1 : Appointment.PENDING_L2);
+        appointment.setCurrentTaskId(firstTaskId);
         appointmentRepository.update(appointment);
 
-        log.info("创建管理端审核任务 appointment={} task={} role={}",
-                appointment.getAppointmentNo(), taskId, role);
+        // 提交时抄送（只通知、不阻断）
+        for (ApprovalCc cc : template.submitCcs()) {
+            ccPort.ccToRole(cc.targetValue(), appointment.getId(), appointment.getAppointmentNo(),
+                    visitorNameOf(appointment), timeRangeOf(appointment), "提交时");
+        }
+        log.info("创建审批任务 appointment={} 模板={} 节点1={} 模式={}",
+                appointment.getAppointmentNo(), template.id(), first.nodeName(), first.modeText());
+    }
+
+    /** 按节点配置建任务；会签节点给该角色每个启用账号各建一条，返回第一条任务 id。 */
+    private long createNodeTasks(Appointment appointment, ApprovalTemplate template, ApprovalNode node) {
+        if (node.allMode()) {
+            List<Long> userIds = adminUserRepository.findActiveUserIdsByRole(node.assigneeRole());
+            if (!userIds.isEmpty()) {
+                long first = 0L;
+                for (Long userId : userIds) {
+                    long id = taskRepository.insert(ApprovalTask.adminUserTask(appointment.getId(),
+                            node.seq(), userId, node.assigneeRole(), template.id(), node.id(),
+                            node.nodeName()));
+                    if (first == 0L) {
+                        first = id;
+                    }
+                }
+                return first;
+            }
+            log.warn("会签节点 {} 下角色 {} 没有启用账号，降级为角色任务", node.nodeName(), node.assigneeRole());
+        }
+        return taskRepository.insert(ApprovalTask.roleTask(appointment.getId(), node.seq(),
+                node.assigneeRole(), template.id(), node.id(), node.nodeName()));
     }
 
     @Override
@@ -157,39 +215,69 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     }
 
     /**
-     * 管理端审核通过（单级审批）。
+     * 管理端审核通过（多级审批）。
      *
-     * @param qrApproved 是否同意二维码开门；{@code null} 表示不改
+     * <p>本节点办结后：会签未齐 → 等待；有下一节点 → 建下一节点任务；最后一节点 → 终审下发。
+     *
+     * @param qrApproved 是否同意二维码开门；{@code null} 表示不改（节点不允许时强制不改）
      */
     @Transactional
     public PassResult guardPass(Long taskId, Long operatorUserId, List<String> roles, String comment,
                                 List<Long> approvedGateIds, Boolean qrApproved) {
-        ApprovalTask task = requirePendingRole(taskId, roles);
+        ApprovalTask task = requirePendingAdminTask(taskId, operatorUserId, roles);
         Appointment appointment = loadAppointment(task.appointmentId());
-        applyQrDecision(appointment, qrApproved, operatorUserId);
+        ApprovalNode node = nodeOf(task);
 
-        List<Long> approved = approvedGateIds == null
-                ? null : appointmentGateService.saveApproved(appointment, approvedGateIds);
+        // 节点可以限制"能否改门点 / 能否批二维码"，越权传值直接忽略，避免被前端绕过
+        Boolean effectiveQr = node == null || node.allowQr() ? qrApproved : null;
+        List<Long> effectiveGates = node == null || node.allowEditGates() ? approvedGateIds : null;
+        applyQrDecision(appointment, effectiveQr, operatorUserId);
+
+        List<Long> approved = effectiveGates == null
+                ? null : appointmentGateService.saveApproved(appointment, effectiveGates);
         actionRepository.insert(taskId, appointment.getId(), operatorUserId, ApprovalTask.TYPE_ROLE,
                 ACTION_PASS, null, trim(comment), gateSnapshot(approved));
         taskRepository.updateStatus(taskId, ApprovalTask.STATUS_PASSED);
 
-        if (taskRepository.findPendingByAppointmentAndLevel(appointment.getId(), task.level()).isEmpty()) {
+        List<ApprovalTask> pending = taskRepository.findPendingByAppointment(appointment.getId());
+        boolean nodeDone = pending.stream().noneMatch(t -> sameNode(t, task));
+        if (!nodeDone) {
+            log.info("会签节点还有待处理 appointment={} node={} 剩余={}",
+                    appointment.getAppointmentNo(), task.nodeName(), pending.size());
+            return new PassResult(appointment.getAppointmentNo(), appointment.getStatus(),
+                    Appointment.statusText(appointment.getStatus()), true, false);
+        }
+
+        ApprovalTemplate template = templateOf(task);
+        if (node != null && template != null) {
+            for (ApprovalCc cc : template.ccsOfNode(node.id())) {
+                ccPort.ccToRole(cc.targetValue(), appointment.getId(), appointment.getAppointmentNo(),
+                        visitorNameOf(appointment), timeRangeOf(appointment),
+                        "节点『" + node.nodeName() + "』已通过");
+            }
+        }
+
+        ApprovalNode next = template == null ? null : template.nodeAfter(task.level());
+        if (next == null) {
             return finalizeApprove(appointment, false);
         }
-        log.info("还有同级复核未完成 appointment={} level={}",
-                appointment.getAppointmentNo(), task.level());
+        long nextTaskId = createNodeTasks(appointment, template, next);
+        appointment.setStatus(Appointment.PENDING_L2);
+        appointment.setCurrentTaskId(nextTaskId);
+        appointmentRepository.update(appointment);
+        log.info("进入下一审批节点 appointment={} 节点={}({})",
+                appointment.getAppointmentNo(), next.seq(), next.nodeName());
         return new PassResult(appointment.getAppointmentNo(), appointment.getStatus(),
-                Appointment.statusText(appointment.getStatus()), false, false);
+                Appointment.statusText(appointment.getStatus()), true, false);
     }
 
-    /** 二级驳回（门卫拒绝放行）：整单驳回并记录原因。 */
+    /** 驳回（任一节点）：整单驳回并记录原因，其余待办全部失效。 */
     @Transactional
     public void guardReject(Long taskId, Long operatorUserId, List<String> roles, String comment) {
         if (comment == null || comment.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_MISSING, "拒绝放行必须填写原因");
         }
-        ApprovalTask task = requirePendingRole(taskId, roles);
+        ApprovalTask task = requirePendingAdminTask(taskId, operatorUserId, roles);
         Appointment appointment = loadAppointment(task.appointmentId());
 
         actionRepository.insert(taskId, appointment.getId(), operatorUserId, ApprovalTask.TYPE_ROLE,
@@ -203,8 +291,8 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         appointmentRepository.update(appointment);
 
         notifyPort.approvalResult(appointment.getId(), false, comment.trim());
-        log.info("门卫拒绝放行 appointment={} task={} operator={} 原因={}",
-                appointment.getAppointmentNo(), taskId, operatorUserId, comment.trim());
+        log.info("审批驳回 appointment={} task={} node={} operator={} 原因={}",
+                appointment.getAppointmentNo(), taskId, task.nodeName(), operatorUserId, comment.trim());
     }
 
     /** 催办：同一任务按配置间隔与次数上限限流。 */
@@ -246,35 +334,40 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         return remind(task.id(), operatorId);
     }
 
-    /* ---------------- 保安复核（原二级，现为唯一审核入口） ---------------- */
+    /* ---------------- 管理端审批（多级） ---------------- */
 
-    public long guardTodoCount(List<String> roles) {
-        String role = guardRole(roles);
-        return role == null ? 0 : taskRepository.countPendingByRole(role);
+    public long guardTodoCount(List<String> roles, Long adminUserId) {
+        return taskRepository.countPendingByRoles(roles, adminUserId);
     }
 
-    public PageResult<TodoView> guardTodoList(List<String> roles, int page, int size) {
+    public PageResult<TodoView> guardTodoList(List<String> roles, Long adminUserId, int page, int size) {
         int safePage = Math.max(page, 1);
         int safeSize = Math.min(Math.max(size, 1), 100);
-        String role = guardRole(roles);
-        if (role == null) {
-            return PageResult.of(0, safePage, safeSize, List.of());
-        }
-        List<ApprovalTaskRepository.TodoRow> rows = taskRepository.findTodoByRole(role,
+        List<ApprovalTaskRepository.TodoRow> rows = taskRepository.findTodoByRoles(roles, adminUserId,
                 (safePage - 1) * safeSize, safeSize);
         List<TodoView> list = rows.stream()
-                .map(r -> new TodoView(r.taskId(), r.level(), r.appointmentNo(), r.visitorName(),
+                .map(r -> new TodoView(r.taskId(), r.level(), r.nodeName(), r.appointmentNo(), r.visitorName(),
                         r.idCardMask(), r.purpose(),
                         DATETIME.format(r.startTime()), DATETIME.format(r.endTime())))
                 .toList();
-        return PageResult.of(taskRepository.countPendingByRole(role), safePage, safeSize, list);
+        return PageResult.of(taskRepository.countPendingByRoles(roles, adminUserId), safePage, safeSize, list);
     }
 
-    public DetailView guardDetail(Long taskId, List<String> roles) {
+    public DetailView guardDetail(Long taskId, List<String> roles, Long adminUserId) {
         ApprovalTask task = requireExists(taskId);
-        boolean canAct = task.pending() && task.roleTask()
-                && (roles.contains("ADMIN") || roles.contains(task.assigneeRole()));
+        boolean canAct = task.pending() && canAct(task, roles, adminUserId);
         return buildDetail(task, canAct);
+    }
+
+    private boolean canAct(ApprovalTask task, List<String> roles, Long adminUserId) {
+        if (task.adminUserTask()) {
+            return adminUserId != null && adminUserId.equals(task.assigneeId());
+        }
+        if (!task.roleTask()) {
+            return false;
+        }
+        List<String> safeRoles = roles == null ? List.of() : roles;
+        return safeRoles.contains("ADMIN") || safeRoles.contains(task.assigneeRole());
     }
 
     private DetailView buildDetail(ApprovalTask task, boolean canAct) {
@@ -293,7 +386,10 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         GateAssignment gates = new GateAssignment(appointment.getGateScope(), selectable,
                 appointmentGateService.appliedGateIds(appointment),
                 appointmentGateService.approvedGateIds(appointment));
-        return new DetailView(task.id(), task.level(), task.status(), taskStatusText(task.status()),
+        ApprovalNode node = nodeOf(task);
+        String nodeName = task.nodeName() == null || task.nodeName().isBlank()
+                ? ("第 " + task.level() + " 级审核") : task.nodeName();
+        return new DetailView(task.id(), task.level(), nodeName, task.status(), taskStatusText(task.status()),
                 appointment.getAppointmentNo(), appointment.getStatus(),
                 Appointment.statusText(appointment.getStatus()),
                 visitor == null ? "" : visitor.getName(),
@@ -301,7 +397,8 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                 appointment.getVisitorType(), appointment.getPurpose(), appointment.getVisitPhoneMask(),
                 DATETIME.format(appointment.getStartTime()), DATETIME.format(appointment.getEndTime()),
                 gates, canAct, actions,
-                appointment.isQrRequested(), appointment.isQrApproved());
+                appointment.isQrRequested(), appointment.isQrApproved(),
+                node == null || node.allowEditGates(), node == null || node.allowQr());
     }
 
     private ApprovalTask requireExists(Long taskId) {
@@ -324,7 +421,7 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
 
     public List<TodoView> todoForAppointment(Long appointmentId) {
         return taskRepository.findPendingByAppointment(appointmentId).stream()
-                .map(t -> new TodoView(t.id(), t.level(),
+                .map(t -> new TodoView(t.id(), t.level(), t.nodeName() == null ? "" : t.nodeName(),
                         appointmentRepository.findById(t.appointmentId())
                                 .map(Appointment::getAppointmentNo).orElse(""),
                         "", "", "", "", ""))
@@ -407,48 +504,53 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         return sb.toString();
     }
 
-    /**
-     * 取当前账号可处理的二级复核角色：角色匹配或管理员都行（管理员兜底，避免没人能批）。
-     *
-     * @return null 表示该账号没有复核权限
-     */
-    private String guardRole(List<String> roles) {
-        String role = configRepository.loadGlobal().roleOrDefault();
-        if (roles.contains(role) || roles.contains("ADMIN")) {
-            return role;
-        }
-        return null;
-    }
-
-    private ApprovalTask requirePendingRole(Long taskId, List<String> roles) {
+    /** 待处理的**后台审批任务**校验：角色任务按角色，会签任务按账号。 */
+    private ApprovalTask requirePendingAdminTask(Long taskId, Long operatorUserId, List<String> roles) {
         ApprovalTask task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_INVALID, "审批任务不存在：" + taskId));
         if (!task.pending()) {
             throw new BusinessException(ErrorCode.TASK_ALREADY_HANDLED, "该任务已处理");
         }
-        if (!task.roleTask()) {
-            throw new BusinessException(ErrorCode.NOT_TASK_OWNER, "该任务不是保安复核任务");
+        if (!task.adminApprovalTask()) {
+            throw new BusinessException(ErrorCode.NOT_TASK_OWNER, "该任务不是后台审批任务");
         }
-        if (roles.contains("ADMIN") || roles.contains(task.assigneeRole())) {
+        if (canAct(task, roles, operatorUserId)) {
             return task;
         }
         throw new BusinessException(ErrorCode.NOT_TASK_OWNER, "不是该任务的审批人");
     }
 
-    private ApprovalTask requirePendingOwned(Long taskId, Long operatorId) {
-        ApprovalTask task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_INVALID, "审批任务不存在：" + taskId));
-        if (!task.pending()) {
-            throw new BusinessException(ErrorCode.TASK_ALREADY_HANDLED, "该任务已被处理");
+    /** 任务对应的模板节点（历史任务没有 node_id，返回 null 表示按默认口径放开）。 */
+    private ApprovalNode nodeOf(ApprovalTask task) {
+        return task.nodeId() == null ? null : templateRepository.findNode(task.nodeId()).orElse(null);
+    }
+
+    /** 任务所属模板：优先按 task.template_id，历史任务回落到当前启用模板。 */
+    private ApprovalTemplate templateOf(ApprovalTask task) {
+        if (task.templateId() != null) {
+            ApprovalTemplate byId = templateRepository.findById(task.templateId()).orElse(null);
+            if (byId != null) {
+                return byId;
+            }
         }
-        if (task.roleTask()) {
-            // 二级是保安复核任务，必须走 /api/guard/approval/** 处理
-            throw new BusinessException(ErrorCode.NOT_TASK_OWNER, "该任务需由保安在门卫工作台复核");
+        return templateRepository.findEnabledGlobal().orElse(null);
+    }
+
+    /** 是否同一节点：优先比 node_id，历史任务按 level 比。 */
+    private boolean sameNode(ApprovalTask a, ApprovalTask b) {
+        if (a.nodeId() != null || b.nodeId() != null) {
+            return a.nodeId() != null && a.nodeId().equals(b.nodeId());
         }
-        if (operatorId == null || !task.assigneeId().equals(operatorId)) {
-            throw new BusinessException(ErrorCode.NOT_TASK_OWNER, "您不是该任务的审批人");
-        }
-        return task;
+        return a.level() == b.level();
+    }
+
+    private String visitorNameOf(Appointment appointment) {
+        return visitorRepository.findById(appointment.getVisitorId())
+                .map(Visitor::getName).orElse("访客");
+    }
+
+    private String timeRangeOf(Appointment appointment) {
+        return DATETIME.format(appointment.getStartTime()) + " ~ " + DATETIME.format(appointment.getEndTime());
     }
 
     private Appointment loadAppointment(Long appointmentId) {
@@ -465,6 +567,7 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
             case ACTION_COUNTERSIGN -> "加签";
             case ACTION_REMIND -> "催办";
             case ACTION_SKIP -> "系统跳过";
+            case ACTION_CC -> "抄送";
             default -> "未知";
         };
     }

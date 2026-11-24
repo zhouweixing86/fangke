@@ -24,6 +24,8 @@ public record Notification(Long id,
 
     public static final int RECEIVER_EMPLOYEE = 1;
     public static final int RECEIVER_VISITOR = 2;
+    /** 后台账号（管理端消息中心：审批抄送等）。 */
+    public static final int RECEIVER_ADMIN = 3;
 
     public static final int CHANNEL_INAPP = 1;
     public static final int CHANNEL_SMS = 2;

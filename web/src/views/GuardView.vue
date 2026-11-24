@@ -92,6 +92,11 @@
             style="margin-bottom: 12px" />
           <el-table v-loading="reviewLoading" :data="reviewList" border stripe>
             <el-table-column prop="appointmentNo" label="预约单号" width="170" />
+            <el-table-column label="当前节点" width="120">
+              <template #default="{ row }">
+                <el-tag size="small" effect="plain">{{ row.nodeName || `第 ${row.level} 级` }}</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column prop="visitorName" label="访客" width="120" />
             <el-table-column prop="idCardMask" label="证件号" width="180" />
             <el-table-column prop="purpose" label="事由" min-width="140" />
@@ -152,18 +157,24 @@
         </el-descriptions>
 
         <div class="text-muted" style="margin: 14px 0 6px">
+          <el-tag size="small" type="warning" effect="plain" style="margin-right: 6px">
+            {{ reviewDetail.nodeName || `第 ${reviewDetail.level} 级` }}
+          </el-tag>
           开放门点（被访人已确认：{{ appliedText }}）
         </div>
-        <el-checkbox-group v-model="reviewGateIds">
+        <el-checkbox-group v-if="reviewDetail.allowEditGates !== false" v-model="reviewGateIds">
           <el-checkbox v-for="g in reviewDetail.gates?.selectable || []" :key="g.id" :value="g.id">
             {{ g.name }}
           </el-checkbox>
         </el-checkbox-group>
+        <div v-else class="text-muted" style="font-size: 12px">
+          本节点不允许调整门点，沿用上一级的批准结果
+        </div>
 
         <el-input v-model="reviewComment" type="textarea" :rows="2" style="margin-top: 12px"
           placeholder="通过可不填；拒绝放行必须填原因（如：人证不符）" />
 
-        <div v-if="reviewDetail.qrRequested" class="qr-review">
+        <div v-if="reviewDetail.qrRequested && reviewDetail.allowQr !== false" class="qr-review">
           <div class="text-muted" style="margin-bottom: 4px">
             访客申请用二维码进闸（60 秒动态码）
           </div>

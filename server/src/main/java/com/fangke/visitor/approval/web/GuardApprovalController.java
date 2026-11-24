@@ -42,20 +42,23 @@ public class GuardApprovalController {
             @RequestParam(defaultValue = "20") int size,
             HttpServletRequest request) {
         RoleGuard.requireGuardOrAdmin(request);
-        return ApiResponse.ok(approvalService.guardTodoList(RoleGuard.roles(request), page, size));
+        return ApiResponse.ok(approvalService.guardTodoList(RoleGuard.roles(request),
+                RoleGuard.currentUserId(request), page, size));
     }
 
     @GetMapping("/count")
     public ApiResponse<Map<String, Object>> count(HttpServletRequest request) {
         RoleGuard.requireGuardOrAdmin(request);
-        return ApiResponse.ok(Map.of("pending", approvalService.guardTodoCount(RoleGuard.roles(request))));
+        return ApiResponse.ok(Map.of("pending", approvalService.guardTodoCount(
+                RoleGuard.roles(request), RoleGuard.currentUserId(request))));
     }
 
     @GetMapping("/{taskId}")
     public ApiResponse<ApprovalService.DetailView> detail(@PathVariable Long taskId,
                                                           HttpServletRequest request) {
         RoleGuard.requireGuardOrAdmin(request);
-        return ApiResponse.ok(approvalService.guardDetail(taskId, RoleGuard.roles(request)));
+        return ApiResponse.ok(approvalService.guardDetail(taskId, RoleGuard.roles(request),
+                RoleGuard.currentUserId(request)));
     }
 
     /** 复核通过：可选调整开放门点（默认沿用被访人确认的集合）。 */

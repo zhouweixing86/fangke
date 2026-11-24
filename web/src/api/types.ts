@@ -131,6 +131,46 @@ export interface ApprovalConfig {
   reminderMaxPerTask: number
 }
 
+/** 审批节点（管理端配置多级审批） */
+export interface ApprovalNodeView {
+  id: number
+  seq: number
+  nodeName: string
+  assigneeRole: string
+  approveMode: string
+  approveModeText: string
+  allowEditGates: boolean
+  allowQr: boolean
+  ccRoles: string[]
+}
+
+/** 审批模板：节点串行 + 抄送 */
+export interface ApprovalTemplateView {
+  id: number
+  templateName: string
+  scope: string
+  enabled: boolean
+  remark: string
+  nodes: ApprovalNodeView[]
+  submitCcRoles: string[]
+}
+
+export interface RoleOption {
+  roleCode: string
+  roleName: string
+}
+
+/** 管理端消息中心（审批抄送等） */
+export interface MyNotification {
+  id: number
+  title: string
+  content: string
+  templateCode: string
+  bizNo: string
+  read: boolean
+  createdAt: string
+}
+
 export interface AppointmentRow {
   id: number
   appointmentNo: string
@@ -279,6 +319,8 @@ export interface GuardDashboard {
 export interface ReviewRow {
   taskId: number
   level: number
+  /** 节点名称（多级审批，V24） */
+  nodeName: string
   appointmentNo: string
   visitorName: string
   idCardMask: string
@@ -307,6 +349,8 @@ export interface ReviewAction {
 export interface GuardReviewDetail {
   taskId: number
   level: number
+  /** 节点名称（多级审批，V24） */
+  nodeName: string
   status: number
   statusText: string
   appointmentNo: string
@@ -331,6 +375,10 @@ export interface GuardReviewDetail {
   qrRequested?: boolean
   /** 当前是否已同意二维码开门 */
   qrApproved?: boolean
+  /** 本节点是否允许调整开放门点 */
+  allowEditGates?: boolean
+  /** 本节点是否允许审批二维码 */
+  allowQr?: boolean
 }
 
 export interface OnsiteRow {

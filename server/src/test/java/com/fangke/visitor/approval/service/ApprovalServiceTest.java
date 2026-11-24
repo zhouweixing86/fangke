@@ -7,11 +7,16 @@ import com.fangke.visitor.appointment.repository.AppointmentRepository;
 import com.fangke.visitor.appointment.repository.InMemoryAppointmentGateRepository;
 import com.fangke.visitor.appointment.repository.VisitorRepository;
 import com.fangke.visitor.appointment.service.AppointmentGateService;
+import com.fangke.visitor.approval.model.ApprovalCc;
 import com.fangke.visitor.approval.model.ApprovalConfig;
+import com.fangke.visitor.approval.model.ApprovalNode;
 import com.fangke.visitor.approval.model.ApprovalTask;
+import com.fangke.visitor.approval.model.ApprovalTemplate;
 import com.fangke.visitor.approval.repository.ApprovalActionRepository;
 import com.fangke.visitor.approval.repository.ApprovalConfigRepository;
 import com.fangke.visitor.approval.repository.ApprovalTaskRepository;
+import com.fangke.visitor.approval.repository.ApprovalTemplateRepository;
+import com.fangke.visitor.admin.repository.AdminUserRepository;
 import com.fangke.visitor.common.BusinessException;
 import com.fangke.visitor.common.ErrorCode;
 import com.fangke.visitor.common.PageResult;
@@ -56,15 +61,74 @@ class ApprovalServiceTest {
         }
     }
 
-    static class FakeTaskRepo implements ApprovalTaskRepository {
-        final Map<Long, ApprovalTask> store = new LinkedHashMap<>();
+    /** 模板替身：默认没有模板（走兜底单级），用例里按需赋值。 */
+    static class FakeTemplateRepo implements ApprovalTemplateRepository {
+        ApprovalTemplate template;
+
+        @Override
+        public List<ApprovalTemplate> list() {
+            return template == null ? List.of() : List.of(template);
+        }
+
+        @Override
+        public Optional<ApprovalTemplate> findById(Long id) {
+            return template != null && template.id().equals(id) ? Optional.of(template) : Optional.empty();
+        }
+
+        @Override
+        public Optional<ApprovalTemplate> findEnabledGlobal() {
+            return template != null && template.enabled() ? Optional.of(template) : Optional.empty();
+        }
+
+        @Override
+        public Optional<ApprovalNode> findNode(Long nodeId) {
+            if (template == null || nodeId == null) {
+                return Optional.empty();
+            }
+            return template.nodes().stream().filter(n -> nodeId.equals(n.id())).findFirst();
+        }
+
+        @Override
+        public long create(String templateName, String scope, boolean enabled, String remark) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void updateMeta(Long id, String templateName, boolean enabled, String remark) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void replaceNodes(Long templateId, List<ApprovalNode> nodes) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Long nodeIdOf(Long templateId, int seq) {
+            return template == null ? null : template.nodes().stream()
+                    .filter(n -> n.seq() == seq).map(ApprovalNode::id).findFirst().orElse(null);
+        }
+
+        @Override
+        public void replaceCcs(Long templateId, List<ApprovalCc> ccs) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void delete(Long id) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    static class FakeTaskRepo implements ApprovalTaskRepository {        final Map<Long, ApprovalTask> store = new LinkedHashMap<>();
         final AtomicLong seq = new AtomicLong();
 
         @Override
         public long insert(ApprovalTask t) {
             long id = seq.incrementAndGet();
-            store.put(id, new ApprovalTask(id, t.appointmentId(), t.level(), t.assigneeId(), t.status(),
-                    0, null, null, LocalDateTime.now(), t.assigneeType(), t.assigneeRole()));
+            store.put(id, new ApprovalTask(id, t.appointmentId(), t.templateId(), t.nodeId(), t.nodeName(),
+                    t.level(), t.assigneeId(), t.status(), 0, null, null, LocalDateTime.now(),
+                    t.assigneeType(), t.assigneeRole()));
             return id;
         }
 
@@ -94,9 +158,12 @@ class ApprovalServiceTest {
         }
 
         @Override
-        public long countPendingByRole(String role) {
+        public long countPendingByRoles(List<String> roles, Long adminUserId) {
             return store.values().stream()
-                    .filter(t -> role.equals(t.assigneeRole()) && t.status() == 1 && t.roleTask())
+                    .filter(t -> t.status() == 1)
+                    .filter(t -> t.adminUserTask()
+                            ? t.assigneeId().equals(adminUserId)
+                            : roles != null && roles.contains(t.assigneeRole()))
                     .count();
         }
 
@@ -106,7 +173,7 @@ class ApprovalServiceTest {
         }
 
         @Override
-        public List<TodoRow> findTodoByRole(String role, int offset, int limit) {
+        public List<TodoRow> findTodoByRoles(List<String> roles, Long adminUserId, int offset, int limit) {
             return List.of();
         }
 
@@ -124,9 +191,9 @@ class ApprovalServiceTest {
         @Override
         public void markReminder(Long id) {
             ApprovalTask t = store.get(id);
-            store.put(id, new ApprovalTask(t.id(), t.appointmentId(), t.level(), t.assigneeId(), t.status(),
-                    t.reminderCount() + 1, LocalDateTime.now(), t.finishedAt(), t.createdAt(),
-                    t.assigneeType(), t.assigneeRole()));
+            store.put(id, new ApprovalTask(t.id(), t.appointmentId(), t.templateId(), t.nodeId(), t.nodeName(),
+                    t.level(), t.assigneeId(), t.status(), t.reminderCount() + 1, LocalDateTime.now(),
+                    t.finishedAt(), t.createdAt(), t.assigneeType(), t.assigneeRole()));
         }
 
         @Override
@@ -292,20 +359,29 @@ class ApprovalServiceTest {
     /* ---------------- 固定数据 ---------------- */
 
     private FakeConfigRepo configRepo;
+    private FakeTemplateRepo templateRepo;
     private FakeTaskRepo taskRepo;
     private FakeActionRepo actionRepo;
     private FakeAppointmentRepo appointmentRepo;
+    private AdminUserRepository adminUserRepo;
     private final List<String> notifications = new ArrayList<>();
     private final List<String> dispatches = new ArrayList<>();
+    private final List<String> ccs = new ArrayList<>();
     private ApprovalService service;
     private Appointment appointment;
 
     @BeforeEach
     void setUp() {
         configRepo = new FakeConfigRepo();
+        templateRepo = new FakeTemplateRepo();
         taskRepo = new FakeTaskRepo();
         actionRepo = new FakeActionRepo();
         appointmentRepo = new FakeAppointmentRepo();
+        adminUserRepo = org.mockito.Mockito.mock(AdminUserRepository.class);
+        org.mockito.Mockito.when(adminUserRepo.findActiveUserIdsByRole("GUARD"))
+                .thenReturn(List.of(101L, 102L));
+        CcPort ccPort = (role, appointmentId, appointmentNo, visitorName, timeRange, stage) ->
+                ccs.add(role + "@" + stage);
 
         NotifyPort notify = new NotifyPort() {
             @Override
@@ -337,8 +413,8 @@ class ApprovalServiceTest {
             }
         };
 
-        service = new ApprovalService(configRepo, taskRepo, actionRepo, appointmentRepo,
-                new FakeVisitorRepo(), notify, dispatch, gateSelection, qrConfig);
+        service = new ApprovalService(configRepo, templateRepo, taskRepo, actionRepo, appointmentRepo,
+                new FakeVisitorRepo(), adminUserRepo, notify, ccPort, dispatch, gateSelection, qrConfig);
 
         appointment = new Appointment();
         appointment.setAppointmentNo("A2026111600001");
@@ -453,5 +529,95 @@ class ApprovalServiceTest {
         assertEquals("GUARD", saved.roleOrDefault());
         assertEquals(15, saved.reminderIntervalMin());
         assertEquals(3, saved.reminderMaxPerTask());
+    }
+
+    /* ---------------- 多级审批 / 会签 / 抄送（V24） ---------------- */
+
+    private ApprovalNode node(long id, long templateId, int seq, String name, String role,
+                              String mode, boolean allowGates, boolean allowQr) {
+        return new ApprovalNode(id, templateId, seq, name, ApprovalNode.TYPE_ROLE, role, mode,
+                allowGates, allowQr);
+    }
+
+    @Test
+    @DisplayName("多级审批：一级通过进入二级，二级通过才下发；末级节点办结后抄送")
+    void multiLevelFlow() {
+        ApprovalNode first = node(11L, 9L, 1, "保安审核", "GUARD", "SINGLE", true, true);
+        ApprovalNode second = node(12L, 9L, 2, "行政复核", "ADMIN", "SINGLE", false, false);
+        templateRepo.template = new ApprovalTemplate(9L, "默认审批流程", "GLOBAL", true, null,
+                List.of(first, second), List.of(ApprovalCc.toRole(9L, 12L, "ADMIN")));
+
+        service.start(appointment);
+        assertTrue(ccs.isEmpty(), "提交时没配抄送就不发");
+        ApprovalTask task1 = taskRepo.store.get(onlyTaskId());
+        assertEquals("保安审核", task1.nodeName());
+
+        ApprovalService.PassResult r1 = service.guardPass(task1.id(), 99L, List.of("GUARD"), "ok", null);
+        assertFalse(r1.dispatchStarted());
+        assertEquals(Appointment.PENDING_L2, appointment.getStatus());
+        assertTrue(dispatches.isEmpty(), "一级通过不能直接下发");
+
+        List<ApprovalTask> pending = taskRepo.findPendingByAppointment(appointment.getId());
+        assertEquals(1, pending.size());
+        ApprovalTask task2 = pending.get(0);
+        assertEquals("行政复核", task2.nodeName());
+        assertEquals("ADMIN", task2.assigneeRole());
+
+        ApprovalService.PassResult r2 = service.guardPass(task2.id(), 99L, List.of("ADMIN"), "ok", null);
+        assertTrue(r2.dispatchStarted());
+        assertEquals(Appointment.APPROVED, appointment.getStatus());
+        assertTrue(dispatches.contains("A2026111600001"), "末级通过才下发");
+        assertTrue(ccs.stream().anyMatch(s -> s.contains("行政复核")), "节点办结后按配置抄送 ADMIN");
+    }
+
+    @Test
+    @DisplayName("会签节点：每个账号一条任务，全部通过才进入下一节点")
+    void allModeNeedsEveryApprover() {
+        ApprovalNode first = node(21L, 10L, 1, "会签审核", "GUARD", "ALL", true, true);
+        ApprovalNode second = node(22L, 10L, 2, "终审", "ADMIN", "SINGLE", true, true);
+        templateRepo.template = new ApprovalTemplate(10L, "会签流程", "GLOBAL", true, null,
+                List.of(first, second), List.of());
+
+        service.start(appointment);
+        List<ApprovalTask> pending = taskRepo.findPendingByAppointment(appointment.getId());
+        assertEquals(2, pending.size(), "GUARD 下两个账号各一条");
+        assertEquals(ApprovalTask.TYPE_ADMIN_USER, pending.get(0).assigneeType());
+
+        service.guardPass(pending.get(0).id(), 101L, List.of("GUARD"), "ok", null);
+        List<ApprovalTask> afterFirst = taskRepo.findPendingByAppointment(appointment.getId());
+        assertEquals(1, afterFirst.size(), "还差一个人，不能进下一节点");
+        assertEquals("会签审核", afterFirst.get(0).nodeName());
+
+        service.guardPass(pending.get(1).id(), 102L, List.of("GUARD"), "ok", null);
+        ApprovalTask next = taskRepo.findPendingByAppointment(appointment.getId()).get(0);
+        assertEquals("终审", next.nodeName());
+    }
+
+    @Test
+    @DisplayName("提交时抄送：流程启动就通知抄送角色")
+    void submitCcNotified() {
+        ApprovalNode first = node(31L, 11L, 1, "保安审核", "GUARD", "SINGLE", true, true);
+        templateRepo.template = new ApprovalTemplate(11L, "抄送流程", "GLOBAL", true, null,
+                List.of(first), List.of(ApprovalCc.toRole(11L, null, "ADMIN")));
+
+        service.start(appointment);
+
+        assertEquals(1, ccs.size());
+        assertTrue(ccs.get(0).startsWith("ADMIN@"), "抄送对象是 ADMIN 角色");
+    }
+
+    @Test
+    @DisplayName("节点限制：不允许批二维码的节点，即使传了 qrApproved 也不生效")
+    void nodeRestrictionIgnoresQr() {
+        ApprovalNode first = node(41L, 12L, 1, "只读审核", "GUARD", "SINGLE", true, false);
+        templateRepo.template = new ApprovalTemplate(12L, "受限流程", "GLOBAL", true, null,
+                List.of(first), List.of());
+        appointment.setQrRequested(true);
+
+        service.start(appointment);
+        service.guardPass(onlyTaskId(), 99L, List.of("GUARD"), "ok", null, true);
+
+        assertFalse(appointment.isQrApproved(), "节点不允许批二维码时不能写入同意");
+        assertTrue(dispatches.contains("A2026111600001"));
     }
 }

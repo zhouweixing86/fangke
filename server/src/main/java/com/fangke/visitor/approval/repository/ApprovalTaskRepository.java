@@ -12,6 +12,7 @@ public interface ApprovalTaskRepository {
     record TodoRow(
             Long taskId,
             int level,
+            String nodeName,
             Long appointmentId,
             String appointmentNo,
             String visitorName,
@@ -32,13 +33,19 @@ public interface ApprovalTaskRepository {
 
     long countPending(Long assigneeId);
 
-    /** 角色任务待办数（二级保安复核，C-65）。 */
-    long countPendingByRole(String role);
+    /**
+     * 后台待办数：**角色任务**（当前账号拥有的任一角色）+ **账号任务**（会签节点指派给本人）。
+     *
+     * @param adminUserId 当前后台账号 id；为 null 时只统计角色任务
+     */
+    long countPendingByRoles(List<String> roles, Long adminUserId);
 
     List<TodoRow> findTodo(Long assigneeId, int offset, int limit);
 
-    /** 角色任务待办列表：该角色的任一账号都能看到同一批待复核。 */
-    List<TodoRow> findTodoByRole(String role, int offset, int limit);
+    /**
+     * 后台待办列表：角色任务（该角色任一账号都能看到）+ 指派给本人的账号任务。
+     */
+    List<TodoRow> findTodoByRoles(List<String> roles, Long adminUserId, int offset, int limit);
 
     void updateStatus(Long id, int status);
 

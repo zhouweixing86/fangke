@@ -27,6 +27,9 @@
     <view class="chips">
       <view class="chip" :class="{ active: tab === 'onsite' }" @click="tab = 'onsite'">在访人员</view>
       <view class="chip" :class="{ active: tab === 'pending' }" @click="tab = 'pending'">待审核</view>
+      <view class="chip" :class="{ active: tab === 'cc' }" @click="openCc">
+        抄送<text v-if="ccUnread > 0">（{{ ccUnread }}）</text>
+      </view>
     </view>
 
     <view v-if="tab === 'onsite'">
@@ -45,12 +48,12 @@
       </view>
     </view>
 
-    <view v-else>
+    <view v-else-if="tab === 'pending'">
       <view v-if="!reviewRows.length" class="empty">没有待审核的预约</view>
       <view v-for="row in reviewRows" :key="row.taskId" class="card">
         <view class="card-title">
           <text>{{ row.visitorName }}</text>
-          <text class="tag tag--warn">待审核</text>
+          <text class="tag tag--warn">{{ row.nodeName || '待审核' }}</text>
         </view>
         <view class="line">{{ row.purpose || '事由未填' }} · {{ row.idCardMask }}</view>
         <view class="line">{{ row.startTime }} ~ {{ row.endTime }}</view>
@@ -61,16 +64,32 @@
       </view>
     </view>
 
+    <view v-else>
+      <view v-if="ccUnread > 0" class="quick">
+        <text class="quick-item" @click="markAllCc">全部已读</text>
+      </view>
+      <view v-if="!ccList.length" class="empty">暂无抄送消息</view>
+      <view v-for="msg in ccList" :key="msg.id" class="card" @click="openCcMessage(msg)">
+        <view class="card-title">
+          <text>{{ msg.title }}</text>
+          <text class="tag" :class="msg.read ? '' : 'tag--warn'">{{ msg.read ? '已读' : '未读' }}</text>
+        </view>
+        <view class="line">{{ msg.content }}</view>
+        <view class="line muted">{{ msg.createdAt }}</view>
+      </view>
+    </view>
+
     <!-- 审核弹层：门点可增减、可决定是否同意二维码开门 -->
     <view v-if="reviewVisible" class="mask">
       <view class="sheet">
         <view class="sheet-title">预约审核</view>
         <view v-if="review" class="sheet-body">
           <view class="line strong">{{ review.visitorName }} · {{ review.idCardMask }}</view>
+          <view class="line"><text class="tag tag--warn">{{ review.nodeName || `第 ${review.level} 级审核` }}</text></view>
           <view class="line">{{ review.purpose || '事由未填' }} · {{ review.visitorType }}</view>
           <view class="line">{{ review.startTime }} ~ {{ review.endTime }}</view>
 
-          <view v-if="review.gates">
+          <view v-if="review.gates && review.allowEditGates !== false">
             <view class="sheet-label">开放门点（可增减）</view>
             <checkbox-group class="gates" @change="onGateChange">
               <label v-for="g in review.gates.selectable" :key="g.id" class="gate">
@@ -79,8 +98,9 @@
               </label>
             </checkbox-group>
           </view>
+          <view v-else class="line muted">本节点不允许调整门点，沿用上一级的批准结果</view>
 
-          <label v-if="review.qrRequested" class="gate qr-row">
+          <label v-if="review.qrRequested && review.allowQr !== false" class="gate qr-row">
             <checkbox :checked="reviewQrApproved" @click="reviewQrApproved = !reviewQrApproved" />
             <text>同意二维码开门</text>
           </label>
@@ -106,8 +126,9 @@ import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 import TabBar from '@/components/TabBar.vue'
 import { guardCheckout, guardDashboard, guardOnsite, guardOpenDoor, guardRemind,
-  guardReviewDetail, guardReviewPass, guardReviewReject, guardReviewTodo } from '@/api'
-import type { GuardDashboard, OnsiteRow, ReviewDetail, ReviewRow } from '@/api/types'
+  guardReviewDetail, guardReviewPass, guardReviewReject, guardReviewTodo,
+  listMyNotifications, myUnreadCount, readAllMyNotifications, readMyNotification } from '@/api'
+import type { GuardDashboard, MyNotification, OnsiteRow, ReviewDetail, ReviewRow } from '@/api/types'
 import { auth, isGuardOrAdmin, logout, requireLogin } from '@/store/auth'
 import { alert, confirm, showToast } from '@/utils/ui'
 
@@ -124,7 +145,40 @@ const dashboard = ref<GuardDashboard>({
 const onsite = ref<OnsiteRow[]>([])
 /** 待审核列表（任务维度，可操作） */
 const reviewRows = ref<ReviewRow[]>([])
-const tab = ref<'onsite' | 'pending'>('onsite')
+const tab = ref<'onsite' | 'pending' | 'cc'>('onsite')
+
+/* 抄送（管理端消息中心） */
+const ccList = ref<MyNotification[]>([])
+const ccUnread = ref(0)
+
+async function loadCcUnread() {
+  try {
+    ccUnread.value = (await myUnreadCount()).unread
+  } catch {
+    // 角标失败不影响主流程
+  }
+}
+
+async function openCc() {
+  tab.value = 'cc'
+  try {
+    ccList.value = (await listMyNotifications({ page: 1, size: 50 })).list
+  } catch {
+    ccList.value = []
+  }
+}
+
+async function openCcMessage(message: MyNotification) {
+  if (!message.read) {
+    try {
+      await readMyNotification(message.id)
+      message.read = true
+      ccUnread.value = Math.max(0, ccUnread.value - 1)
+    } catch {
+      // 已读失败不阻断
+    }
+  }
+}
 
 /* 审核弹层 */
 const reviewVisible = ref(false)
@@ -138,6 +192,14 @@ async function refresh() {
   dashboard.value = await guardDashboard()
   onsite.value = (await guardOnsite({ page: 1, size: 50 })).list
   reviewRows.value = (await guardReviewTodo({ page: 1, size: 50 })).list
+  await loadCcUnread()
+}
+
+/** 抄送全部已读 */
+async function markAllCc() {
+  await readAllMyNotifications()
+  ccList.value = ccList.value.map((m) => ({ ...m, read: true }))
+  ccUnread.value = 0
 }
 
 /** 打开审核弹层：二维码默认勾选（访客申请了就默认同意，减少一次点击） */

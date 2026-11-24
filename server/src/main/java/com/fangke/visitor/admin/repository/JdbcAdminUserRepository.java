@@ -146,6 +146,17 @@ public class JdbcAdminUserRepository implements AdminUserRepository {
     }
 
     @Override
+    public List<Long> findActiveUserIdsByRole(String roleCode) {
+        return jdbc.queryForList("""
+                SELECT DISTINCT u.id FROM sys_user u
+                JOIN sys_user_role ur ON ur.user_id = u.id
+                JOIN sys_role r ON r.id = ur.role_id
+                WHERE r.role_code = ? AND u.status = 1 AND u.deleted_at IS NULL
+                ORDER BY u.id
+                """, Long.class, roleCode);
+    }
+
+    @Override
     public void replaceRoles(Long userId, List<String> roleCodes) {
         clearRoles(userId);
         roleCodes.forEach(code -> bindRole(userId, code));

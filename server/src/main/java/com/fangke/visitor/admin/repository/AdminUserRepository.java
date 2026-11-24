@@ -53,4 +53,13 @@ public interface AdminUserRepository {
 
     /** 统计某角色下仍在用的账号数（防把最后一个管理员停用）。 */
     long countActiveByRole(String roleCode);
+
+    /**
+     * 某角色下所有启用账号 id（会签节点按人建任务、抄送按角色发通知时用）。
+     *
+     * <p>默认返回空，方便测试替身只实现自己关心的方法。
+     */
+    default List<Long> findActiveUserIdsByRole(String roleCode) {
+        return List.of();
+    }
 }
