@@ -439,6 +439,37 @@ export interface PermissionItem {
   perm: string
 }
 
+/* ---------------- 来访登记 + 基础字典（V26） ---------------- */
+
+export type VisitDictType = 'CAUSE' | 'AREA' | 'POST'
+
+export interface VisitDict {
+  id: number
+  dictType: VisitDictType
+  name: string
+  sort: number
+  status: number
+  remark: string | null
+}
+
+export interface VisitRegisterRow {
+  id: number
+  areaId: number | null
+  areaName: string | null
+  causeId: number | null
+  causeName: string | null
+  visitorName: string
+  phoneMask: string | null
+  plateNo: string | null
+  company: string | null
+  personCount: number
+  arrivalTime: string
+  leaveTime: string | null
+  status: number
+  remark: string | null
+  createdAt: string
+}
+
 export interface AuditRow {
   id: number
   userId: number

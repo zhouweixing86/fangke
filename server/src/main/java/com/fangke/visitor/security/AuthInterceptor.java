@@ -100,6 +100,7 @@ public class AuthInterceptor implements HandlerInterceptor {
             case "dept" -> "dept:read";
             case "employee", "upload" -> "employee:read";
             case "blacklist" -> "blacklist:read";
+            case "visit" -> "visit:read";
             case "appointment" -> "appointment:read";
             case "access", "traffic" -> "event:read";
             case "sync", "dispatch" -> "batch:read";

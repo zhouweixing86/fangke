@@ -7,6 +7,9 @@ import type {
   ApprovalTemplateView,
   RoleOption,
   MyNotification,
+  VisitDict,
+  VisitDictType,
+  VisitRegisterRow,
   AuditOptions,
   AuditRow,
   BlacklistEnforceResult,
@@ -302,6 +305,28 @@ export const createRole = (data: Record<string, unknown>) =>
 export const updateRole = (id: number, data: Record<string, unknown>) =>
   put<void>(`/admin/roles/${id}`, data)
 export const deleteRole = (id: number) => del<void>(`/admin/roles/${id}`)
+
+/* ---------------- 来访登记 + 基础字典（V26） ---------------- */
+
+export const visitDictOptions = () =>
+  get<Record<VisitDictType, VisitDict[]>>('/admin/visit/dict/options')
+export const listVisitDict = (type: VisitDictType) =>
+  get<VisitDict[]>('/admin/visit/dict', { type })
+export const createVisitDict = (data: Record<string, unknown>) =>
+  post<{ id: number }>('/admin/visit/dict', data)
+export const updateVisitDict = (id: number, data: Record<string, unknown>) =>
+  put<void>(`/admin/visit/dict/${id}`, data)
+export const deleteVisitDict = (id: number) => del<void>(`/admin/visit/dict/${id}`)
+
+export const listVisitRegisters = (params: Record<string, unknown>) =>
+  get<PageResult<VisitRegisterRow>>('/admin/visit/register', params)
+export const createVisitRegister = (data: Record<string, unknown>) =>
+  post<{ id: number }>('/admin/visit/register', data)
+export const leaveVisitRegister = (id: number) =>
+  post<VisitRegisterRow>(`/admin/visit/register/${id}/leave`)
+/** 导出 CSV（带 Authorization，前端用 Blob 下载） */
+export const exportVisitRegisters = (params: Record<string, unknown>) =>
+  http.get('/admin/visit/register/export', { params, responseType: 'blob' }) as unknown as Promise<Blob>
 
 export const listAdminUsers = (params: Record<string, unknown>) =>
   get<PageResult<AdminUserRow>>('/admin/user', params)

@@ -41,6 +41,7 @@ public class RoleAdminService {
     public static final List<Module> MODULES = List.of(
             new Module("dashboard", "保安工作台", "工作台"),
             new Module("guard", "门卫审核", "工作台"),
+            new Module("visit", "来访登记", "业务办理"),
             new Module("appointment", "预约查询", "业务办理"),
             new Module("event", "通行记录", "业务办理"),
             new Module("blacklist", "黑名单", "业务办理"),

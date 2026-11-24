@@ -107,6 +107,7 @@ interface MenuItem {
 
 const allMenus: MenuItem[] = [
   { path: '/', title: '保安工作台', icon: 'Monitor', perm: 'dashboard:read' },
+  { path: '/visit', title: '来访登记', icon: 'Postcard', perm: 'visit:read' },
   { path: '/devices', title: '设备管理', icon: 'Cpu', perm: 'device:read' },
   { path: '/gates', title: '门点管理', icon: 'Place', perm: 'gate:read' },
   { path: '/depts', title: '部门管理', icon: 'OfficeBuilding', perm: 'dept:read' },

@@ -27,6 +27,12 @@ const router = createRouter({
           meta: { title: '设备管理', adminOnly: true }
         },
         {
+          path: 'visit',
+          name: 'visit',
+          component: () => import('@/views/VisitView.vue'),
+          meta: { title: '来访登记', adminOnly: true }
+        },
+        {
           path: 'gates',
           name: 'gates',
           component: () => import('@/views/GateView.vue'),
@@ -113,6 +119,7 @@ const router = createRouter({
 /** 页面权限（C-73）：路由名 → 权限码，与后端 sys_role.perms 一致 */
 const ROUTE_PERMS: Record<string, string> = {
   guard: 'dashboard:read',
+  visit: 'visit:read',
   devices: 'device:read',
   gates: 'gate:read',
   depts: 'dept:read',
@@ -131,6 +138,7 @@ const ROUTE_PERMS: Record<string, string> = {
 /** 落地页顺序：第一个有权限的页面 */
 const HOME_PATHS: [string, string][] = [
   ['/', 'dashboard:read'],
+  ['/visit', 'visit:read'],
   ['/appointments', 'appointment:read'],
   ['/devices', 'device:read'],
   ['/events', 'event:read'],
