@@ -20,11 +20,9 @@
               <el-option v-for="r in roles" :key="r.roleCode" :value="r.roleCode"
                 :label="`${r.roleName}（${r.roleCode}）`" />
             </el-select>
-            <el-select v-model="node.approveMode" style="width: 180px">
-              <el-option value="SINGLE" label="单签（任一人）" />
-              <el-option value="ANY" label="或签（任一人）" />
-              <el-option value="ALL" label="会签（全部通过）" />
-            </el-select>
+            <el-tag type="info" size="small" title="一个节点只建一条待办，该角色任意一人处理即办结">
+              或签（任一人通过）
+            </el-tag>
             <span class="spacer" />
             <el-button link type="primary" :disabled="i === 0" @click="move(i, -1)">上移</el-button>
             <el-button link type="primary" :disabled="i === form.nodes.length - 1"
@@ -123,7 +121,7 @@ const form = reactive<{
   templateName: '默认审批流程',
   enabled: true,
   remark: '',
-  nodes: [{ nodeName: '管理端审核', assigneeRole: 'GUARD', approveMode: 'SINGLE',
+  nodes: [{ nodeName: '管理端审核', assigneeRole: 'GUARD', approveMode: 'ANY',
     allowEditGates: true, allowQr: true, ccRoles: [] }],
   submitCcRoles: []
 })
@@ -150,7 +148,7 @@ async function loadFlow() {
   const template = list[0]
   if (!template) {
     form.id = null
-    form.nodes = [{ nodeName: '管理端审核', assigneeRole: 'GUARD', approveMode: 'SINGLE',
+    form.nodes = [{ nodeName: '管理端审核', assigneeRole: 'GUARD', approveMode: 'ANY',
       allowEditGates: true, allowQr: true, ccRoles: [] }]
     form.submitCcRoles = []
     return
@@ -162,7 +160,7 @@ async function loadFlow() {
   form.nodes = template.nodes.map(toFormNode)
   form.submitCcRoles = template.submitCcRoles || []
   if (form.nodes.length === 0) {
-    form.nodes = [{ nodeName: '管理端审核', assigneeRole: 'GUARD', approveMode: 'SINGLE',
+    form.nodes = [{ nodeName: '管理端审核', assigneeRole: 'GUARD', approveMode: 'ANY',
       allowEditGates: true, allowQr: true, ccRoles: [] }]
   }
 }
@@ -177,7 +175,7 @@ function addNode() {
   form.nodes.push({
     nodeName: `审批节点 ${form.nodes.length + 1}`,
     assigneeRole: 'GUARD',
-    approveMode: 'SINGLE',
+    approveMode: 'ANY',
     allowEditGates: true,
     allowQr: true,
     ccRoles: []

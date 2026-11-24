@@ -589,26 +589,21 @@ class ApprovalServiceTest {
     }
 
     @Test
-    @DisplayName("会签节点：每个账号一条任务，全部通过才进入下一节点")
-    void allModeNeedsEveryApprover() {
-        ApprovalNode first = node(21L, 10L, 1, "会签审核", "GUARD", "ALL", true, true);
-        ApprovalNode second = node(22L, 10L, 2, "终审", "ADMIN", "SINGLE", true, true);
-        templateRepo.template = new ApprovalTemplate(10L, "会签流程", "GLOBAL", true, null,
+    @DisplayName("C-79：即使节点配成会签，也只建一条角色任务，任一人通过即流转")
+    void allModeDegradesToAny() {
+        ApprovalNode first = node(21L, 10L, 1, "全员审核", "GUARD", "ALL", true, true);
+        ApprovalNode second = node(22L, 10L, 2, "终审", "ADMIN", "ANY", true, true);
+        templateRepo.template = new ApprovalTemplate(10L, "旧会签流程", "GLOBAL", true, null,
                 List.of(first, second), List.of());
 
         service.start(appointment);
         List<ApprovalTask> pending = taskRepo.findPendingByAppointment(appointment.getId());
-        assertEquals(2, pending.size(), "GUARD 下两个账号各一条");
-        assertEquals(ApprovalTask.TYPE_ADMIN_USER, pending.get(0).assigneeType());
+        assertEquals(1, pending.size(), "或签只建一条角色任务");
+        assertEquals(ApprovalTask.TYPE_ROLE, pending.get(0).assigneeType());
 
         service.guardPass(pending.get(0).id(), 101L, List.of("GUARD"), "ok", null);
-        List<ApprovalTask> afterFirst = taskRepo.findPendingByAppointment(appointment.getId());
-        assertEquals(1, afterFirst.size(), "还差一个人，不能进下一节点");
-        assertEquals("会签审核", afterFirst.get(0).nodeName());
-
-        service.guardPass(pending.get(1).id(), 102L, List.of("GUARD"), "ok", null);
         ApprovalTask next = taskRepo.findPendingByAppointment(appointment.getId()).get(0);
-        assertEquals("终审", next.nodeName());
+        assertEquals("终审", next.nodeName(), "一人通过即进入下一节点");
     }
 
     @Test

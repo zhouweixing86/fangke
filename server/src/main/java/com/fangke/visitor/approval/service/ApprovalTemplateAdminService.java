@@ -107,7 +107,7 @@ public class ApprovalTemplateAdminService {
         for (int i = 0; i < nodes.size(); i++) {
             NodeSpec spec = nodes.get(i);
             entities.add(ApprovalNode.of(templateId, i + 1, spec.nodeName().trim(),
-                    spec.assigneeRole().trim(), spec.approveMode(),
+                    spec.assigneeRole().trim(), ApprovalNode.MODE_ANY,
                     spec.allowEditGates() == null || spec.allowEditGates(),
                     spec.allowQr() == null || spec.allowQr()));
         }

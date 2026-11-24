@@ -182,24 +182,13 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                 appointment.getAppointmentNo(), template.id(), first.nodeName(), first.modeText());
     }
 
-    /** 按节点配置建任务；会签节点给该角色每个启用账号各建一条，返回第一条任务 id。 */
+    /**
+     * 按节点配置建任务（C-79：产品上只保留「或签」）。
+     *
+     * <p>一个节点只建**一条角色任务**：该角色任意一人（后台账号或微信审批人）通过即办结，
+     * 因此单签/会签的区分已下沉为「用专属角色实现个签」。
+     */
     private long createNodeTasks(Appointment appointment, ApprovalTemplate template, ApprovalNode node) {
-        if (node.allMode()) {
-            List<Long> userIds = adminUserRepository.findActiveUserIdsByRole(node.assigneeRole());
-            if (!userIds.isEmpty()) {
-                long first = 0L;
-                for (Long userId : userIds) {
-                    long id = taskRepository.insert(ApprovalTask.adminUserTask(appointment.getId(),
-                            node.seq(), userId, node.assigneeRole(), template.id(), node.id(),
-                            node.nodeName()));
-                    if (first == 0L) {
-                        first = id;
-                    }
-                }
-                return first;
-            }
-            log.warn("会签节点 {} 下角色 {} 没有启用账号，降级为角色任务", node.nodeName(), node.assigneeRole());
-        }
         return taskRepository.insert(ApprovalTask.roleTask(appointment.getId(), node.seq(),
                 node.assigneeRole(), template.id(), node.id(), node.nodeName()));
     }
