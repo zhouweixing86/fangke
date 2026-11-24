@@ -442,6 +442,18 @@ export interface PermissionItem {
   perm: string
 }
 
+/* ---------------- 微信角色二维码（C-76） ---------------- */
+
+export interface WxRoleQr {
+  roleId: number
+  roleCode: string
+  roleName: string
+  /** 二维码里的绑定令牌（一角色一个，可重新生成） */
+  token: string
+  /** 已绑定该角色的微信人数 */
+  bindCount: number
+}
+
 /* ---------------- 来访登记 + 基础字典（V26） ---------------- */
 
 export type VisitDictType = 'CAUSE' | 'AREA' | 'POST'

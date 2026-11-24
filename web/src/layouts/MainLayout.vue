@@ -120,7 +120,8 @@ const allMenus: MenuItem[] = [
   { path: '/users', title: '账号管理', icon: 'Avatar', perm: 'user:read' },
   { path: '/audit', title: '审计日志', icon: 'Tickets', perm: 'audit:read' },
   { path: '/ops', title: '运维中心', icon: 'SetUp', perm: 'ops:read' },
-  { path: '/approval-config', title: '审批配置', icon: 'Setting', perm: 'approval:read' }
+  { path: '/approval-config', title: '审批配置', icon: 'Setting', perm: 'approval:read' },
+  { path: '/role-qr', title: '角色二维码', icon: 'Grid', perm: 'user:read' }
 ]
 
 const menus = computed(() => allMenus.filter((item) => auth.hasPerm(item.perm)))

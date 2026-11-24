@@ -47,6 +47,15 @@ public interface ApprovalTaskRepository {
      */
     List<TodoRow> findTodoByRoles(List<String> roles, Long adminUserId, int offset, int limit);
 
+    /** 「已审批」行（C-76）：微信审批人按 operator_id + operator_type 查自己处理过的任务。 */
+    record DoneRow(long taskId, int level, String nodeName, long appointmentId, String appointmentNo,
+                   String visitorName, String purpose, int action, String comment, LocalDateTime actedAt) {
+    }
+
+    List<DoneRow> findDoneByOperator(long operatorId, int operatorType, int offset, int limit);
+
+    long countDoneByOperator(long operatorId, int operatorType);
+
     void updateStatus(Long id, int status);
 
     void updateAssignee(Long id, Long assigneeId);

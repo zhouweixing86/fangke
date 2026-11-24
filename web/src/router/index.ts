@@ -103,6 +103,12 @@ const router = createRouter({
           name: 'approval-config',
           component: () => import('@/views/ApprovalConfigView.vue'),
           meta: { title: '审批配置', adminOnly: true }
+        },
+        {
+          path: 'role-qr',
+          name: 'role-qr',
+          component: () => import('@/views/RoleQrView.vue'),
+          meta: { title: '角色二维码', adminOnly: true }
         }
       ]
     },
@@ -132,7 +138,8 @@ const ROUTE_PERMS: Record<string, string> = {
   appointments: 'appointment:read',
   events: 'event:read',
   batches: 'batch:read',
-  'approval-config': 'approval:read'
+  'approval-config': 'approval:read',
+  'role-qr': 'user:read'
 }
 
 /** 落地页顺序：第一个有权限的页面 */

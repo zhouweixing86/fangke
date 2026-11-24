@@ -59,8 +59,16 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     private static final int ACTION_SKIP = 6;
     private static final int ACTION_CC = 7;
 
+    /** 审批操作人类型：4 = 微信小程序审批人（C-76，按扫码绑定的角色审批）。 */
+    public static final int OPERATOR_APP_USER = 4;
+
     public record TodoView(long taskId, int level, String nodeName, String appointmentNo, String visitorName,
                            String idCardMask, String purpose, String startTime, String endTime) {
+    }
+
+    /** 「已审批」列表行（微信端）。 */
+    public record DoneView(long taskId, int level, String nodeName, String appointmentNo, String visitorName,
+                           String purpose, int action, String actionText, String comment, String actedAt) {
     }
 
     public record ActionView(int action, String actionText, String operatorId, int operatorType,
@@ -224,18 +232,34 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     @Transactional
     public PassResult guardPass(Long taskId, Long operatorUserId, List<String> roles, String comment,
                                 List<Long> approvedGateIds, Boolean qrApproved) {
-        ApprovalTask task = requirePendingAdminTask(taskId, operatorUserId, roles);
+        return doPass(taskId, operatorUserId, ApprovalTask.TYPE_ROLE, null, roles, comment,
+                approvedGateIds, qrApproved);
+    }
+
+    /** 微信小程序审批通过（C-76）：身份来自扫码绑定的角色，审批轨迹记姓名。 */
+    @Transactional
+    public PassResult appPass(Long taskId, Long bindingId, String operatorName, List<String> roleCodes,
+                              String comment, List<Long> approvedGateIds, Boolean qrApproved) {
+        return doPass(taskId, bindingId, OPERATOR_APP_USER, operatorName, roleCodes, comment,
+                approvedGateIds, qrApproved);
+    }
+
+    private PassResult doPass(Long taskId, Long operatorId, int operatorType, String operatorName,
+                              List<String> roles, String comment, List<Long> approvedGateIds,
+                              Boolean qrApproved) {
+        ApprovalTask task = requirePendingAdminTask(taskId,
+                operatorType == OPERATOR_APP_USER ? null : operatorId, roles);
         Appointment appointment = loadAppointment(task.appointmentId());
         ApprovalNode node = nodeOf(task);
 
         // 节点可以限制"能否改门点 / 能否批二维码"，越权传值直接忽略，避免被前端绕过
         Boolean effectiveQr = node == null || node.allowQr() ? qrApproved : null;
         List<Long> effectiveGates = node == null || node.allowEditGates() ? approvedGateIds : null;
-        applyQrDecision(appointment, effectiveQr, operatorUserId);
+        applyQrDecision(appointment, effectiveQr, operatorId);
 
         List<Long> approved = effectiveGates == null
                 ? null : appointmentGateService.saveApproved(appointment, effectiveGates);
-        actionRepository.insert(taskId, appointment.getId(), operatorUserId, ApprovalTask.TYPE_ROLE,
+        actionRepository.insert(taskId, appointment.getId(), operatorId, operatorName, operatorType,
                 ACTION_PASS, null, trim(comment), gateSnapshot(approved));
         taskRepository.updateStatus(taskId, ApprovalTask.STATUS_PASSED);
 
@@ -274,13 +298,26 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     /** 驳回（任一节点）：整单驳回并记录原因，其余待办全部失效。 */
     @Transactional
     public void guardReject(Long taskId, Long operatorUserId, List<String> roles, String comment) {
+        doReject(taskId, operatorUserId, ApprovalTask.TYPE_ROLE, null, roles, comment);
+    }
+
+    /** 微信小程序驳回（C-76）。 */
+    @Transactional
+    public void appReject(Long taskId, Long bindingId, String operatorName, List<String> roleCodes,
+                          String comment) {
+        doReject(taskId, bindingId, OPERATOR_APP_USER, operatorName, roleCodes, comment);
+    }
+
+    private void doReject(Long taskId, Long operatorId, int operatorType, String operatorName,
+                          List<String> roles, String comment) {
         if (comment == null || comment.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_MISSING, "拒绝放行必须填写原因");
         }
-        ApprovalTask task = requirePendingAdminTask(taskId, operatorUserId, roles);
+        ApprovalTask task = requirePendingAdminTask(taskId,
+                operatorType == OPERATOR_APP_USER ? null : operatorId, roles);
         Appointment appointment = loadAppointment(task.appointmentId());
 
-        actionRepository.insert(taskId, appointment.getId(), operatorUserId, ApprovalTask.TYPE_ROLE,
+        actionRepository.insert(taskId, appointment.getId(), operatorId, operatorName, operatorType,
                 ACTION_REJECT, null, comment.trim(), null);
         taskRepository.updateStatus(taskId, ApprovalTask.STATUS_REJECTED);
         taskRepository.invalidatePending(appointment.getId());
@@ -291,8 +328,9 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         appointmentRepository.update(appointment);
 
         notifyPort.approvalResult(appointment.getId(), false, comment.trim());
-        log.info("审批驳回 appointment={} task={} node={} operator={} 原因={}",
-                appointment.getAppointmentNo(), taskId, task.nodeName(), operatorUserId, comment.trim());
+        log.info("审批驳回 appointment={} task={} node={} operator={}({}) 原因={}",
+                appointment.getAppointmentNo(), taskId, task.nodeName(), operatorId, operatorType,
+                comment.trim());
     }
 
     /** 催办：同一任务按配置间隔与次数上限限流。 */
@@ -359,6 +397,47 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         return buildDetail(task, canAct);
     }
 
+    /* ---------------- 微信小程序审批（C-76）：身份来自扫码绑定的角色 ---------------- */
+
+    public long appTodoCount(List<String> roleCodes) {
+        return taskRepository.countPendingByRoles(roleCodes, null);
+    }
+
+    public PageResult<TodoView> appTodoList(List<String> roleCodes, int page, int size) {
+        int safePage = Math.max(page, 1);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        List<ApprovalTaskRepository.TodoRow> rows = taskRepository.findTodoByRoles(roleCodes, null,
+                (safePage - 1) * safeSize, safeSize);
+        List<TodoView> list = rows.stream()
+                .map(r -> new TodoView(r.taskId(), r.level(), r.nodeName(), r.appointmentNo(), r.visitorName(),
+                        r.idCardMask(), r.purpose(), DATETIME.format(r.startTime()), DATETIME.format(r.endTime())))
+                .toList();
+        return PageResult.of(taskRepository.countPendingByRoles(roleCodes, null), safePage, safeSize, list);
+    }
+
+    public DetailView appDetail(Long taskId, List<String> roleCodes) {
+        ApprovalTask task = requireExists(taskId);
+        boolean canAct = task.pending() && canAct(task, roleCodes, null);
+        if (!canAct && !task.adminApprovalTask()) {
+            throw new BusinessException(ErrorCode.NOT_TASK_OWNER, "该任务不是你的审批任务");
+        }
+        return buildDetail(task, canAct);
+    }
+
+    /** 我已处理过的（通过/驳回）任务。 */
+    public PageResult<DoneView> appDoneList(long bindingId, int page, int size) {
+        int safePage = Math.max(page, 1);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        List<DoneView> list = taskRepository.findDoneByOperator(bindingId, OPERATOR_APP_USER,
+                        (safePage - 1) * safeSize, safeSize).stream()
+                .map(r -> new DoneView(r.taskId(), r.level(), r.nodeName(), r.appointmentNo(),
+                        r.visitorName(), r.purpose(), r.action(), actionText(r.action()),
+                        r.comment(), DATETIME.format(r.actedAt())))
+                .toList();
+        return PageResult.of(taskRepository.countDoneByOperator(bindingId, OPERATOR_APP_USER),
+                safePage, safeSize, list);
+    }
+
     private boolean canAct(ApprovalTask task, List<String> roles, Long adminUserId) {
         if (task.adminUserTask()) {
             return adminUserId != null && adminUserId.equals(task.assigneeId());
@@ -376,7 +455,9 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
 
         List<ActionView> actions = actionRepository.listByAppointment(appointment.getId()).stream()
                 .map(a -> new ActionView(a.action(), actionText(a.action()),
-                        String.valueOf(a.operatorId()), a.operatorType(), a.comment(),
+                        a.operatorName() != null && !a.operatorName().isBlank()
+                                ? a.operatorName() : String.valueOf(a.operatorId()),
+                        a.operatorType(), a.comment(),
                         gateNames(a.gateSnapshot()), DATETIME.format(a.createdAt())))
                 .toList();
 

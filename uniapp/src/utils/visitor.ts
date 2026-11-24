@@ -12,7 +12,8 @@ import { applyWxLogin, auth, cacheWxCode, requestWxCode } from '@/store/auth'
  * @param force 强制重新登录（例如刚提交完预约，需要立刻刷新绑定状态）
  */
 export async function ensureVisitorLogin(force = false): Promise<void> {
-  const usable = !!auth.token && auth.kind === 'APP' && auth.subjectId > 0
+  const usable = !!auth.token && auth.kind === 'APP' &&
+    (auth.subjectId > 0 || auth.roles.indexOf('APP_APPROVER') >= 0)
   if (!force && usable) {
     return
   }

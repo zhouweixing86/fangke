@@ -20,7 +20,12 @@ import type {
   ReportOverview,
   ReviewDetail,
   ReviewRow,
-  VisitDictOption
+  VisitDictOption,
+  BindPreview,
+  BindResult,
+  ApprovalDetail,
+  MyApprovalDone,
+  TodoView
 } from './types'
 
 /* ---------------- 登录（只有管理端；访客走微信小程序静默登录） ---------------- */
@@ -37,6 +42,10 @@ export const wxLogin = (code: string) =>
     /** mock 模式：openid 由 code 派生，前端需复用同一个 code */
     mock: boolean
     expiresInSeconds: number
+    /** C-76：已扫码绑定的后台角色编码（有值就会在小程序里显示「我的审批」） */
+    roleCodes?: string[]
+    approver?: boolean
+    bindingId?: number
   }>('/app/auth/wx-login', { code })
 
 /** 被访人手机号 → 自动匹配被访人（访客预约表单） */
@@ -58,6 +67,34 @@ export const appointmentDetail = (no: string) => get<AppointmentView>('/app/appo
 
 /** 可选门点（厂区多门点时访客要选从哪个门进） */
 export const listAppGates = () => get<GateOption[]>('/app/gate')
+
+/* ---------------- 微信角色绑定 + 我的审批（C-76） ---------------- */
+
+export const bindPreview = (token: string) =>
+  get<BindPreview>('/app/bind/preview', { token })
+
+export const bindRole = (payload: Record<string, unknown>) =>
+  post<BindResult>('/app/bind', payload)
+
+export const myApprovalCount = () => get<{ pending: number }>('/app/approval/count')
+
+export const myApprovalTodo = (params: Record<string, unknown>) =>
+  get<PageResult<TodoView>>('/app/approval/todo', params)
+
+export const myApprovalDone = (params: Record<string, unknown>) =>
+  get<PageResult<MyApprovalDone>>('/app/approval/done', params)
+
+export const myApprovalDetail = (taskId: number) =>
+  get<ApprovalDetail>('/app/approval/' + taskId)
+
+export const approveTask = (taskId: number, payload: Record<string, unknown>) =>
+  post<{ appointmentNo: string; status: number; statusText: string }>(
+    '/app/approval/' + taskId + '/pass',
+    payload
+  )
+
+export const rejectTask = (taskId: number, comment: string) =>
+  post<void>('/app/approval/' + taskId + '/reject', { comment })
 
 /** 预约页基础字典：事由 / 区域（C-75） */
 export const appDictOptions = () =>

@@ -233,4 +233,39 @@ public class JdbcApprovalTaskRepository implements ApprovalTaskRepository {
             ps.setLong(index, value);
         }
     }
+
+    @Override
+    public List<DoneRow> findDoneByOperator(long operatorId, int operatorType, int offset, int limit) {
+        return jdbc.query("""
+                        SELECT t.id AS task_id, t.level, t.node_name, a.id AS appointment_id, a.appointment_no,
+                               v.name AS visitor_name, a.purpose, aa.action, aa.comment, aa.created_at
+                        FROM approval_action aa
+                        JOIN approval_task t ON t.id = aa.task_id
+                        JOIN appointment a ON a.id = aa.appointment_id
+                        LEFT JOIN visitor v ON v.id = a.visitor_id
+                        WHERE aa.operator_id = ? AND aa.operator_type = ?
+                        ORDER BY aa.id DESC
+                        LIMIT ? OFFSET ?
+                        """,
+                (rs, i) -> new DoneRow(
+                        rs.getLong("task_id"),
+                        rs.getInt("level"),
+                        rs.getString("node_name"),
+                        rs.getLong("appointment_id"),
+                        rs.getString("appointment_no"),
+                        rs.getString("visitor_name"),
+                        rs.getString("purpose"),
+                        rs.getInt("action"),
+                        rs.getString("comment"),
+                        rs.getTimestamp("created_at").toLocalDateTime()),
+                operatorId, operatorType, limit, offset);
+    }
+
+    @Override
+    public long countDoneByOperator(long operatorId, int operatorType) {
+        Long count = jdbc.queryForObject("""
+                        SELECT COUNT(1) FROM approval_action WHERE operator_id = ? AND operator_type = ?
+                        """, Long.class, operatorId, operatorType);
+        return count == null ? 0 : count;
+    }
 }

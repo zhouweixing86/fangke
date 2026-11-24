@@ -30,6 +30,10 @@ public class AppAuthInterceptor implements HandlerInterceptor {
     public static final String ATTR_ROLE = "app.role";
     public static final String ATTR_SUBJECT_ID = "app.subjectId";
     public static final String ATTR_PHONE = "app.phone";
+    /** 微信角色绑定 ID（V29）；未绑定为 null */
+    public static final String ATTR_BIND_ID = "app.bindId";
+    /** token 里的全部身份：APP_VISITOR/APP_EMPLOYEE + APP_APPROVER + 后台角色编码 */
+    public static final String ATTR_ROLES = "app.roles";
 
     private static final String ROLE_EMPLOYEE = "APP_EMPLOYEE";
     private static final String ROLE_VISITOR = "APP_VISITOR";
@@ -77,6 +81,10 @@ public class AppAuthInterceptor implements HandlerInterceptor {
         request.setAttribute(ATTR_ROLE, role);
         request.setAttribute(ATTR_SUBJECT_ID, uid.longValue());
         request.setAttribute(ATTR_PHONE, claims.get("sub") instanceof String s ? s : null);
+        request.setAttribute(ATTR_ROLES, roles);
+        Object bindId = claims.get("bindId");
+        request.setAttribute(ATTR_BIND_ID,
+                bindId instanceof Number n && n.longValue() > 0 ? n.longValue() : null);
         return true;
     }
 
@@ -94,6 +102,10 @@ public class AppAuthInterceptor implements HandlerInterceptor {
         if ("GET".equalsIgnoreCase(method) && path.startsWith("/api/app/dict")) {
             return true;
         }
+        // 角色二维码：扫码页预览 + 提交绑定（用 wxCode 换 openid，此时还没有可信身份）
+        if (path.startsWith("/api/app/bind")) {
+            return true;
+        }
         return "POST".equalsIgnoreCase(method) && "/api/app/appointment".equals(path);
     }
 
@@ -108,6 +120,32 @@ public class AppAuthInterceptor implements HandlerInterceptor {
     public static Long subjectId(HttpServletRequest request) {
         Object id = request.getAttribute(ATTR_SUBJECT_ID);
         return id instanceof Long l ? l : null;
+    }
+
+    /** token 里的全部身份（含后台角色编码）。 */
+    @SuppressWarnings("unchecked")
+    public static List<String> roles(HttpServletRequest request) {
+        Object roles = request.getAttribute(ATTR_ROLES);
+        return roles instanceof List<?> list ? (List<String>) list : List.of();
+    }
+
+    /** 微信角色绑定 ID；未扫码绑定过返回 null。 */
+    public static Long bindId(HttpServletRequest request) {
+        Object id = request.getAttribute(ATTR_BIND_ID);
+        return id instanceof Long l ? l : null;
+    }
+
+    public static boolean isApprover(HttpServletRequest request) {
+        return bindId(request) != null && roles(request).contains("APP_APPROVER");
+    }
+
+    /** 审批接口统一入口：必须扫码绑定过角色。 */
+    public static Long requireApprover(HttpServletRequest request) {
+        Long bindId = bindId(request);
+        if (bindId == null || !roles(request).contains("APP_APPROVER")) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "请先扫描角色二维码绑定身份");
+        }
+        return bindId;
     }
 
     public static Long requireEmployee(HttpServletRequest request) {

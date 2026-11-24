@@ -6,6 +6,10 @@
     { "path": "pages/visitor/new", "style": { "navigationBarTitleText": "预约" } },
     { "path": "pages/visitor/index", "style": { "navigationBarTitleText": "我的预约", "enablePullDownRefresh": true } },
     { "path": "pages/visitor/appointment", "style": { "navigationBarTitleText": "预约详情" } },
+    // ---------- 身份绑定 + 我的审批（C-76） ----------
+    { "path": "pages/bind/bind", "style": { "navigationBarTitleText": "绑定身份" } },
+    { "path": "pages/employee/approvals", "style": { "navigationBarTitleText": "我的审批", "enablePullDownRefresh": true } },
+    { "path": "pages/employee/approval", "style": { "navigationBarTitleText": "审批详情" } },
     // #endif
 
     // #ifndef MP-WEIXIN

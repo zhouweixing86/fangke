@@ -10,6 +10,7 @@ import com.fangke.visitor.employee.repository.EmployeeRepository;
 import com.fangke.visitor.employee.service.EmployeeValidator;
 import com.fangke.visitor.security.CryptoService;
 import com.fangke.visitor.security.JwtService;
+import com.fangke.visitor.wxbind.repository.WxBindingRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -39,6 +40,8 @@ public class AppAuthService {
 
     public static final String ROLE_EMPLOYEE = "APP_EMPLOYEE";
     public static final String ROLE_VISITOR = "APP_VISITOR";
+    /** 已绑定任意后台角色的微信用户：小程序展示「我的审批」。 */
+    public static final String ROLE_APPROVER = "APP_APPROVER";
 
     public record CodeResult(String phoneMask, int ttlSeconds, String mockCode, int resendAfterSeconds) {
     }
@@ -50,11 +53,14 @@ public class AppAuthService {
     /**
      * 微信一键登录结果。
      *
-     * @param bound 是否已绑定访客档案（false 表示首次使用，提交一次预约后自动绑定）
+     * @param bound 是否已绑定人员档案（false 表示首次使用，提交一次预约后自动绑定）
      * @param mock  是否 mock 模式：mock 下 openid 由 code 派生，前端需复用同一个 code 才能保持身份稳定
+     * @param roles 小程序可见身份：APP_VISITOR / APP_EMPLOYEE + APP_APPROVER + 已授予的后台角色编码
+     * @param approver 是否具备审批身份（扫码绑定过任意角色）
      */
     public record WxLoginResult(String token, String role, Long subjectId, String name,
-                                String openid, boolean bound, long expiresInSeconds, boolean mock) {
+                                String openid, boolean bound, long expiresInSeconds, boolean mock,
+                                List<String> roleCodes, boolean approver, Long bindingId) {
     }
 
     private record CodeEntry(String code, Instant createdAt, Instant expireAt, int attempts) {
@@ -62,6 +68,7 @@ public class AppAuthService {
 
     private final EmployeeRepository employeeRepository;
     private final VisitorRepository visitorRepository;
+    private final WxBindingRepository wxBindingRepository;
     private final CryptoService crypto;
     private final JwtService jwtService;
     private final AppProperties props;
@@ -69,11 +76,13 @@ public class AppAuthService {
 
     public AppAuthService(EmployeeRepository employeeRepository,
                           VisitorRepository visitorRepository,
+                          WxBindingRepository wxBindingRepository,
                           CryptoService crypto,
                           JwtService jwtService,
                           AppProperties props) {
         this.employeeRepository = employeeRepository;
         this.visitorRepository = visitorRepository;
+        this.wxBindingRepository = wxBindingRepository;
         this.crypto = crypto;
         this.jwtService = jwtService;
         this.props = props;
@@ -143,20 +152,28 @@ public class AppAuthService {
             if (e.getStatus() != Employee.STATUS_ACTIVE) {
                 throw new BusinessException(ErrorCode.ACCOUNT_DISABLED, "该员工账号已停用");
             }
-            return issue(ROLE_EMPLOYEE, e.getId(), e.getName(), CryptoService.maskPhone(normalized));
+            return issue(ROLE_EMPLOYEE, e.getId(), e.getName(), CryptoService.maskPhone(normalized), hmac);
         }
         var visitor = visitorRepository.findByPhoneHmac(hmac);
         if (visitor.isPresent()) {
             Visitor v = visitor.get();
-            return issue(ROLE_VISITOR, v.getId(), v.getName(), CryptoService.maskPhone(normalized));
+            return issue(ROLE_VISITOR, v.getId(), v.getName(), CryptoService.maskPhone(normalized), hmac);
         }
         throw new BusinessException(ErrorCode.PARAM_INVALID,
                 "该手机号还没有登记记录，请先在「访客预约」里提交一次预约");
     }
 
-    private LoginResult issue(String role, Long subjectId, String name, String phoneMask) {
-        String token = jwtService.issue(subjectId, phoneMask, List.of(role));
-        log.info("App 登录成功 role={} subjectId={} phone={}", role, subjectId, phoneMask);
+    private LoginResult issue(String role, Long subjectId, String name, String phoneMask, String phoneHmac) {
+        List<String> roles = new java.util.ArrayList<>();
+        roles.add(role);
+        var binding = wxBindingRepository.findByPhoneHmac(phoneHmac);
+        if (binding.isPresent() && !binding.get().roleCodes().isEmpty()) {
+            roles.add(ROLE_APPROVER);
+            roles.addAll(binding.get().roleCodes());
+        }
+        String token = jwtService.issue(subjectId, phoneMask, roles, binding.map(WxBindingRepository.Binding::id).orElse(null));
+        log.info("App 登录成功 role={} subjectId={} phone={} 微信角色={}", role, subjectId, phoneMask,
+                binding.map(WxBindingRepository.Binding::roleCodes).orElse(List.of()));
         return new LoginResult(token, role, subjectId, name, phoneMask, jwtService.ttlSeconds());
     }
 
@@ -168,23 +185,54 @@ public class AppAuthService {
      * 下次进入即可直接看到「我的预约」。
      */
     public WxLoginResult wxLogin(String code) {
-        String openid = resolveOpenid(code);
+        return loginByOpenid(resolveOpenid(code));
+    }
+
+    /**
+     * 按 openid 登录：已扫码绑定角色时，token 里额外带 {@code APP_APPROVER} 与后台角色编码，
+     * 小程序据此显示「我的审批」，审批接口按角色匹配待办。
+     */
+    public WxLoginResult loginByOpenid(String openid) {
+        var binding = wxBindingRepository.findByOpenid(openid).orElse(null);
         var visitor = visitorRepository.findByWxOpenid(openid);
-        if (visitor.isPresent()) {
-            Visitor v = visitor.get();
-            String token = jwtService.issue(v.getId(), v.getPhoneMask(), List.of(ROLE_VISITOR));
-            log.info("微信一键登录（已绑定） openid={} visitorId={} name={}", openid, v.getId(), v.getName());
-            return new WxLoginResult(token, ROLE_VISITOR, v.getId(), v.getName(), openid, true,
-                    jwtService.ttlSeconds(), props.getWx().isMock());
+        List<String> roleCodes = binding == null ? List.of() : binding.roleCodes();
+        boolean approver = !roleCodes.isEmpty();
+
+        String role;
+        Long subjectId;
+        String name;
+        if (binding != null && binding.employeeId() != null) {
+            role = ROLE_EMPLOYEE;
+            subjectId = binding.employeeId();
+            name = binding.name();
+        } else if (visitor.isPresent()) {
+            role = ROLE_VISITOR;
+            subjectId = visitor.get().getId();
+            name = visitor.get().getName();
+        } else {
+            role = ROLE_VISITOR;
+            subjectId = 0L;
+            name = binding == null ? "微信访客" : binding.name();
         }
-        String token = jwtService.issue(0L, "微信用户", List.of(ROLE_VISITOR));
-        log.info("微信一键登录（未绑定，待首次预约） openid={}", openid);
-        return new WxLoginResult(token, ROLE_VISITOR, 0L, "微信访客", openid, false,
-                jwtService.ttlSeconds(), props.getWx().isMock());
+
+        List<String> roles = new java.util.ArrayList<>();
+        roles.add(role);
+        if (approver) {
+            roles.add(ROLE_APPROVER);
+            roles.addAll(roleCodes);
+        }
+        String phoneMask = binding != null ? binding.phoneMask()
+                : visitor.map(Visitor::getPhoneMask).orElse("微信用户");
+        String token = jwtService.issue(subjectId, phoneMask, roles,
+                binding == null ? null : binding.id());
+        log.info("微信一键登录 openid={} role={} subjectId={} 角色={}", openid, role, subjectId, roles);
+        return new WxLoginResult(token, role, subjectId, name, openid, subjectId > 0,
+                jwtService.ttlSeconds(), props.getWx().isMock(), roleCodes, approver,
+                binding == null ? null : binding.id());
     }
 
     /** mock 模式把 code 当 openid，方便没有小程序账号时联调。 */
-    private String resolveOpenid(String code) {
+    public String resolveOpenid(String code) {
         String value = EmployeeValidator.requireText(code, "微信登录凭证");
         AppProperties.Wx wx = props.getWx();
         if (wx.isMock()) {

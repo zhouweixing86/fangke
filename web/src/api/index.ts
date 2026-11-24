@@ -48,6 +48,7 @@ import type {
   TrafficRow,
   VehicleEventRow,
   VehiclePlateSnapshot,
+  WxRoleQr,
   VehiclePlateSyncResult
 } from './types'
 
@@ -305,6 +306,12 @@ export const createRole = (data: Record<string, unknown>) =>
 export const updateRole = (id: number, data: Record<string, unknown>) =>
   put<void>(`/admin/roles/${id}`, data)
 export const deleteRole = (id: number) => del<void>(`/admin/roles/${id}`)
+
+/* ---------------- 微信角色二维码（C-76） ---------------- */
+
+export const listWxRoleQr = () => get<WxRoleQr[]>('/admin/wx-role-qr')
+export const regenerateWxRoleQr = (roleId: number) =>
+  post<WxRoleQr>(`/admin/wx-role-qr/${roleId}/regenerate`)
 
 /* ---------------- 来访登记 + 基础字典（V26） ---------------- */
 

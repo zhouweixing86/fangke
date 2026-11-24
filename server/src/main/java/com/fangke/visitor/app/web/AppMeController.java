@@ -1,5 +1,6 @@
 package com.fangke.visitor.app.web;
 
+import com.fangke.visitor.app.auth.service.AppAuthService;
 import com.fangke.visitor.appointment.repository.VisitorRepository;
 import com.fangke.visitor.common.ApiResponse;
 import com.fangke.visitor.common.BusinessException;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -26,22 +28,29 @@ public class AppMeController {
 
     private final EmployeeRepository employeeRepository;
     private final VisitorRepository visitorRepository;
+    private final com.fangke.visitor.wxbind.repository.WxBindingRepository wxBindingRepository;
 
-    public AppMeController(EmployeeRepository employeeRepository, VisitorRepository visitorRepository) {
+    public AppMeController(EmployeeRepository employeeRepository, VisitorRepository visitorRepository,
+                           com.fangke.visitor.wxbind.repository.WxBindingRepository wxBindingRepository) {
         this.employeeRepository = employeeRepository;
         this.visitorRepository = visitorRepository;
+        this.wxBindingRepository = wxBindingRepository;
     }
 
     @GetMapping("/me")
     public ApiResponse<Map<String, Object>> me(HttpServletRequest request) {
         Long subjectId = AppAuthInterceptor.subjectId(request);
+        Long bindId = AppAuthInterceptor.bindId(request);
         String role = (String) request.getAttribute(AppAuthInterceptor.ATTR_ROLE);
         String phone = (String) request.getAttribute(AppAuthInterceptor.ATTR_PHONE);
+        List<String> roles = AppAuthInterceptor.roles(request);
 
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("role", role);
         view.put("phoneMask", phone);
-        if (AppAuthInterceptor.isEmployee(request)) {
+        view.put("roles", roles);
+        view.put("approver", roles.contains(AppAuthService.ROLE_APPROVER));
+        if (AppAuthInterceptor.isEmployee(request) && subjectId != null && subjectId > 0) {
             var employee = employeeRepository.findById(subjectId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "员工不存在"));
             view.put("subjectId", employee.getId());
@@ -49,13 +58,22 @@ public class AppMeController {
             view.put("deptName", employee.getDeptName());
             view.put("title", employee.getTitle());
             view.put("personNo", employee.getPersonNo());
-        } else {
+        } else if (subjectId != null && subjectId > 0) {
             var visitor = visitorRepository.findById(subjectId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "访客不存在"));
             view.put("subjectId", visitor.getId());
             view.put("name", visitor.getName());
             view.put("personNo", visitor.getPersonNo());
             view.put("company", visitor.getCompany());
+        } else if (bindId != null) {
+            // 只扫了角色码、还没登记过访客：没有访客档案，只用绑定信息回显
+            var binding = wxBindingRepository.findById(bindId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "微信绑定不存在"));
+            view.put("subjectId", 0L);
+            view.put("name", binding.name());
+        } else {
+            view.put("subjectId", 0L);
+            view.put("name", "微信访客");
         }
         return ApiResponse.ok(view);
     }

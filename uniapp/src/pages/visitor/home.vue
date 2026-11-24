@@ -10,6 +10,9 @@
     <view class="actions">
       <button class="pill" @click="goBooking">预约申请</button>
       <button class="pill pill--ghost" @click="goMine">我的预约</button>
+      <button v-if="approver" class="pill pill--approval" @click="goApprovals">
+        我的审批<text v-if="pending > 0" class="badge">{{ pending }}</text>
+      </button>
     </view>
 
     <view class="wave wave--1" />
@@ -20,7 +23,9 @@
 
 <script setup lang="ts">
 import { onShow } from '@dcloudio/uni-app'
-import { auth } from '@/store/auth'
+import { ref } from 'vue'
+import { myApprovalCount } from '@/api'
+import { auth, isApprover } from '@/store/auth'
 import { ensureVisitorLogin } from '@/utils/visitor'
 
 /**
@@ -28,7 +33,12 @@ import { ensureVisitorLogin } from '@/utils/visitor'
  *
  * <p>不做注册：进小程序即静默一键登录（wx.login → /api/app/auth/wx-login）。
  * 未绑定时后端仍发 token（subjectId=0），访客可先提交预约，提交后自动绑定 openid。
+ *
+ * <p>C-76：扫过管理端「角色二维码」的微信会带上后台角色，这里额外显示「我的审批」。
  */
+const approver = ref(isApprover())
+const pending = ref(0)
+
 function goBooking() {
   uni.navigateTo({ url: '/pages/visitor/new' })
 }
@@ -37,8 +47,12 @@ function goMine() {
   uni.navigateTo({ url: '/pages/visitor/index' })
 }
 
+function goApprovals() {
+  uni.navigateTo({ url: '/pages/employee/approvals' })
+}
+
 async function oneClickLogin() {
-  if (auth.token && auth.kind === 'APP' && auth.subjectId > 0) {
+  if (auth.token && auth.kind === 'APP' && (auth.subjectId > 0 || isApprover())) {
     return
   }
   try {
@@ -48,8 +62,24 @@ async function oneClickLogin() {
   }
 }
 
-onShow(() => {
-  oneClickLogin()
+async function refreshApprover() {
+  approver.value = isApprover()
+  if (!approver.value) {
+    pending.value = 0
+    return
+  }
+  try {
+    const result = await myApprovalCount()
+    pending.value = result.pending || 0
+  } catch {
+    pending.value = 0
+  }
+}
+
+onShow(async () => {
+  await oneClickLogin()
+  approver.value = isApprover()
+  await refreshApprover()
 })
 </script>
 
@@ -124,6 +154,21 @@ onShow(() => {
 
 .pill--ghost {
   background: #ffffff;
+}
+
+.pill--approval {
+  background: #1989fa;
+  color: #ffffff;
+  border-color: #1989fa;
+}
+
+.badge {
+  margin-left: 8rpx;
+  padding: 0 10rpx;
+  border-radius: 20rpx;
+  background: #e45656;
+  color: #ffffff;
+  font-size: 22rpx;
 }
 
 .wave {

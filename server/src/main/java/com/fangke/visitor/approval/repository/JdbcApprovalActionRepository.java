@@ -24,24 +24,31 @@ public class JdbcApprovalActionRepository implements ApprovalActionRepository {
     @Override
     public void insert(Long taskId, Long appointmentId, Long operatorId, int operatorType, int action,
                        Long targetUser, String comment, String gateSnapshot) {
+        insert(taskId, appointmentId, operatorId, null, operatorType, action, targetUser, comment, gateSnapshot);
+    }
+
+    @Override
+    public void insert(Long taskId, Long appointmentId, Long operatorId, String operatorName,
+                       int operatorType, int action, Long targetUser, String comment, String gateSnapshot) {
         jdbc.update(connection -> {
             var ps = connection.prepareStatement("""
-                    INSERT INTO approval_action (task_id, appointment_id, operator_id, operator_type, action,
-                        target_user, comment, gate_snapshot)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO approval_action (task_id, appointment_id, operator_id, operator_name,
+                        operator_type, action, target_user, comment, gate_snapshot)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """);
             ps.setLong(1, taskId);
             ps.setLong(2, appointmentId);
             ps.setLong(3, operatorId);
-            ps.setInt(4, operatorType);
-            ps.setInt(5, action);
+            ps.setString(4, operatorName);
+            ps.setInt(5, operatorType);
+            ps.setInt(6, action);
             if (targetUser == null) {
-                ps.setNull(6, Types.BIGINT);
+                ps.setNull(7, Types.BIGINT);
             } else {
-                ps.setLong(6, targetUser);
+                ps.setLong(7, targetUser);
             }
-            ps.setString(7, comment);
-            ps.setString(8, gateSnapshot);
+            ps.setString(8, comment);
+            ps.setString(9, gateSnapshot);
             return ps;
         });
     }
@@ -49,8 +56,8 @@ public class JdbcApprovalActionRepository implements ApprovalActionRepository {
     @Override
     public List<ActionRow> listByAppointment(Long appointmentId) {
         return jdbc.query("""
-                        SELECT id, task_id, operator_id, operator_type, action, target_user, comment,
-                               gate_snapshot, created_at
+                        SELECT id, task_id, operator_id, operator_name, operator_type, action, target_user,
+                               comment, gate_snapshot, created_at
                         FROM approval_action WHERE appointment_id = ? ORDER BY id
                         """,
                 (rs, i) -> {
@@ -60,6 +67,7 @@ public class JdbcApprovalActionRepository implements ApprovalActionRepository {
                             rs.getLong("id"),
                             rs.getLong("task_id"),
                             rs.getLong("operator_id"),
+                            rs.getString("operator_name"),
                             rs.getInt("operator_type"),
                             rs.getInt("action"),
                             targetUser,

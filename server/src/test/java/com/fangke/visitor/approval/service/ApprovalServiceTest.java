@@ -208,6 +208,17 @@ class ApprovalServiceTest {
                                                      int limit) {
             return java.util.List.of();
         }
+
+        @Override
+        public java.util.List<DoneRow> findDoneByOperator(long operatorId, int operatorType,
+                                                          int offset, int limit) {
+            return java.util.List.of();
+        }
+
+        @Override
+        public long countDoneByOperator(long operatorId, int operatorType) {
+            return 0;
+        }
     }
 
     static class FakeActionRepo implements ApprovalActionRepository {
@@ -222,6 +233,13 @@ class ApprovalServiceTest {
         @Override
         public void insert(Long taskId, Long appointmentId, Long operatorId, int operatorType, int action,
                            Long targetUser, String comment, String gateSnapshot) {
+            actions.add((long) action);
+        }
+
+        @Override
+        public void insert(Long taskId, Long appointmentId, Long operatorId, String operatorName,
+                           int operatorType, int action, Long targetUser, String comment,
+                           String gateSnapshot) {
             actions.add((long) action);
         }
 

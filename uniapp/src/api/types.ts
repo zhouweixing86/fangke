@@ -125,12 +125,48 @@ export interface QrVerifyResult {
 export interface TodoView {
   taskId: number
   level: number
+  nodeName?: string
   appointmentNo: string
   visitorName: string
   idCardMask: string
   purpose: string
   startTime: string
   endTime: string
+}
+
+/** 「已审批」（C-76）：微信审批人处理过的任务 */
+export interface MyApprovalDone {
+  taskId: number
+  level: number
+  nodeName: string
+  appointmentNo: string
+  visitorName: string
+  purpose: string
+  action: number
+  actionText: string
+  comment: string
+  actedAt: string
+}
+
+/** 扫码预览：这是哪个角色的二维码 */
+export interface BindPreview {
+  roleName: string
+  roleCode: string
+}
+
+/** 扫码绑定结果：直接带回新 token */
+export interface BindResult {
+  roleName: string
+  roles: string[]
+  login: {
+    token: string
+    role: string
+    subjectId: number
+    name: string
+    openid?: string
+    roleCodes?: string[]
+    approver?: boolean
+  }
 }
 
 export interface ApprovalAction {
@@ -144,6 +180,7 @@ export interface ApprovalAction {
 export interface ApprovalDetail {
   taskId: number
   level: number
+  nodeName?: string
   status: number
   statusText: string
   appointmentNo: string

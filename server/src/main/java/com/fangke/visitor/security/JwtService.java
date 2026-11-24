@@ -35,12 +35,21 @@ public class JwtService {
         this.ttlSeconds = properties.getJwt().getTtl().toSeconds();
     }
 
-    public String issue(long userId, String username, List<String> roles) {        String header = encode("{\"alg\":\"HS256\",\"typ\":\"JWT\"}");
+    public String issue(long userId, String username, List<String> roles) {
+        return issue(userId, username, roles, null);
+    }
+
+    /**
+     * @param bindId 微信角色绑定 ID（V29），小程序审批接口据此取已授予角色；后台账号传 {@code null}
+     */
+    public String issue(long userId, String username, List<String> roles, Long bindId) {
+        String header = encode("{\"alg\":\"HS256\",\"typ\":\"JWT\"}");
         String payload = encode(String.format(
-                "{\"uid\":%d,\"sub\":\"%s\",\"roles\":[%s],\"exp\":%d}",
+                "{\"uid\":%d,\"sub\":\"%s\",\"roles\":[%s],\"bindId\":%d,\"exp\":%d}",
                 userId,
                 escape(username),
                 roles.stream().map(r -> "\"" + escape(r) + "\"").reduce((a, b) -> a + "," + b).orElse(""),
+                bindId == null ? 0L : bindId,
                 Instant.now().getEpochSecond() + ttlSeconds));
         String signingInput = header + "." + payload;
         return signingInput + "." + encode(sign(signingInput));

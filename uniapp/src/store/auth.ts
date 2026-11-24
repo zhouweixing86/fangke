@@ -55,12 +55,19 @@ export function applyWxLogin(result: {
   subjectId: number
   name: string
   openid?: string
+  roleCodes?: string[]
+  approver?: boolean
 }) {
+  const roles = [result.role]
+  if (result.approver) roles.push('APP_APPROVER')
+  for (const code of result.roleCodes ?? []) {
+    if (roles.indexOf(code) < 0) roles.push(code)
+  }
   persist(result.token, {
     kind: 'APP',
     name: result.name,
     role: result.role,
-    roles: [result.role],
+    roles,
     subjectId: result.subjectId,
     phoneMask: '',
     openid: result.openid
@@ -93,6 +100,8 @@ export function logout() {
 /** 访客端（仅微信小程序使用） */
 export const isAppUser = () => auth.kind === 'APP' && !!auth.role
 export const isVisitor = () => auth.role === 'APP_VISITOR'
+/** C-76：扫码绑定过任意后台角色 → 小程序显示「我的审批」 */
+export const isApprover = () => auth.kind === 'APP' && auth.roles.indexOf('APP_APPROVER') >= 0
 
 /** 管理端 */
 export const isAdminUser = () => auth.kind === 'ADMIN'
@@ -107,7 +116,7 @@ export const isGuardOrAdmin = () => auth.roles.indexOf('GUARD') >= 0 || isAdmin(
  */
 export function homePath(): string {
   if (isAdminUser()) return '/pages/admin/workbench'
-  if (isVisitor()) return '/pages/visitor/home'
+  if (auth.kind === 'APP' && auth.role) return '/pages/visitor/home'
   return '/pages/login/login'
 }
 

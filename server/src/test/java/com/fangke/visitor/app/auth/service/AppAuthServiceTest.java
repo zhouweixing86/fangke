@@ -48,7 +48,11 @@ class AppAuthServiceTest {
 
         employeeRepo = mock(EmployeeRepository.class);
         visitorRepo = mock(VisitorRepository.class);
-        service = new AppAuthService(employeeRepo, visitorRepo, crypto, new JwtService(props), props);
+        com.fangke.visitor.wxbind.repository.WxBindingRepository wxBindingRepo =
+                mock(com.fangke.visitor.wxbind.repository.WxBindingRepository.class);
+        when(wxBindingRepo.findByPhoneHmac(anyString())).thenReturn(Optional.empty());
+        service = new AppAuthService(employeeRepo, visitorRepo, wxBindingRepo, crypto,
+                new JwtService(props), props);
     }
 
     private String code() {
