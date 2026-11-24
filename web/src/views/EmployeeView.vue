@@ -25,7 +25,7 @@
       <el-table-column label="车牌" width="110">
         <template #default="{ row }">{{ row.plateNo || '-' }}</template>
       </el-table-column>
-      <el-table-column prop="title" label="职务" width="110" />
+      <el-table-column prop="title" label="岗位" width="110" />
       <el-table-column prop="phoneMask" label="手机号" width="130" />
       <el-table-column prop="idCardMask" label="身份证" width="180" />
       <el-table-column label="有效期" width="200">
@@ -76,8 +76,12 @@
             <el-option v-for="d in depts" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="职务">
-          <el-input v-model="form.title" />
+        <el-form-item label="岗位">
+          <el-select v-model="form.title" filterable allow-create default-first-option clearable
+            placeholder="选择岗位（也可直接输入新岗位）" style="width: 100%"
+            @visible-change="(open: boolean) => open && loadPosts()">
+            <el-option v-for="p in posts" :key="p.id" :label="p.name" :value="p.name" />
+          </el-select>
         </el-form-item>
         <el-form-item label="车牌号">
           <el-input v-model="form.plateNo" maxlength="16" placeholder="如 京A12345（二期车辆识别用）" />
@@ -151,13 +155,14 @@ import {
   listDepts,
   listEmployeeFaces,
   listEmployees,
+  listVisitDict,
   stopEmployee,
   syncAllEmployees,
   syncEmployee,
   updateEmployee,
   uploadEmployeeFace
 } from '@/api'
-import type { DeptView, EmployeeFace, EmployeeView } from '@/api/types'
+import type { DeptView, EmployeeFace, EmployeeView, VisitDict } from '@/api/types'
 
 const rows = ref<EmployeeView[]>([])
 const total = ref(0)
@@ -167,6 +172,17 @@ const loading = ref(false)
 const query = reactive<{ keyword: string; status: number | undefined }>({ keyword: '', status: undefined })
 
 const depts = ref<DeptView[]>([])
+/** 岗位字典（基础字典 POST，C-74） */
+const posts = ref<VisitDict[]>([])
+
+/** 岗位下拉：打开时刷新，管理端刚新增的岗位立刻可选 */
+async function loadPosts() {
+  try {
+    posts.value = await listVisitDict('POST')
+  } catch {
+    posts.value = []
+  }
+}
 const formVisible = ref(false)
 const saving = ref(false)
 const formRef = ref<FormInstance>()
@@ -375,7 +391,7 @@ async function uploadFaceFile(file: File) {
 
 onMounted(async () => {
   depts.value = await listDepts()
-  await load()
+  await Promise.all([loadPosts(), load()])
 })
 </script>
 
