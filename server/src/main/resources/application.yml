@@ -50,6 +50,8 @@ fangke:
     - http://127.0.0.1:5174
     - http://localhost:5175
     - http://127.0.0.1:5175
+  # 通配来源（局域网演示用，逗号分隔），如 http://192.168.*:*；生产留空走上面的精确来源
+  cors-allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:}
 
   jwt:
     # 生产必须用环境变量注入，禁止把真实密钥写进配置文件

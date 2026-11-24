@@ -35,8 +35,12 @@ public class WebConfig implements WebMvcConfigurer {
     /** 前端独立部署（Vite dev server）时需要；生产建议同域部署或由网关统一处理。 */
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        // 精确来源与通配来源合并成 patterns：Spring 不允许 allowedOrigins 与 allowedOriginPatterns 同时设置，
+        // 而 patterns 本身也接受精确地址，所以统一走 patterns（局域网演示时可配 http://192.168.*:*）
+        java.util.List<String> patterns = new java.util.ArrayList<>(props.getCorsAllowedOrigins());
+        patterns.addAll(props.getCorsAllowedOriginPatterns());
         registry.addMapping("/api/**")
-                .allowedOrigins(props.getCorsAllowedOrigins().toArray(new String[0]))
+                .allowedOriginPatterns(patterns.toArray(new String[0]))
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("Authorization", "Content-Type", "X-Employee-Id", "X-Trace-Id")
                 .maxAge(3600);

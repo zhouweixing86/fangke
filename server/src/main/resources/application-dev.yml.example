@@ -27,6 +27,12 @@ logging:
     com.fangke: DEBUG
 
 fangke:
+  # 局域网演示：允许同网段来源跨域（同事用 http://<本机IP>:5173 或 :5175 打开）
+  cors-allowed-origin-patterns:
+    - http://192.168.*:*
+    - http://10.*:*
+    - http://172.16.*:*
+
   device:
     pull-verify-sign: false
     pull-sign-key: fangke-pull-key

@@ -119,4 +119,16 @@ class AuthInterceptorTest {
         assertEquals(ErrorCode.UNAUTHORIZED.code(), e.getCode());
         assertTrue(e.getMessage().contains("过期"));
     }
+
+    @Test
+    @DisplayName("CORS 预检（OPTIONS）不带 token 也要放行，否则跨域请求全部 500")
+    void preflightBypassesAuth() {
+        MockHttpServletRequest preflight = new MockHttpServletRequest("OPTIONS", "/api/admin/device");
+        preflight.setRequestURI("/api/admin/device");
+        preflight.addHeader("Origin", "http://192.168.1.131:5175");
+        preflight.addHeader("Access-Control-Request-Method", "GET");
+        preflight.addHeader("Access-Control-Request-Headers", "authorization");
+
+        assertTrue(interceptor.preHandle(preflight, new MockHttpServletResponse(), new Object()));
+    }
 }

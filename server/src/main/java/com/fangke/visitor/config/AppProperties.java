@@ -25,6 +25,13 @@ public class AppProperties {
     private List<String> corsAllowedOrigins = new ArrayList<>(
             List.of("http://localhost:5173", "http://127.0.0.1:5173"));
 
+    /**
+     * 跨域来源通配（局域网演示用），如 {@code http://192.168.*:*}。
+     *
+     * <p>只在开发/联调环境配置；生产建议同域部署或由网关统一处理。
+     */
+    private List<String> corsAllowedOriginPatterns = new ArrayList<>();
+
     public String getTenantCode() {
         return tenantCode;
     }
@@ -75,6 +82,14 @@ public class AppProperties {
 
     public void setCorsAllowedOrigins(List<String> corsAllowedOrigins) {
         this.corsAllowedOrigins = corsAllowedOrigins;
+    }
+
+    public List<String> getCorsAllowedOriginPatterns() {
+        return corsAllowedOriginPatterns;
+    }
+
+    public void setCorsAllowedOriginPatterns(List<String> corsAllowedOriginPatterns) {
+        this.corsAllowedOriginPatterns = corsAllowedOriginPatterns;
     }
 
     /* ---------------- 初始化管理员 ---------------- */

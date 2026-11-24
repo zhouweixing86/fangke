@@ -11,6 +11,8 @@ export default defineConfig({
     }
   },
   server: {
+    // 局域网演示：监听 0.0.0.0，同事用 http://<本机IP>:5173 访问（前端仍走 Vite 代理，不涉及 CORS）
+    host: true,
     port: 5173,
     proxy: {
       '/api': {

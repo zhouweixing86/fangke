@@ -35,6 +35,10 @@ public class AuthInterceptor implements HandlerInterceptor {
     @Override
     @SuppressWarnings("unchecked")
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        // CORS 预检不带 Authorization（浏览器不允许），放行交给 Spring 的 CORS 处理
+        if (org.springframework.web.cors.CorsUtils.isPreFlightRequest(request)) {
+            return true;
+        }
         String header = request.getHeader("Authorization");
         if (header == null || !header.startsWith("Bearer ")) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
