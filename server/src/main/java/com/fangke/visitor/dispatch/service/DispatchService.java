@@ -164,7 +164,7 @@ public class DispatchService implements DispatchTrigger {
         Map<Long, List<Device>> devicesByGate = new LinkedHashMap<>();
         List<Long> emptyGates = new ArrayList<>();
         for (Long gateId : gateIds) {
-            List<Device> gateDevices = deviceRepository.findActiveByGate(gateId);
+            List<Device> gateDevices = DeviceRepository.personDevices(deviceRepository.findActiveByGate(gateId));
             if (gateDevices.isEmpty()) {
                 emptyGates.add(gateId);
             } else {
@@ -275,7 +275,7 @@ public class DispatchService implements DispatchTrigger {
         int fail = 0;
         int deviceTotal = 0;
         for (Long gateId : gateIds) {
-            List<Device> devices = deviceRepository.findActiveByGate(gateId);
+            List<Device> devices = DeviceRepository.personDevices(deviceRepository.findActiveByGate(gateId));
             deviceTotal += devices.size();
             for (Device device : devices) {
                 long itemId = batchRepository.addItem(new SyncBatchItem(null, batchId, device.getId(),
@@ -363,7 +363,7 @@ public class DispatchService implements DispatchTrigger {
         List<AccessGrant> expired = grantRepository.findExpiredBefore(LocalDateTime.now().minusDays(7), 200);
         int cleaned = 0;
         for (AccessGrant grant : expired) {
-            List<Device> devices = deviceRepository.findActiveByGate(grant.gateId());
+            List<Device> devices = DeviceRepository.personDevices(deviceRepository.findActiveByGate(grant.gateId()));
             for (Device device : devices) {
                 try {
                     DeviceAdapter adapter = adapterFactory.resolve(device);

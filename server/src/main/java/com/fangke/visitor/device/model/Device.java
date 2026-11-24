@@ -8,14 +8,28 @@ import java.time.LocalDateTime;
 public class Device {
 
     /**
-     * 通道类型：
+     * 通道类型（决定用哪个适配器）：
      * <ul>
-     *   <li>{@link #PULL}：HTTP 客户端（轮询）——设备主动来拉，当前唯一在用的真机通道；</li>
+     *   <li>{@link #PULL}：人行终端 HTTP 客户端（轮询）——设备主动来拉，当前唯一在用的真机通道；</li>
+     *   <li>{@link #VEHICLE}：车闸相机（车牌识别），厂商协议待接入，见 docs/18；</li>
      *   <li>{@link #MOCK}：内置模拟设备，无硬件时自测用；</li>
      *   <li>{@link #CLOUD}：云 MQTT，占位未实现。</li>
      * </ul>
      */
-    public enum Channel { PULL, MOCK, CLOUD }
+    public enum Channel { PULL, VEHICLE, MOCK, CLOUD }
+
+    /** 通道中文名：管理端「单独管理」按它分人行闸 / 车闸。 */
+    public static String channelText(Channel channel) {
+        if (channel == null) {
+            return "未设置";
+        }
+        return switch (channel) {
+            case PULL -> "人行终端";
+            case VEHICLE -> "车闸相机";
+            case MOCK -> "模拟设备";
+            case CLOUD -> "云 MQTT";
+        };
+    }
 
     private Long id;
     private String deviceSn;
@@ -39,6 +53,18 @@ public class Device {
     private String capabilityJson;
     /** 备注：现场补的位置说明（如「A 栋东侧门内侧」）。 */
     private String remark;
+
+    /**
+     * 是否"真在线"：{@code online_state} 只会被心跳置 1、没有任务置回 0，
+     * 设备断电后会一直显示在线。这里按心跳新鲜度判断（3 个心跳周期，最少 60 秒）。
+     */
+    public boolean isFreshOnline(int heartSeconds) {
+        if (!online || lastHeartbeat == null) {
+            return false;
+        }
+        long windowSeconds = Math.max(60L, heartSeconds * 3L);
+        return lastHeartbeat.isAfter(LocalDateTime.now().minusSeconds(windowSeconds));
+    }
 
     public Long getId() {
         return id;

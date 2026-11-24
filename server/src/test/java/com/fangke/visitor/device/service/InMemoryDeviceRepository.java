@@ -54,6 +54,13 @@ public class InMemoryDeviceRepository implements DeviceRepository {
     }
 
     @Override
+    public List<Device> findActiveByChannel(Device.Channel channel) {
+        return devices.values().stream()
+                .filter(d -> d.getStatus() == 1 && d.getChannel() == channel)
+                .toList();
+    }
+
+    @Override
     public void updateHeartbeat(String deviceSn, String ip, Integer personCount,
                                 LocalDateTime heartbeatAt, Integer clockSkewSeconds, String rawJson) {
         Device device = devices.get(deviceSn);
@@ -119,6 +126,14 @@ public class InMemoryDeviceRepository implements DeviceRepository {
                         d.setRemark(remark);
                     }
                 });
+    }
+
+    @Override
+    public void updateChannel(Long deviceId, Device.Channel channel) {
+        devices.values().stream()
+                .filter(d -> deviceId.equals(d.getId()))
+                .findFirst()
+                .ifPresent(d -> d.setChannel(channel));
     }
 
     @Override

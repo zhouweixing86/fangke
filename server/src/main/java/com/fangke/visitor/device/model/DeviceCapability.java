@@ -25,7 +25,13 @@ public enum DeviceCapability {
     FACE_PHOTO("人脸照片下发"),
     QR_ONLINE("在线二维码核验"),
     HEARTBEAT("心跳上报"),
-    RECORD_CALLBACK("通行记录回调");
+    RECORD_CALLBACK("通行记录回调"),
+
+    /* ---------------- 车闸相机（docs/18，厂商协议待接入） ---------------- */
+    PLATE_UPSERT("车牌名单下发"),
+    PLATE_REMOVE("车牌名单删除"),
+    PLATE_LIST("读取车牌名单"),
+    PLATE_CALLBACK("车牌识别上报");
 
     private final String label;
 
@@ -44,5 +50,10 @@ public enum DeviceCapability {
     /** 下发名单所必需的最小能力集，用于设备档案自检与交接检查。 */
     public static Set<DeviceCapability> dispatchRequired() {
         return EnumSet.of(PERSON_UPSERT, PERSON_REMOVE, PERSON_LIST);
+    }
+
+    /** 下发车牌名单所必需的最小能力集（车闸相机自检用）。 */
+    public static Set<DeviceCapability> plateDispatchRequired() {
+        return EnumSet.of(PLATE_UPSERT, PLATE_REMOVE);
     }
 }

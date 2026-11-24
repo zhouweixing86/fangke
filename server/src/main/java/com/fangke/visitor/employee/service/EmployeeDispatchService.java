@@ -115,7 +115,7 @@ public class EmployeeDispatchService {
         int success = 0;
         int fail = 0;
         for (Gate gate : gates) {
-            for (Device device : deviceRepository.findActiveByGate(gate.id())) {
+            for (Device device : DeviceRepository.personDevices(deviceRepository.findActiveByGate(gate.id()))) {
                 devices++;
                 try {
                     push(device, payload);
@@ -143,7 +143,7 @@ public class EmployeeDispatchService {
         int success = 0;
         int fail = 0;
         for (AccessGrant grant : grants) {
-            for (Device device : deviceRepository.findActiveByGate(grant.gateId())) {
+            for (Device device : DeviceRepository.personDevices(deviceRepository.findActiveByGate(grant.gateId()))) {
                 devices++;
                 try {
                     remove(device, employee.getPersonNo());

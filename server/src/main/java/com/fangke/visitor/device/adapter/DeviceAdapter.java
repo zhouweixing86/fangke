@@ -1,9 +1,11 @@
 package com.fangke.visitor.device.adapter;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fangke.visitor.common.ErrorCode;
 import com.fangke.visitor.device.model.Device;
 import com.fangke.visitor.device.model.DeviceCapability;
 import com.fangke.visitor.device.model.PersonPayload;
+import com.fangke.visitor.device.model.PlatePayload;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -65,4 +67,23 @@ public interface DeviceAdapter {
 
     /** 校准设备时间。 */
     void setDeviceTime(Device device, LocalDateTime time);
+
+    /**
+     * 下发车牌名单（车闸相机，docs/18）。
+     *
+     * <p>只有车闸相机的适配器会实现；人行终端一律走 {@link #upsertPerson}。
+     * 默认实现直接报「不支持」，避免业务误把车牌当人员下发。
+     */
+    default void pushPlates(Device device, List<PlatePayload> plates) {
+        throw new DeviceException(ErrorCode.DEVICE_UNSUPPORTED,
+                "设备 " + device.getDeviceSn() + " 不支持「" + DeviceCapability.PLATE_UPSERT.label()
+                        + "」：该通道未实现车牌名单下发");
+    }
+
+    /** 删除单个车牌（车牌过期/换车时用）；默认不支持。 */
+    default void removePlate(Device device, String plateNo) {
+        throw new DeviceException(ErrorCode.DEVICE_UNSUPPORTED,
+                "设备 " + device.getDeviceSn() + " 不支持「" + DeviceCapability.PLATE_REMOVE.label()
+                        + "」：该通道未实现车牌名单删除");
+    }
 }

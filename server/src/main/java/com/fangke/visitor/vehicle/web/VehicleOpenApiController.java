@@ -5,9 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fangke.visitor.config.AppProperties;
 import com.fangke.visitor.device.model.Device;
 import com.fangke.visitor.device.pull.OpenApiSign;
-import com.fangke.visitor.device.service.DeviceRepository;
 import com.fangke.visitor.vehicle.model.VehicleEvent;
 import com.fangke.visitor.vehicle.service.VehicleAccessService;
+import com.fangke.visitor.vehicle.service.VehicleDeviceService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,14 +44,14 @@ public class VehicleOpenApiController {
 
     private final ObjectMapper mapper;
     private final VehicleAccessService accessService;
-    private final DeviceRepository deviceRepository;
+    private final VehicleDeviceService deviceService;
     private final AppProperties props;
 
     public VehicleOpenApiController(ObjectMapper mapper, VehicleAccessService accessService,
-                                    DeviceRepository deviceRepository, AppProperties props) {
+                                    VehicleDeviceService deviceService, AppProperties props) {
         this.mapper = mapper;
         this.accessService = accessService;
-        this.deviceRepository = deviceRepository;
+        this.deviceService = deviceService;
         this.props = props;
     }
 
@@ -86,8 +86,12 @@ public class VehicleOpenApiController {
             return fail("缺少车牌号");
         }
         Long gateId = asLong(data, "gateId");
-        if (gateId == null && deviceSn != null) {
-            gateId = deviceRepository.findBySn(deviceSn).map(Device::getGateId).orElse(null);
+        Device device = null;
+        if (deviceSn != null) {
+            device = deviceService.resolveOrRegister(deviceSn, request.getRemoteAddr());
+            if (gateId == null && device != null) {
+                gateId = device.getGateId();
+            }
         }
         int direction = asInt(data, "direction", "inout") == null ? 1 : asInt(data, "direction", "inout");
         LocalDateTime eventTime = parseTime(data);

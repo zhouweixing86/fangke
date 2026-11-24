@@ -386,6 +386,10 @@ public class OpenApiDeviceService {
         LocalDateTime time = OpenApiRecordMapper.eventTime(text(data, "time"));
         Integer openType = number(data, "openType");
         Integer inout = number(data, "inout");
+        // 出口相机可能不上报 inout，回退到设备档案的方向，否则出门记录会被当成进门
+        if (inout == null && device.getDirection() != null && device.getDirection() != 2) {
+            inout = device.getDirection();
+        }
         Integer resultStatus = number(data, "resultStatus");
         String temperature = text(data, "Temp");
         String tableId = text(data, "tableID");

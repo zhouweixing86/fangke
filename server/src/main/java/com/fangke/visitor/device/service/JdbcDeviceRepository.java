@@ -104,6 +104,14 @@ public class JdbcDeviceRepository implements DeviceRepository {
     }
 
     @Override
+    public List<Device> findActiveByChannel(Device.Channel channel) {
+        if (channel == null) {
+            return findAllActive();
+        }
+        return jdbc.query(SELECT + "WHERE status = 1 AND channel = ? ORDER BY id", MAPPER, channel.name());
+    }
+
+    @Override
     public void updateHeartbeat(String deviceSn, String ip, Integer personCount,
                                 LocalDateTime heartbeatAt, Integer clockSkewSeconds, String rawJson) {
         jdbc.update("UPDATE device SET online_state = 1, last_heartbeat = ?, person_count = COALESCE(?, person_count), "
@@ -179,6 +187,14 @@ public class JdbcDeviceRepository implements DeviceRepository {
                         + "direction = COALESCE(?, direction), gate_id = COALESCE(?, gate_id), "
                         + "remark = COALESCE(?, remark) WHERE id = ?",
                 deviceName, model, direction, gateId, remark, deviceId);
+    }
+
+    @Override
+    public void updateChannel(Long deviceId, Device.Channel channel) {
+        if (channel == null) {
+            return;
+        }
+        jdbc.update("UPDATE device SET channel = ? WHERE id = ?", channel.name(), deviceId);
     }
 
     @Override

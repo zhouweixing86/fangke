@@ -25,6 +25,7 @@ export interface DeviceView {
   gateId: number
   gateName: string
   channel: string
+  channelText: string
   ip: string
   online: boolean
   lastHeartbeat: string
@@ -500,6 +501,42 @@ export interface VehicleEventRow {
   failReason: string
   photoKey: string
   deviceSn: string
+}
+
+/** 车闸车牌名单：平台侧"应该下发什么"（docs/18） */
+export interface VehiclePlateRow {
+  plateNo: string
+  ownerType: string
+  ownerTypeText: string
+  ownerName: string
+  personNo: string
+  validFrom: string
+  validTo: string
+  validToText: string
+}
+
+export interface VehiclePlateSnapshot {
+  summary: { employee: number; visitor: number; total: number }
+  gateId: number
+  gateName: string
+  plates: VehiclePlateRow[]
+}
+
+/** 车牌下发到某台车闸相机的结果；厂商协议未接入时 status=PENDING_VENDOR */
+export interface VehiclePlateSyncDevice {
+  deviceId: number
+  deviceSn: string
+  deviceName: string
+  gateId: number
+  status: string
+  message: string
+  plateCount: number
+}
+
+export interface VehiclePlateSyncResult {
+  plateTotal: number
+  pendingDevices: number
+  devices: VehiclePlateSyncDevice[]
 }
 
 /** 通行记录汇总：一人一天一行（C-69） */

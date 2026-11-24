@@ -141,6 +141,20 @@ class EmployeeDispatchServiceTest {
     }
 
     @Test
+    @DisplayName("同门点挂了车闸相机：人员名单只发给人行终端")
+    void syncSkipsVehicleCamera() {
+        Device camera = device(3L, "CAR-EAST-1", 10L);
+        camera.setChannel(Device.Channel.VEHICLE);
+        when(deviceRepository.findActiveByGate(10L)).thenReturn(List.of(eastDevice, camera));
+
+        EmployeeDispatchService.SyncResult result = service.sync(employee(Employee.STATUS_ACTIVE));
+
+        assertEquals(1, result.devices(), "车闸相机不算人员下发目标");
+        verify(adapter).upsertPerson(eq(eastDevice), any());
+        verify(adapter, never()).upsertPerson(eq(camera), any());
+    }
+
+    @Test
     @DisplayName("停用员工：不推送，授权直接置撤销")
     void syncDisabledEmployeeRevokesGrant() {
         service.sync(employee(Employee.STATUS_DISABLED));

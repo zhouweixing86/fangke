@@ -49,6 +49,15 @@ public interface AppointmentRepository {
     }
 
     /**
+     * 某天填了车牌、当前可通行的预约单（车闸车牌白名单来源之一，docs/18）。
+     *
+     * <p>默认返回空，方便测试替身；生产实现见 JdbcAppointmentRepository。
+     */
+    default List<Appointment> findPlateAppointmentsOnDate(java.time.LocalDate date) {
+        return List.of();
+    }
+
+    /**
      * 到期未到访的预约（status ∈ {30 已通过, 35 可通行} 且 end_time 早于 before）。
      * 定时任务用：置为「已过期」并通知访客。
      */

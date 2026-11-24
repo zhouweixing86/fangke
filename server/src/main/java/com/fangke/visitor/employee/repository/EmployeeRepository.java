@@ -75,4 +75,13 @@ public interface EmployeeRepository {
     default java.util.Optional<Employee> findActiveByPlateNo(String plateNo) {
         return java.util.Optional.empty();
     }
+
+    /**
+     * 全部填了车牌的在职员工（车闸车牌白名单来源之一，docs/18）。
+     *
+     * <p>默认返回空，方便测试替身只实现自己关心的方法；生产实现见 JdbcEmployeeRepository。
+     */
+    default List<Employee> findActiveWithPlate() {
+        return List.of();
+    }
 }

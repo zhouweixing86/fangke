@@ -24,6 +24,26 @@ public interface DeviceRepository {
     /** 全部启用设备（对账定时任务用）。 */
     List<Device> findAllActive();
 
+    /** 按通道取启用设备：车闸相机单独管理时用（docs/18）。 */
+    List<Device> findActiveByChannel(Device.Channel channel);
+
+    /**
+     * 一个门点可能同时挂人行闸与车闸；人员/黑名单下发只能发给人行终端。
+     *
+     * <p>写成静态方法而不是仓储默认方法：测试里 deviceRepository 是 mock，
+     * 默认方法会被 mock 成空返回，业务就"静默不下发"了。
+     */
+    static List<Device> personDevices(List<Device> devices) {
+        if (devices == null) {
+            return List.of();
+        }
+        return devices.stream().filter(DeviceRepository::isPersonDevice).toList();
+    }
+
+    static boolean isPersonDevice(Device device) {
+        return device != null && device.getChannel() != Device.Channel.VEHICLE;
+    }
+
     /**
      * 心跳落库：更新在线状态与容量，并按策略写入 device_heartbeat 样本。
      *
@@ -58,6 +78,9 @@ public interface DeviceRepository {
      */
     void updateMeta(Long deviceId, String deviceName, String model, Integer direction,
                     Long gateId, String remark);
+
+    /** 改通道（人行终端 ↔ 车闸相机）：单独管理时用来纠正误登记的类型。 */
+    void updateChannel(Long deviceId, Device.Channel channel);
 
     /** 门点下的设备数量（门点停用前要先清空，避免设备无门可投递）。 */
     int countByGate(Long gateId);

@@ -56,7 +56,7 @@ public class BlacklistDeviceDispatcher {
         }
         String payload = payload(idno);
         int queued = 0;
-        for (Device device : deviceRepository.findAllActive()) {
+        for (Device device : DeviceRepository.personDevices(deviceRepository.findAllActive())) {
             long id = commandRepository.enqueue(device.getId(),
                     PullCommandRepository.TYPE_ADD_PERSON, PRIORITY, payload, null);
             if (id > 0) {
@@ -80,7 +80,7 @@ public class BlacklistDeviceDispatcher {
         }
         String payload = payload(idno);
         int queued = 0;
-        for (Device device : deviceRepository.findAllActive()) {
+        for (Device device : DeviceRepository.personDevices(deviceRepository.findAllActive())) {
             long id = commandRepository.enqueue(device.getId(),
                     PullCommandRepository.TYPE_DEL_PERSON, PRIORITY, payload, null);
             if (id > 0) {

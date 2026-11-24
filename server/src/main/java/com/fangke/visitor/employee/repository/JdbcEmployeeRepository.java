@@ -289,4 +289,10 @@ public class JdbcEmployeeRepository implements EmployeeRepository {
                 .stream().findFirst();
     }
 
+    @Override
+    public List<Employee> findActiveWithPlate() {
+        return jdbc.query(SELECT + " WHERE e.status = 1 AND e.deleted_at IS NULL "
+                + "AND e.plate_no IS NOT NULL AND e.plate_no <> '' ORDER BY e.id", MAPPER);
+    }
+
 }

@@ -1,6 +1,11 @@
 <template>
   <div class="page-card">
     <div class="toolbar">
+      <el-radio-group v-model="deviceKind" @change="load">
+        <el-radio-button value="PULL">人行终端</el-radio-button>
+        <el-radio-button value="VEHICLE">车闸相机</el-radio-button>
+        <el-radio-button value="">全部</el-radio-button>
+      </el-radio-group>
       <el-button :icon="Refresh" @click="load">刷新</el-button>
       <el-select v-model="filterGateId" clearable placeholder="全部门点" style="width: 180px"
         @change="load">
@@ -24,9 +29,11 @@
       <el-table-column prop="deviceSn" label="SN" width="160" />
       <el-table-column prop="ip" label="IP" width="130" />
       <el-table-column prop="model" label="型号" width="140" />
-      <el-table-column label="通道" width="90">
+      <el-table-column label="通道" width="110">
         <template #default="{ row }">
-          <el-tag size="small" type="info">{{ row.channel }}</el-tag>
+          <el-tag size="small" :type="row.channel === 'VEHICLE' ? 'warning' : 'info'">
+            {{ row.channelText || row.channel }}
+          </el-tag>
         </template>
       </el-table-column>
       <el-table-column label="状态" width="90">
@@ -40,12 +47,17 @@
         <template #default="{ row }">{{ row.personCount }} / {{ row.capacity || '-' }}</template>
       </el-table-column>
       <el-table-column prop="lastHeartbeat" label="最近心跳" width="160" />
-      <el-table-column label="操作" width="290" fixed="right">
+      <el-table-column label="操作" width="320" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">档案</el-button>
-          <el-button link type="primary" @click="openDoor(row)">开门</el-button>
-          <el-button link type="primary" @click="openRemote(row)">远程管理</el-button>
-          <el-button link type="primary" @click="openLocal(row)">本地管理</el-button>
+          <template v-if="row.channel === 'VEHICLE'">
+            <el-button link type="primary" @click="openPlates(row)">车牌名单</el-button>
+          </template>
+          <template v-else>
+            <el-button link type="primary" @click="openDoor(row)">开门</el-button>
+            <el-button link type="primary" @click="openRemote(row)">远程管理</el-button>
+            <el-button link type="primary" @click="openLocal(row)">本地管理</el-button>
+          </template>
           <el-popconfirm title="删除这台设备的档案？历史通行记录会保留" confirm-button-text="删除"
             @confirm="doDelete(row)">
             <template #reference>
@@ -61,6 +73,12 @@
         style="margin-bottom: 12px"
         title="这台设备还在「待分配」门点，分配到真实门点后才会收到该门点的访客名单" />
       <el-form :model="editForm" label-width="100px">
+        <el-form-item label="设备类型">
+          <el-radio-group v-model="editForm.channel">
+            <el-radio value="PULL">人行终端（人脸/刷证/扫码）</el-radio>
+            <el-radio value="VEHICLE">车闸相机（车牌识别）</el-radio>
+          </el-radio-group>
+        </el-form-item>
         <el-form-item label="设备名称">
           <el-input v-model="editForm.deviceName" maxlength="64" placeholder="如 A 栋东门人脸终端" />
         </el-form-item>
@@ -224,6 +242,50 @@
         <el-button @click="remoteVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 车闸相机：车牌名单（来源=员工档案 + 访客预约，docs/18） -->
+    <el-dialog v-model="platesVisible" :title="`车牌名单 · ${platesRow?.deviceName || ''}`" width="720px">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
+        title="车牌不用单独维护：填员工档案或访客预约时填的车牌号会自动汇总到这里。厂商协议接入后可一键下发到相机本地。" />
+      <div class="toolbar">
+        <el-button :loading="platesLoading" :icon="Refresh" @click="loadPlates">刷新清单</el-button>
+        <el-button type="primary" :loading="platesSyncing" @click="doSyncPlates">下发到车闸相机</el-button>
+        <span class="spacer" />
+        <span class="text-muted">
+          员工 {{ plates?.summary.employee || 0 }} 辆 · 访客 {{ plates?.summary.visitor || 0 }} 辆 ·
+          共 {{ plates?.summary.total || 0 }} 辆
+        </span>
+      </div>
+      <el-alert v-if="syncResult" :type="syncResult.pendingDevices ? 'warning' : 'success'"
+        :closable="false" show-icon style="margin-bottom: 8px"
+        :title="`已备好 ${syncResult.plateTotal} 条车牌；待接入厂商协议的相机 ${syncResult.pendingDevices} 台`" />
+      <el-table :data="plates?.plates || []" border size="small" max-height="360">
+        <el-table-column prop="plateNo" label="车牌" width="120" />
+        <el-table-column label="来源" width="80">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.ownerType === 'EMPLOYEE' ? 'primary' : 'success'">
+              {{ row.ownerTypeText }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="ownerName" label="姓名" width="100" />
+        <el-table-column prop="personNo" label="人员编号" width="120" />
+        <el-table-column prop="validFrom" label="生效时间" width="160" />
+        <el-table-column prop="validToText" label="有效期至" width="110" />
+      </el-table>
+      <div v-if="syncResult?.devices.length" style="margin-top: 10px">
+        <div class="text-muted" style="margin-bottom: 4px">下发结果</div>
+        <div v-for="d in syncResult.devices" :key="d.deviceId" class="tip-row">
+          <el-tag size="small" :type="d.status === 'PUSHED' ? 'success'
+            : d.status === 'PENDING_VENDOR' ? 'warning' : 'danger'">{{ d.status }}</el-tag>
+          <span class="mono">{{ d.deviceSn }}</span>
+          <span class="text-muted">{{ d.message }}</span>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="platesVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -247,15 +309,25 @@ import {
   deviceRemoteApplyQrConfig,
   deviceRemoteSyncTime,
   deviceRemoteTip,
+  getVehiclePlates,
   listDevices,
   listGates,
   openDeviceDoor,
+  syncVehiclePlates,
   updateDevice,
   type DeviceRemoteInfo
 } from '@/api'
-import type { DeviceView, GateRow } from '@/api/types'
+import type {
+  DeviceView,
+  GateRow,
+  VehiclePlateSnapshot,
+  VehiclePlateSyncResult
+} from '@/api/types'
 
 const route = useRoute()
+
+/** 人行终端 / 车闸相机分开管理（docs/18）；空字符串=全部 */
+const deviceKind = ref<string>('PULL')
 
 const loading = ref(false)
 const devices = ref<DeviceView[]>([])
@@ -267,12 +339,27 @@ const filterGateId = ref<number | undefined>(
 const editVisible = ref(false)
 const editSaving = ref(false)
 const editingRow = ref<DeviceView | null>(null)
-const editForm = ref({ deviceName: '', model: '', direction: 1, gateId: 0, remark: '' })
+const editForm = ref({
+  deviceName: '',
+  model: '',
+  direction: 1,
+  gateId: 0,
+  remark: '',
+  channel: 'PULL'
+})
+
+/* ---------------- 车闸相机：车牌名单 ---------------- */
+const platesVisible = ref(false)
+const platesLoading = ref(false)
+const platesSyncing = ref(false)
+const platesRow = ref<DeviceView | null>(null)
+const plates = ref<VehiclePlateSnapshot | null>(null)
+const syncResult = ref<VehiclePlateSyncResult | null>(null)
 
 async function load() {
   loading.value = true
   try {
-    devices.value = await listDevices(filterGateId.value)
+    devices.value = await listDevices(filterGateId.value, deviceKind.value || undefined)
   } finally {
     loading.value = false
   }
@@ -289,7 +376,8 @@ function openEdit(row: DeviceView) {
     model: row.model,
     direction: row.direction,
     gateId: row.gateId,
-    remark: row.remark
+    remark: row.remark,
+    channel: row.channel || 'PULL'
   }
   editVisible.value = true
 }
@@ -322,7 +410,48 @@ async function doDelete(row: DeviceView) {
   }
 }
 
-async function openDoor(row: DeviceView) {  await ElMessageBox.confirm(
+/* ---------------- 车闸相机：车牌名单 ---------------- */
+
+async function openPlates(row: DeviceView) {
+  platesRow.value = row
+  platesVisible.value = true
+  syncResult.value = null
+  plates.value = null
+  await loadPlates()
+}
+
+async function loadPlates() {
+  if (!platesRow.value) return
+  platesLoading.value = true
+  try {
+    plates.value = await getVehiclePlates(platesRow.value.gateId || undefined)
+  } catch (error) {
+    showRemoteError(error)
+  } finally {
+    platesLoading.value = false
+  }
+}
+
+/** 下发车牌名单：厂商协议未接入时会返回 PENDING_VENDOR，这里如实提示，不当成失败 */
+async function doSyncPlates() {
+  if (!platesRow.value) return
+  platesSyncing.value = true
+  try {
+    syncResult.value = await syncVehiclePlates(platesRow.value.gateId || undefined)
+    if (syncResult.value.pendingDevices > 0) {
+      ElMessage.warning('车牌清单已备好，但车闸相机厂商协议还没接入，暂时投不到相机本地')
+    } else {
+      ElMessage.success(`已下发 ${syncResult.value.plateTotal} 条车牌`)
+    }
+  } catch (error) {
+    showRemoteError(error)
+  } finally {
+    platesSyncing.value = false
+  }
+}
+
+async function openDoor(row: DeviceView) {
+  await ElMessageBox.confirm(
     `确认远程打开「${row.deviceName}」？指令随设备下一次心跳生效（当前心跳间隔 5 秒，最长等一个间隔）。`,
     '远程开门',
     { type: 'warning' }

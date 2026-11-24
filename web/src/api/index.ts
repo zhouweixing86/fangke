@@ -39,7 +39,9 @@ import type {
   VisitorReport,
   TrafficDetail,
   TrafficRow,
-  VehicleEventRow
+  VehicleEventRow,
+  VehiclePlateSnapshot,
+  VehiclePlateSyncResult
 } from './types'
 
 /** 响应拦截器已解包 ApiResponse，这里只做类型断言。 */
@@ -67,8 +69,11 @@ export const updateGateStatus = (id: number, status: number) =>
 /* ---------------- 设备 ---------------- */
 
 /** 不传 gateId 返回全部门点的设备（多门点部署必须能看到所有门） */
-export const listDevices = (gateId?: number) =>
-  get<DeviceView[]>('/admin/device', gateId ? { gateId } : undefined)
+export const listDevices = (gateId?: number, channel?: string) =>
+  get<DeviceView[]>('/admin/device', {
+    ...(gateId ? { gateId } : {}),
+    ...(channel ? { channel } : {})
+  })
 export const getDevice = (id: number) => get<DeviceView>(`/admin/device/${id}`)
 
 /** 补/改设备档案：名称、型号、出入口方向、所属门点、备注 */
@@ -355,6 +360,16 @@ export const guardCheckout = (appointmentNo: string) =>
 
 export const listVehicleEvents = (params: Record<string, unknown>) =>
   get<PageResult<VehicleEventRow>>('/admin/vehicle/event', params)
+
+/* ---------------- 车闸相机车牌名单（docs/18，厂商协议待接入） ---------------- */
+
+/** 车牌清单快照：员工白名单 + 当天已授权访客（平台侧"应该下发什么"） */
+export const getVehiclePlates = (gateId?: number) =>
+  get<VehiclePlateSnapshot>('/admin/vehicle/plate', gateId ? { gateId } : undefined)
+
+/** 下发车牌名单到车闸相机；厂商协议未接入时返回 PENDING_VENDOR */
+export const syncVehiclePlates = (gateId?: number) =>
+  post<VehiclePlateSyncResult>('/admin/vehicle/plate/sync', undefined, gateId ? { gateId } : undefined)
 
 /* ---------------- 通行记录（C-69：行人 + 车辆合并） ---------------- */
 

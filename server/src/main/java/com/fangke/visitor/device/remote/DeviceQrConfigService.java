@@ -45,7 +45,7 @@ public class DeviceQrConfigService {
             return 0;
         }
         int queued = 0;
-        for (Device device : deviceRepository.findAllActive()) {
+        for (Device device : DeviceRepository.personDevices(deviceRepository.findAllActive())) {
             try {
                 adapterFactory.resolve(device).writeParams(device, Map.of("thirdQrUrl", url));
                 queued++;

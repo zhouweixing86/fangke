@@ -45,28 +45,52 @@ public class DeviceAdminController {
     private final DeviceGateway gateway;
     private final DeviceCapabilityService capabilityService;
     private final GateService gateService;
+    private final com.fangke.visitor.config.AppProperties props;
 
     public DeviceAdminController(DeviceRepository deviceRepository,
                                  DeviceAdapterFactory adapterFactory,
                                  DeviceGateway gateway,
                                  DeviceCapabilityService capabilityService,
-                                 GateService gateService) {
+                                 GateService gateService,
+                                 com.fangke.visitor.config.AppProperties props) {
         this.deviceRepository = deviceRepository;
         this.adapterFactory = adapterFactory;
         this.gateway = gateway;
         this.capabilityService = capabilityService;
         this.gateService = gateService;
+        this.props = props;
     }
 
-    /** 设备列表：可按门点过滤；不传 gateId 返回全部（多门点部署必须能看到所有门）。 */
+    /** 设备列表：可按门点/通道过滤；不传 gateId 返回全部（多门点部署必须能看到所有门）。 */
     @GetMapping
     public ApiResponse<List<Map<String, Object>>> list(
-            @RequestParam(name = "gateId", required = false) Long gateId) {
-        List<Device> devices = gateId == null
-                ? deviceRepository.findAllActive()
-                : deviceRepository.findActiveByGate(gateId);
+            @RequestParam(name = "gateId", required = false) Long gateId,
+            @RequestParam(name = "channel", required = false) String channel) {
+        Device.Channel parsed = parseChannel(channel);
+        List<Device> devices;
+        if (parsed != null) {
+            devices = deviceRepository.findActiveByChannel(parsed).stream()
+                    .filter(d -> gateId == null || gateId.equals(d.getGateId()))
+                    .toList();
+        } else {
+            devices = gateId == null
+                    ? deviceRepository.findAllActive()
+                    : deviceRepository.findActiveByGate(gateId);
+        }
         List<Map<String, Object>> view = devices.stream().map(this::toView).toList();
         return ApiResponse.ok(view);
+    }
+
+    private Device.Channel parseChannel(String channel) {
+        if (channel == null || channel.isBlank()) {
+            return null;
+        }
+        try {
+            return Device.Channel.valueOf(channel.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID,
+                    "通道只能是 PULL（人行终端）/ VEHICLE（车闸相机）/ MOCK / CLOUD：" + channel);
+        }
     }
 
     @GetMapping("/{id}")
@@ -129,6 +153,10 @@ public class DeviceAdminController {
             throw new BusinessException(ErrorCode.PARAM_TOO_LONG, "备注最长 255 字");
         }
         deviceRepository.updateMeta(id, deviceName, model, direction, gateId, remark);
+        Device.Channel channel = parseChannel(request.channel());
+        if (channel != null) {
+            deviceRepository.updateChannel(id, channel);
+        }
         return ApiResponse.ok(toView(load(id)));
     }
 
@@ -173,8 +201,9 @@ public class DeviceAdminController {
         view.put("gateId", d.getGateId() == null ? 0L : d.getGateId());
         view.put("gateName", gateService.nameOf(d.getGateId()));
         view.put("channel", d.getChannel() == null ? "PULL" : d.getChannel().name());
+        view.put("channelText", Device.channelText(d.getChannel()));
         view.put("ip", nullSafe(d.getIp()));
-        view.put("online", d.isOnline());
+        view.put("online", isFresh(d));
         view.put("lastHeartbeat", d.getLastHeartbeat() == null ? "" : DATETIME.format(d.getLastHeartbeat()));
         view.put("personCount", d.getPersonCount() == null ? 0 : d.getPersonCount());
         view.put("capacity", d.getCapacity() == null ? 0 : d.getCapacity());
@@ -182,8 +211,14 @@ public class DeviceAdminController {
         return view;
     }
 
-    private String blankToNull(String value) {
-        if (value == null) {
+    /**
+     * 是否"真在线"：设备断电后 online_state 仍为 1，用 {@link Device#isFreshOnline} 按心跳新鲜度判断。
+     */
+    private boolean isFresh(Device d) {
+        return d.isFreshOnline(props.getDevice().getPullHeartSeconds());
+    }
+
+    private String blankToNull(String value) {        if (value == null) {
             return null;
         }
         String trimmed = value.trim();
@@ -208,6 +243,6 @@ public class DeviceAdminController {
 
     /** 设备档案补录请求；字段为 null 表示不改该项。 */
     public record DeviceUpdateRequest(String deviceName, String model, Integer direction,
-                                      Long gateId, String remark) {
+                                      Long gateId, String remark, String channel) {
     }
 }

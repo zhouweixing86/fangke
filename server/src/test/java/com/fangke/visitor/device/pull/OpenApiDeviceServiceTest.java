@@ -304,6 +304,22 @@ class OpenApiDeviceServiceTest {
         assertEquals("黑名单拦截", captor.getValue().failReason());
     }
 
+    @Test
+    @DisplayName("出口相机：记录没带 inout 时按设备方向（0 出口）落库")
+    void recordDirectionFallsBackToDevice() throws Exception {
+        var captor = org.mockito.ArgumentCaptor.forClass(com.fangke.visitor.device.model.AccessEvent.class);
+        when(eventRepo.insertIfAbsent(captor.capture())).thenReturn(Optional.of(11L));
+        Device exit = device();
+        exit.setDirection(0);
+        var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(
+                "{\"time\":\"2026-11-21 18:00:00\",\"openType\":2,\"resultStatus\":1,"
+                        + "\"idNum\":\"342221199704020012\"}");
+
+        service.receiveRecord(exit, node, node.toString());
+
+        assertEquals(0, captor.getValue().direction(), "出口相机不能把出门记录记成进门");
+    }
+
     private AccessGrant grant(Long id, int subjectType, Long subjectId, String personNo) {
         return new AccessGrant(id, subjectType, subjectId, personNo, 100L, 1L,
                 LocalDateTime.of(2026, 11, 19, 0, 0), LocalDateTime.of(2026, 11, 19, 23, 59, 59),

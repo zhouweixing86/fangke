@@ -286,4 +286,15 @@ public class JdbcAppointmentRepository implements AppointmentRepository {
                 Timestamp.valueOf(date.plusDays(1).atStartOfDay()));
     }
 
+    @Override
+    public List<Appointment> findPlateAppointmentsOnDate(LocalDate date) {
+        if (date == null) {
+            return List.of();
+        }
+        return jdbc.query(SELECT + " WHERE plate_no IS NOT NULL AND plate_no <> '' AND status IN (35, 40) "
+                                + "AND start_time >= ? AND start_time < ? ORDER BY id",
+                MAPPER, Timestamp.valueOf(date.atStartOfDay()),
+                Timestamp.valueOf(date.plusDays(1).atStartOfDay()));
+    }
+
 }
