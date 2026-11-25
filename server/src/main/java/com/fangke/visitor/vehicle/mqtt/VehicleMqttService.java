@@ -151,16 +151,12 @@ public class VehicleMqttService {
         if (plate.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_MISSING, "车牌号不能为空");
         }
-        String template = template(props.getVehicle().getMqtt().getAddTemplate(), DEFAULT_ADD);
         LocalDateTime endAt = end == null ? LocalDateTime.now().plusDays(1) : end;
-        String payload = fill(template, envelopeValues(deviceSn, Map.of(
-                "plate", plate,
-                "type", String.valueOf(props.getVehicle().getMqtt().getPlateType()),
-                "begin", DATETIME.format(begin == null ? LocalDateTime.now() : begin),
-                "end", DATETIME.format(endAt),
-                "endDate", DATE.format(endAt))));
-        gateway.publish(deviceSn, payload);
-        logRepository.save("DOWN", deviceSn, topicOf(deviceSn), payload, "下发/更新车牌 " + plate);
+        LocalDateTime beginAt = begin == null ? LocalDateTime.now() : begin;
+        String payload = sendAdd(deviceSn, plate, beginAt, endAt);
+        // 手工下发也记对账状态：否则下一次定时对账会因为它「不在状态表里」而被清掉，
+        // 或者反过来——手工删掉的车牌会被判定成「已下发」而永远不再补。
+        stateRepository.upsert(deviceSn, plate, manualFingerprint(beginAt, endAt));
         return result("ADD", deviceSn, plate, payload);
     }
 
@@ -170,11 +166,34 @@ public class VehicleMqttService {
         if (plate.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_MISSING, "车牌号不能为空");
         }
+        String payload = sendDelete(deviceSn, plate);
+        // 手工删除同时清对账状态：如果这个车牌仍在期望清单里（员工/访客还有效），
+        // 下一轮定时对账会自动补回来，避免「相机里没了但平台以为还在」。
+        stateRepository.remove(deviceSn, plate);
+        return result("DELETE", deviceSn, plate, payload);
+    }
+
+    /** 只负责发 `AddCarInfo` + 留痕，状态由调用方维护（定时对账与手工下发口径不同）。 */
+    private String sendAdd(String deviceSn, String plate, LocalDateTime begin, LocalDateTime end) {
+        String template = template(props.getVehicle().getMqtt().getAddTemplate(), DEFAULT_ADD);
+        String payload = fill(template, envelopeValues(deviceSn, Map.of(
+                "plate", plate,
+                "type", String.valueOf(props.getVehicle().getMqtt().getPlateType()),
+                "begin", DATETIME.format(begin),
+                "end", DATETIME.format(end),
+                "endDate", DATE.format(end))));
+        gateway.publish(deviceSn, payload);
+        logRepository.save("DOWN", deviceSn, topicOf(deviceSn), payload, "下发/更新车牌 " + plate);
+        return payload;
+    }
+
+    /** 只负责发 `DeleteCarInfo` + 留痕。 */
+    private String sendDelete(String deviceSn, String plate) {
         String template = template(props.getVehicle().getMqtt().getDeleteTemplate(), DEFAULT_DELETE);
         String payload = fill(template, envelopeValues(deviceSn, Map.of("plate", plate)));
         gateway.publish(deviceSn, payload);
         logRepository.save("DOWN", deviceSn, topicOf(deviceSn), payload, "删除车牌 " + plate);
-        return result("DELETE", deviceSn, plate, payload);
+        return payload;
     }
 
     /** 全量覆盖车牌（员工 + 当天已授权访客），用于对齐。 */
@@ -293,7 +312,8 @@ public class VehicleMqttService {
             // 没写有效期的（员工长期车）给 10 年，别按「明天到期」下发
             LocalDateTime end = plate.validTo() == null
                     ? LocalDateTime.now().plusYears(10) : plate.validTo();
-            addPlate(deviceSn, plate.plateNo(), plate.validFrom(), end);
+            sendAdd(deviceSn, plate.plateNo(),
+                    plate.validFrom() == null ? LocalDateTime.now() : plate.validFrom(), end);
             stateRepository.upsert(deviceSn, plate.plateNo(), fingerprint);
             if (last == null) {
                 added++;
@@ -303,7 +323,7 @@ public class VehicleMqttService {
         }
         for (String plate : existing.keySet()) {
             if (!desiredPlates.contains(plate)) {
-                deletePlate(deviceSn, plate);
+                sendDelete(deviceSn, plate);
                 stateRepository.remove(deviceSn, plate);
                 removed++;
             }
@@ -328,6 +348,12 @@ public class VehicleMqttService {
         return props.getVehicle().getMqtt().getPlateType() + "|"
                 + (plate.validFrom() == null ? "" : DATETIME.format(plate.validFrom())) + "|"
                 + (plate.validTo() == null ? "" : DATETIME.format(plate.validTo()));
+    }
+
+    /** 手工下发用的指纹（按实际下发的时间段记，下一次对账会按业务数据重新算）。 */
+    private String manualFingerprint(LocalDateTime begin, LocalDateTime end) {
+        return props.getVehicle().getMqtt().getPlateType() + "|"
+                + DATETIME.format(begin) + "|" + DATETIME.format(end);
     }
 
     /** 直接发一段原始报文（协议探测/联调用）。 */

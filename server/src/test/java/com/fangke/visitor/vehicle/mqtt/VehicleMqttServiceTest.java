@@ -155,6 +155,17 @@ class VehicleMqttServiceTest {
     }
 
     @Test
+    @DisplayName("手工下发/删除车牌也会同步对账状态，避免下一次对账把它当「未知状态」")
+    void manualPlateOpsSyncState() {
+        service.addPlate(SN, "苏A1", java.time.LocalDateTime.of(2026, 11, 26, 0, 0),
+                java.time.LocalDateTime.of(2026, 12, 31, 23, 59));
+        verify(stateRepository).upsert(eq(SN), eq("苏A1"), org.mockito.ArgumentMatchers.startsWith("1|2026-11-26"));
+
+        service.deletePlate(SN, "苏A1");
+        verify(stateRepository).remove(SN, "苏A1");
+    }
+
+    @Test
     @DisplayName("车牌对账：新增→AddCarInfo、内容变了→重发、清单里没有→DeleteCarInfo")
     void syncPushesAddsUpdatesAndDeletes() {
         LocalDateTime begin = LocalDateTime.of(2026, 11, 26, 0, 0);
