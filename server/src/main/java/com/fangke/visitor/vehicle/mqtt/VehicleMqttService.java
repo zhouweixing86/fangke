@@ -168,7 +168,16 @@ public class VehicleMqttService {
     void onUpload(String topic, String payload) {
         String deviceSn = extractDeviceSn(topic);
         String command = extractText(payload, "command");
+        if ("Rtd".equalsIgnoreCase(command)) {
+            // 5 秒一条心跳，写日志表会把库撑爆（每天 3 万+ 行），只打 debug
+            log.debug("车闸心跳 device={}", deviceSn);
+            return;
+        }
         String plate = extractPlate(payload);
+        if (plate == null && "Image".equalsIgnoreCase(command)) {
+            log.debug("车闸图片上报（无车牌）device={}", deviceSn);
+            return;
+        }
         String message;
         if ("Conn".equalsIgnoreCase(command)) {
             message = "设备上线" + enableReplyQuietly(deviceSn);

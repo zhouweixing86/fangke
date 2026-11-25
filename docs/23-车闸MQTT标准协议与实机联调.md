@@ -131,6 +131,7 @@ V1 的 `time` 语义：**月租车=到期日期；贵宾车=当前日期**，格
 | 回执解析 | `describeWithoutPlate`：`errCode=0` → 「下行回执：成功」 |
 | 识别结果解析 | `extractPlate`：`data` 是字符串也能解析，字段优先 `carNO` |
 | 连接可靠性 | `VehicleMqttGateway.ensureConnected` 看门狗（默认 30s，`fangke.vehicle.mqtt.watchdog-ms`）+ `publish` 前判活 |
+| 日志降噪 | 心跳 `Rtd` 与无车 `Image` **不写** `vehicle_mqtt_log`（5s 一条会撑爆库），只打 debug |
 | 管理端 | 「基础资料 → 车闸对接」：状态/重连/使能回执/下发/删除/全量对齐/原始报文/上下行日志 |
 
 ## 8. 现场落地清单

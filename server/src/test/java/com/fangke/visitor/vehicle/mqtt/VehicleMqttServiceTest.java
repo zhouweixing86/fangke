@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -119,12 +120,17 @@ class VehicleMqttServiceTest {
     }
 
     @Test
-    @DisplayName("心跳只留痕；Conn 上行时自动使能下行回执；回执报文标成功")
+    @DisplayName("心跳/无车图片不落日志表；Conn 上行时自动使能下行回执；回执报文标成功")
     void heartbeatConnAndReplyAreDescribed() {
         String heartbeat = "{\"command\":\"Rtd\",\"data\":\"{\\\"hasCar\\\":2}\",\"requestId\":\"2\",\"sn\":\"" + SN
                 + "\",\"time\":\"2026-11-25 23:39:50\",\"version\":\"1.0.1\"}";
         service.onUpload("upload/" + SN, heartbeat);
-        verify(logRepository).save(eq("UP"), eq(SN), eq("upload/" + SN), eq(heartbeat), eq("心跳"));
+        verify(logRepository, never()).save(any(), any(), any(), any(), any());
+
+        String image = "{\"command\":\"Image\",\"data\":\"\",\"requestId\":\"5\",\"sn\":\"" + SN
+                + "\",\"time\":\"2026-11-25 23:39:51\",\"version\":\"1.0.1\"}";
+        service.onUpload("upload/" + SN, image);
+        verify(logRepository, never()).save(any(), any(), any(), any(), any());
 
         String conn = "{\"command\":\"Conn\",\"data\":\"{\\\"deviceType\\\":\\\"PCM500FSPUTV14\\\"}\","
                 + "\"requestId\":\"3\",\"sn\":\"" + SN + "\",\"time\":\"2026-11-25 23:40:00\",\"version\":\"1.0.1\"}";
