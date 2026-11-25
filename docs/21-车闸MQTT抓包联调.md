@@ -166,3 +166,50 @@ Web 后台的所有操作都走 `POST http://<ip>/Signalway.fcgi?<Cmd>`，请求
 
 所以要么**换一条能通的链路**（内网出口 / 443+TLS / 端口映射走 SDK / 车场平台），
 要么**拿到厂商协议文档 + 确认相机固件支持该链路**。
+
+---
+
+## 12. 2026-11-25 22:10–22:25 实验记录（HTTP 推送 + 网络出口）
+
+### 12.1 第三方协议（HTTP）配置（已写入相机，随后已回滚）
+
+相机「高级设置 → 平台配置 → 第三方协议（HTTP）」字段（对应 INI `[ExternalHttp]`）：
+
+| 字段 | 我们填的值 |
+|---|---|
+| 启用此HTTP / `Enable` | 1 |
+| URL地址 / `PostUrl` | `58.87.99.249` |
+| 端口 / `PostPort` | 80 |
+| 推送心跳地址 / `PushHeartBearUrl` | `/openapi/probe/heartBeat` |
+| 推送车牌识别结果地址 / `PushPlateResultUrl` | `/openapi/probe/plateResult` |
+| 端口/串口推送 | 同样改到 `/openapi/probe/*` |
+
+云平台侧打开 `DEVICE_OPENAPI_PROBE=true`（`/openapi/**` 未知路径兜底 200 并留报文）。
+**结果：相机没有发出任何 HTTP 请求**（nginx 日志无记录，抓包缓冲只有自测），
+说明该客户端还依赖某个我们不知道的前提（很可能需要「平台代码」或注册握手）。
+
+### 12.2 尝试关掉 4G 强制走内网（已回滚）
+
+INI `[NetComManager\MobileNet] Enable` 由 1 改为 0 并上传 → 相机重启后**完全没有出网连接**，
+说明它所在的内网出口（192.168.10.1）没有给相机提供可用的默认路由/出网。
+已上传原始 INI 回滚，相机恢复：`GetMqttRunStatus` 返回「已连接」（厂商平台），LAN 访问正常。
+
+> 结论：这台调试机只有 **4G 出口**能出网，而 4G 会重置 MQTT；内网不能出网。
+> 想跑通 MQTT/HTTP 推送，必须解决「相机到云的可达链路」，这是网络侧的事，不是代码能绕过的。
+
+### 12.3 相机 HTTP/XML 控制接口（可复用）
+
+```
+POST http://<camera-ip>/Signalway.fcgi?<CmdName>
+Body: XML[Value]=<?xml version="1.0" encoding="GB2312" standalone="yes"?>
+      <HvCmd ver="3.0"><CmdName Type="..." Class="..." Value="...">命令</CmdName></HvCmd>
+```
+
+| 命令 | 用途 |
+|---|---|
+| `GetRunStatus` | 运行状态（识别 fps、各链接数等） |
+| `GetMqttRunStatus` | MQTT 连接状态（"已连接"/"未连接"） |
+| `DownloadINIFileEx`（Value=MQTT/HTTP/THTTP…） | 返回 `RetMsg="ini/<ip>_<SECTION>.ini"`，再 `GET /ini/<文件名>` 下载配置 |
+| 上传配置 | Web 的「上传配置」可上传改过的 INI，设备会自动重启 |
+
+完整配置（60KB，含全部 section）可用 `Value` 传一个不存在的 section 拿到，例如 `THTTP`。
