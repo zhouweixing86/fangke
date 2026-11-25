@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
@@ -413,18 +414,24 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         return buildDetail(task, canAct);
     }
 
-    /** 我已处理过的（通过/驳回）任务。 */
-    public PageResult<DoneView> appDoneList(long bindingId, int page, int size) {
+    /** 我已处理过的（通过/驳回）任务；C-80 支持按结果与日期筛选。 */
+    public PageResult<DoneView> appDoneList(long bindingId, Integer action, LocalDate from, LocalDate to,
+                                            int page, int size) {
         int safePage = Math.max(page, 1);
         int safeSize = Math.min(Math.max(size, 1), 100);
-        List<DoneView> list = taskRepository.findDoneByOperator(bindingId, OPERATOR_APP_USER,
-                        (safePage - 1) * safeSize, safeSize).stream()
+        List<DoneView> list = taskRepository.findDoneByOperator(bindingId, OPERATOR_APP_USER, action,
+                        from, to, (safePage - 1) * safeSize, safeSize).stream()
                 .map(r -> new DoneView(r.taskId(), r.level(), r.nodeName(), r.appointmentNo(),
                         r.visitorName(), r.purpose(), r.action(), actionText(r.action()),
                         r.comment(), DATETIME.format(r.actedAt())))
                 .toList();
-        return PageResult.of(taskRepository.countDoneByOperator(bindingId, OPERATOR_APP_USER),
+        return PageResult.of(taskRepository.countDoneByOperator(bindingId, OPERATOR_APP_USER, action, from, to),
                 safePage, safeSize, list);
+    }
+
+    /** 履职统计：我批了多少、其中通过/驳回各多少。 */
+    public ApprovalTaskRepository.DoneStats appDoneStats(long bindingId, LocalDate from, LocalDate to) {
+        return taskRepository.doneStats(bindingId, OPERATOR_APP_USER, from, to);
     }
 
     private boolean canAct(ApprovalTask task, List<String> roles, Long adminUserId) {

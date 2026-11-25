@@ -2,6 +2,7 @@ package com.fangke.visitor.admin.web;
 
 import com.fangke.visitor.admin.repository.AdminQueryRepository;
 import com.fangke.visitor.appointment.model.Appointment;
+import com.fangke.visitor.approval.repository.ApprovalActionRepository;
 import com.fangke.visitor.common.ApiResponse;
 import com.fangke.visitor.common.BusinessException;
 import com.fangke.visitor.common.ErrorCode;
@@ -31,10 +32,13 @@ public class AdminAppointmentController {
 
     private final AdminQueryRepository queryRepository;
     private final GateService gateService;
+    private final ApprovalActionRepository actionRepository;
 
-    public AdminAppointmentController(AdminQueryRepository queryRepository, GateService gateService) {
+    public AdminAppointmentController(AdminQueryRepository queryRepository, GateService gateService,
+                                      ApprovalActionRepository actionRepository) {
         this.queryRepository = queryRepository;
         this.gateService = gateService;
+        this.actionRepository = actionRepository;
     }
 
     @GetMapping
@@ -57,9 +61,63 @@ public class AdminAppointmentController {
 
     @GetMapping("/{id}")
     public ApiResponse<Map<String, Object>> detail(@PathVariable Long id) {
-        return ApiResponse.ok(queryRepository.findAppointment(id)
-                .map(this::toView)
-                .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_INVALID, "预约单不存在：" + id)));
+        AdminQueryRepository.AppointmentRow row = queryRepository.findAppointment(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_INVALID, "预约单不存在：" + id));
+        Map<String, Object> view = toView(row);
+        // C-80：审批轨迹进详情，便于流程追溯（谁、哪个节点、通过/驳回、意见、门点）
+        view.put("actions", actionRepository.listByAppointment(id).stream().map(a -> {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("action", a.action());
+            item.put("actionText", actionText(a.action()));
+            item.put("operatorName", a.operatorName() == null || a.operatorName().isBlank()
+                    ? String.valueOf(a.operatorId()) : a.operatorName());
+            item.put("operatorType", a.operatorType());
+            item.put("operatorTypeText", operatorTypeText(a.operatorType()));
+            item.put("comment", a.comment() == null ? "" : a.comment());
+            item.put("gates", gateNames(a.gateSnapshot()));
+            item.put("at", DATETIME.format(a.createdAt()));
+            return item;
+        }).toList());
+        return ApiResponse.ok(view);
+    }
+
+    private String actionText(int action) {
+        return switch (action) {
+            case 1 -> "通过";
+            case 2 -> "驳回";
+            case 3 -> "转交";
+            case 4 -> "加签";
+            case 5 -> "催办";
+            case 6 -> "跳过";
+            case 7 -> "抄送";
+            default -> "未知";
+        };
+    }
+
+    private String operatorTypeText(int type) {
+        return switch (type) {
+            case 1 -> "员工";
+            case 2 -> "管理端";
+            case 4 -> "微信小程序";
+            default -> "系统";
+        };
+    }
+
+    private String gateNames(String snapshot) {
+        if (snapshot == null || snapshot.isBlank()) {
+            return "";
+        }
+        return String.join("/", java.util.Arrays.stream(snapshot.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(text -> {
+                    try {
+                        return gateService.nameOf(Long.parseLong(text));
+                    } catch (NumberFormatException e) {
+                        return text;
+                    }
+                })
+                .toList());
     }
 
     private Map<String, Object> toView(AdminQueryRepository.AppointmentRow row) {

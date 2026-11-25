@@ -162,6 +162,7 @@ const menuTree: MenuNode[] = [
     icon: 'Setting',
     children: [
       { path: '/approval-config', title: '审批配置', icon: 'Setting', perm: 'approval:read' },
+      { path: '/approval-ledger', title: '审批台账', icon: 'Tickets', perm: 'approval:read' },
       { path: '/role-qr', title: '角色二维码', icon: 'Grid', perm: 'user:read' },
       { path: '/wx-bindings', title: '微信身份', icon: 'Avatar', perm: 'user:read' }
     ]

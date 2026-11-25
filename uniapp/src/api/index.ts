@@ -84,6 +84,10 @@ export const myApprovalTodo = (params: Record<string, unknown>) =>
 export const myApprovalDone = (params: Record<string, unknown>) =>
   get<PageResult<MyApprovalDone>>('/app/approval/done', params)
 
+/** 履职统计：我的审批台账汇总 */
+export const myApprovalStats = (params: Record<string, unknown> = {}) =>
+  get<{ total: number; approved: number; rejected: number }>('/app/approval/stats', params)
+
 export const myApprovalDetail = (taskId: number) =>
   get<ApprovalDetail>('/app/approval/' + taskId)
 

@@ -73,6 +73,26 @@
         </el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ detail?.createdAt }}</el-descriptions-item>
       </el-descriptions>
+
+      <div class="trace">
+        <div class="trace-title">审批轨迹</div>
+        <el-timeline v-if="detail?.actions && detail.actions.length">
+          <el-timeline-item v-for="(a, i) in detail.actions" :key="i" :timestamp="a.at"
+            :type="a.action === 1 ? 'success' : a.action === 2 ? 'danger' : 'primary'">
+            <div class="trace-line">
+              <b>{{ a.operatorName }}</b>
+              <el-tag size="small" type="info">{{ a.operatorTypeText }}</el-tag>
+              <el-tag size="small" :type="a.action === 1 ? 'success' : a.action === 2 ? 'danger' : 'info'">
+                {{ a.actionText }}
+              </el-tag>
+              <span v-if="a.gates" class="trace-gate">门点：{{ a.gates }}</span>
+            </div>
+            <div v-if="a.comment" class="trace-comment">意见：{{ a.comment }}</div>
+          </el-timeline-item>
+        </el-timeline>
+        <el-text v-else type="info" size="small">暂无审批记录</el-text>
+      </div>
+
       <template #footer>
         <el-button @click="detailVisible = false">关闭</el-button>
         <el-button v-if="detail?.canRevoke" type="warning" @click="revokeQr(detail!)">撤销通行码</el-button>
@@ -317,5 +337,32 @@ onBeforeUnmount(stopCountdown)
   margin-top: 10px;
   font-size: 13px;
   color: var(--el-text-color-secondary);
+}
+
+.trace {
+  margin-top: 16px;
+}
+
+.trace-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.trace-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.trace-gate {
+  color: var(--el-text-color-secondary);
+}
+
+.trace-comment {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
 }
 </style>

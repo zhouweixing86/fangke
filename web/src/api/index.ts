@@ -50,6 +50,7 @@ import type {
   VehiclePlateSnapshot,
   WxRoleQr,
   WxBindingRow,
+  ApprovalRecordRow,
   VehiclePlateSyncResult
 } from './types'
 
@@ -313,6 +314,13 @@ export const deleteRole = (id: number) => del<void>(`/admin/roles/${id}`)
 export const listWxRoleQr = () => get<WxRoleQr[]>('/admin/wx-role-qr')
 export const regenerateWxRoleQr = (roleId: number) =>
   post<WxRoleQr>(`/admin/wx-role-qr/${roleId}/regenerate`)
+
+/* ---------------- 审批台账（C-80） ---------------- */
+
+export const listApprovalRecords = (params: Record<string, unknown>) =>
+  get<PageResult<ApprovalRecordRow>>('/admin/approval/records', params)
+export const exportApprovalRecords = (params: Record<string, unknown>) =>
+  http.get('/admin/approval/records/export', { params, responseType: 'blob' }) as unknown as Promise<Blob>
 
 /* ---------------- 微信身份（绑定）管理（C-77） ---------------- */
 

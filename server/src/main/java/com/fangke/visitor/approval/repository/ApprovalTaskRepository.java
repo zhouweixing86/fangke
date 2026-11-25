@@ -2,6 +2,7 @@ package com.fangke.visitor.approval.repository;
 
 import com.fangke.visitor.approval.model.ApprovalTask;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -52,9 +53,17 @@ public interface ApprovalTaskRepository {
                    String visitorName, String purpose, int action, String comment, LocalDateTime actedAt) {
     }
 
-    List<DoneRow> findDoneByOperator(long operatorId, int operatorType, int offset, int limit);
+    /** 履职统计（C-80）：我批了多少、其中通过/驳回各多少。 */
+    record DoneStats(long total, long approved, long rejected) {
+    }
 
-    long countDoneByOperator(long operatorId, int operatorType);
+    List<DoneRow> findDoneByOperator(long operatorId, int operatorType, Integer action,
+                                     LocalDate from, LocalDate to, int offset, int limit);
+
+    long countDoneByOperator(long operatorId, int operatorType, Integer action,
+                             LocalDate from, LocalDate to);
+
+    DoneStats doneStats(long operatorId, int operatorType, LocalDate from, LocalDate to);
 
     void updateStatus(Long id, int status);
 

@@ -121,6 +121,12 @@ const router = createRouter({
           name: 'dict',
           component: () => import('@/views/DictView.vue'),
           meta: { title: '基础字典', adminOnly: true }
+        },
+        {
+          path: 'approval-ledger',
+          name: 'approval-ledger',
+          component: () => import('@/views/ApprovalLedgerView.vue'),
+          meta: { title: '审批台账', adminOnly: true }
         }
       ]
     },
@@ -153,7 +159,8 @@ const ROUTE_PERMS: Record<string, string> = {
   'approval-config': 'approval:read',
   'role-qr': 'user:read',
   'wx-bindings': 'user:read',
-  dict: 'visit:read'
+  dict: 'visit:read',
+  'approval-ledger': 'approval:read'
 }
 
 /** 落地页顺序：第一个有权限的页面 */

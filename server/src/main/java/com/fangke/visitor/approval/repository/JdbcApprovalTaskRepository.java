@@ -235,7 +235,13 @@ public class JdbcApprovalTaskRepository implements ApprovalTaskRepository {
     }
 
     @Override
-    public List<DoneRow> findDoneByOperator(long operatorId, int operatorType, int offset, int limit) {
+    public List<DoneRow> findDoneByOperator(long operatorId, int operatorType, Integer action,
+                                            java.time.LocalDate from, java.time.LocalDate to,
+                                            int offset, int limit) {
+        List<Object> args = new ArrayList<>();
+        String where = doneWhere(operatorId, operatorType, action, from, to, args);
+        args.add(limit);
+        args.add(offset);
         return jdbc.query("""
                         SELECT t.id AS task_id, t.level, t.node_name, a.id AS appointment_id, a.appointment_no,
                                v.name AS visitor_name, a.purpose, aa.action, aa.comment, aa.created_at
@@ -243,10 +249,7 @@ public class JdbcApprovalTaskRepository implements ApprovalTaskRepository {
                         JOIN approval_task t ON t.id = aa.task_id
                         JOIN appointment a ON a.id = aa.appointment_id
                         LEFT JOIN visitor v ON v.id = a.visitor_id
-                        WHERE aa.operator_id = ? AND aa.operator_type = ?
-                        ORDER BY aa.id DESC
-                        LIMIT ? OFFSET ?
-                        """,
+                        """ + where + " ORDER BY aa.id DESC LIMIT ? OFFSET ?",
                 (rs, i) -> new DoneRow(
                         rs.getLong("task_id"),
                         rs.getInt("level"),
@@ -258,14 +261,51 @@ public class JdbcApprovalTaskRepository implements ApprovalTaskRepository {
                         rs.getInt("action"),
                         rs.getString("comment"),
                         rs.getTimestamp("created_at").toLocalDateTime()),
-                operatorId, operatorType, limit, offset);
+                args.toArray());
     }
 
     @Override
-    public long countDoneByOperator(long operatorId, int operatorType) {
-        Long count = jdbc.queryForObject("""
-                        SELECT COUNT(1) FROM approval_action WHERE operator_id = ? AND operator_type = ?
-                        """, Long.class, operatorId, operatorType);
+    public long countDoneByOperator(long operatorId, int operatorType, Integer action,
+                                    java.time.LocalDate from, java.time.LocalDate to) {
+        List<Object> args = new ArrayList<>();
+        String where = doneWhere(operatorId, operatorType, action, from, to, args);
+        Long count = jdbc.queryForObject("SELECT COUNT(1) FROM approval_action aa" + where,
+                Long.class, args.toArray());
         return count == null ? 0 : count;
+    }
+
+    @Override
+    public DoneStats doneStats(long operatorId, int operatorType, java.time.LocalDate from,
+                               java.time.LocalDate to) {
+        List<Object> args = new ArrayList<>();
+        String where = doneWhere(operatorId, operatorType, null, from, to, args);
+        return jdbc.queryForObject("""
+                        SELECT COUNT(1) AS total,
+                               SUM(CASE WHEN aa.action = 1 THEN 1 ELSE 0 END) AS approved,
+                               SUM(CASE WHEN aa.action = 2 THEN 1 ELSE 0 END) AS rejected
+                        FROM approval_action aa
+                        """ + where,
+                (rs, i) -> new DoneStats(rs.getLong("total"), rs.getLong("approved"), rs.getLong("rejected")),
+                args.toArray());
+    }
+
+    private String doneWhere(long operatorId, int operatorType, Integer action,
+                             java.time.LocalDate from, java.time.LocalDate to, List<Object> args) {
+        StringBuilder sb = new StringBuilder(" WHERE aa.operator_id = ? AND aa.operator_type = ?");
+        args.add(operatorId);
+        args.add(operatorType);
+        if (action != null) {
+            sb.append(" AND aa.action = ?");
+            args.add(action);
+        }
+        if (from != null) {
+            sb.append(" AND aa.created_at >= ?");
+            args.add(Timestamp.valueOf(from.atStartOfDay()));
+        }
+        if (to != null) {
+            sb.append(" AND aa.created_at < ?");
+            args.add(Timestamp.valueOf(to.plusDays(1).atStartOfDay()));
+        }
+        return sb.toString();
     }
 }

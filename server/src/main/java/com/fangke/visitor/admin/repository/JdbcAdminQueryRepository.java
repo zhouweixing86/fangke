@@ -130,6 +130,85 @@ public class JdbcAdminQueryRepository implements AdminQueryRepository {
         return count == null ? 0 : count;
     }
 
+    /* ---------------- 审批台账（C-80） ---------------- */
+
+    private static final String APPROVAL_RECORD_SELECT = """
+            SELECT aa.id, a.appointment_no, v.name AS visitor_name, t.node_name,
+                   COALESCE(aa.operator_name, u.real_name, u.username, CONCAT('微信#', aa.operator_id)) AS operator_name,
+                   aa.operator_type, aa.action, aa.comment, aa.gate_snapshot, aa.created_at
+            FROM approval_action aa
+            JOIN appointment a ON a.id = aa.appointment_id
+            LEFT JOIN visitor v ON v.id = a.visitor_id
+            LEFT JOIN approval_task t ON t.id = aa.task_id
+            LEFT JOIN sys_user u ON u.id = aa.operator_id AND aa.operator_type <> 4
+            """;
+
+    @Override
+    public List<ApprovalRecordRow> searchApprovalRecords(LocalDate from, LocalDate to, Integer action,
+                                                         String operator, String keyword,
+                                                         int offset, int limit) {
+        List<Object> args = new ArrayList<>();
+        String where = approvalRecordWhere(from, to, action, operator, keyword, args);
+        args.add(limit);
+        args.add(offset);
+        return jdbc.query(APPROVAL_RECORD_SELECT + where
+                        + " ORDER BY aa.created_at DESC, aa.id DESC LIMIT ? OFFSET ?",
+                (rs, i) -> new ApprovalRecordRow(
+                        rs.getLong("id"),
+                        rs.getString("appointment_no"),
+                        rs.getString("visitor_name"),
+                        rs.getString("node_name"),
+                        rs.getString("operator_name"),
+                        rs.getInt("operator_type"),
+                        rs.getInt("action"),
+                        rs.getString("comment"),
+                        rs.getString("gate_snapshot"),
+                        rs.getTimestamp("created_at").toLocalDateTime()),
+                args.toArray());
+    }
+
+    @Override
+    public long countApprovalRecords(LocalDate from, LocalDate to, Integer action,
+                                     String operator, String keyword) {
+        List<Object> args = new ArrayList<>();
+        String where = approvalRecordWhere(from, to, action, operator, keyword, args);
+        Long count = jdbc.queryForObject("""
+                SELECT COUNT(1) FROM approval_action aa
+                JOIN appointment a ON a.id = aa.appointment_id
+                LEFT JOIN visitor v ON v.id = a.visitor_id
+                LEFT JOIN sys_user u ON u.id = aa.operator_id AND aa.operator_type <> 4
+                """ + where, Long.class, args.toArray());
+        return count == null ? 0 : count;
+    }
+
+    private String approvalRecordWhere(LocalDate from, LocalDate to, Integer action,
+                                       String operator, String keyword, List<Object> args) {
+        StringBuilder sb = new StringBuilder(" WHERE 1=1");
+        if (from != null) {
+            sb.append(" AND aa.created_at >= ?");
+            args.add(Timestamp.valueOf(from.atStartOfDay()));
+        }
+        if (to != null) {
+            sb.append(" AND aa.created_at < ?");
+            args.add(Timestamp.valueOf(to.plusDays(1).atStartOfDay()));
+        }
+        if (action != null) {
+            sb.append(" AND aa.action = ?");
+            args.add(action);
+        }
+        if (StringUtils.hasText(operator)) {
+            sb.append(" AND COALESCE(aa.operator_name, u.real_name, u.username) LIKE ?");
+            args.add("%" + operator.trim() + "%");
+        }
+        if (StringUtils.hasText(keyword)) {
+            sb.append(" AND (a.appointment_no LIKE ? OR v.name LIKE ?)");
+            String like = "%" + keyword.trim() + "%";
+            args.add(like);
+            args.add(like);
+        }
+        return sb.toString();
+    }
+
     /* ---------------- 条件拼装 ---------------- */
 
     private String appointmentWhere(String keyword, Integer status, Long areaId, LocalDate from, LocalDate to,

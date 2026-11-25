@@ -201,6 +201,19 @@ export interface AppointmentRow {
   grantStatus: number
   canRevoke: boolean
   createdAt: string
+  /** C-80 审批轨迹（仅详情接口返回） */
+  actions?: ApprovalTraceItem[]
+}
+
+export interface ApprovalTraceItem {
+  action: number
+  actionText: string
+  operatorName: string
+  operatorType: number
+  operatorTypeText: string
+  comment: string
+  gates: string
+  at: string
 }
 
 export interface EventRow {
@@ -464,6 +477,24 @@ export interface WxBindingRow {
   /** 已授予的角色编码，逗号分隔 */
   roleCodes: string | null
   createdAt: string
+}
+
+/* ---------------- 审批台账（C-80） ---------------- */
+
+export interface ApprovalRecordRow {
+  id: number
+  createdAt: string
+  appointmentNo: string
+  visitorName: string
+  nodeName: string
+  operatorName: string
+  operatorType: number
+  operatorTypeText: string
+  action: number
+  actionText: string
+  comment: string
+  /** 批准门点，`/` 分隔 */
+  gates: string
 }
 
 /* ---------------- 来访登记 + 基础字典（V26） ---------------- */

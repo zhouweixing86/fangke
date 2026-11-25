@@ -63,9 +63,32 @@ public class AppApprovalController {
     public ApiResponse<PageResult<ApprovalService.DoneView>> done(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Integer action,
+            @RequestParam(required = false)
+            @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            java.time.LocalDate from,
+            @RequestParam(required = false)
+            @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            java.time.LocalDate to,
             HttpServletRequest request) {
         long bindId = AppAuthInterceptor.requireApprover(request);
-        return ApiResponse.ok(approvalService.appDoneList(bindId, page, size));
+        return ApiResponse.ok(approvalService.appDoneList(bindId, action, from, to, page, size));
+    }
+
+    /** 履职统计：我的审批台账汇总（总数/通过/驳回）。 */
+    @GetMapping("/stats")
+    public ApiResponse<java.util.Map<String, Object>> stats(
+            @RequestParam(required = false)
+            @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            java.time.LocalDate from,
+            @RequestParam(required = false)
+            @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            java.time.LocalDate to,
+            HttpServletRequest request) {
+        long bindId = AppAuthInterceptor.requireApprover(request);
+        var stats = approvalService.appDoneStats(bindId, from, to);
+        return ApiResponse.ok(java.util.Map.of(
+                "total", stats.total(), "approved", stats.approved(), "rejected", stats.rejected()));
     }
 
     @GetMapping("/{taskId}")

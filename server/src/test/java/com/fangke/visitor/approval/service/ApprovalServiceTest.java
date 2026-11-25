@@ -210,14 +210,22 @@ class ApprovalServiceTest {
         }
 
         @Override
-        public java.util.List<DoneRow> findDoneByOperator(long operatorId, int operatorType,
+        public java.util.List<DoneRow> findDoneByOperator(long operatorId, int operatorType, Integer action,
+                                                          java.time.LocalDate from, java.time.LocalDate to,
                                                           int offset, int limit) {
             return java.util.List.of();
         }
 
         @Override
-        public long countDoneByOperator(long operatorId, int operatorType) {
+        public long countDoneByOperator(long operatorId, int operatorType, Integer action,
+                                        java.time.LocalDate from, java.time.LocalDate to) {
             return 0;
+        }
+
+        @Override
+        public DoneStats doneStats(long operatorId, int operatorType, java.time.LocalDate from,
+                                   java.time.LocalDate to) {
+            return new DoneStats(0, 0, 0);
         }
     }
 
