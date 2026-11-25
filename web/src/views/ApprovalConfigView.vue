@@ -10,6 +10,8 @@
         </div>
         <el-alert v-if="!form.enabled" type="warning" :closable="false" show-icon style="margin-bottom: 10px"
           title="模板已停用：新提交的预约会退回「单级角色审批」，不会卡住" />
+        <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px"
+          title="保存后只影响「之后新提交的预约」：已在途的审批按提交时的层级/角色走完（提交时已快照流程），不会被新模板改变。" />
 
         <div v-for="(node, i) in form.nodes" :key="i" class="node-card">
           <div class="node-head">

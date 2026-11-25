@@ -12,6 +12,8 @@ import com.fangke.visitor.approval.model.ApprovalConfig;
 import com.fangke.visitor.approval.model.ApprovalNode;
 import com.fangke.visitor.approval.model.ApprovalTask;
 import com.fangke.visitor.approval.model.ApprovalTemplate;
+import com.fangke.visitor.approval.model.FlowNode;
+import com.fangke.visitor.approval.repository.AppointmentFlowRepository;
 import com.fangke.visitor.approval.repository.ApprovalActionRepository;
 import com.fangke.visitor.approval.repository.ApprovalConfigRepository;
 import com.fangke.visitor.approval.repository.ApprovalTaskRepository;
@@ -30,6 +32,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -116,6 +119,7 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     private final DispatchTrigger dispatchTrigger;
     private final AppointmentGateService appointmentGateService;
     private final DeviceQrConfigService qrConfigService;
+    private final AppointmentFlowRepository flowRepository;
 
     public ApprovalService(ApprovalConfigRepository configRepository,
                            ApprovalTemplateRepository templateRepository,
@@ -128,7 +132,8 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                            CcPort ccPort,
                            DispatchTrigger dispatchTrigger,
                            AppointmentGateService appointmentGateService,
-                           DeviceQrConfigService qrConfigService) {
+                           DeviceQrConfigService qrConfigService,
+                           AppointmentFlowRepository flowRepository) {
         this.configRepository = configRepository;
         this.templateRepository = templateRepository;
         this.taskRepository = taskRepository;
@@ -141,55 +146,74 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         this.dispatchTrigger = dispatchTrigger;
         this.appointmentGateService = appointmentGateService;
         this.qrConfigService = qrConfigService;
+        this.flowRepository = flowRepository;
     }
 
     /* ---------------- 启动 / 取消 ---------------- */
 
     /**
-     * 创建审批任务：按**启用的全局模板**建第 1 个节点的任务。
+     * 创建审批任务：按**启用的全局模板**建第 1 个节点的任务，并把整条流程**快照**下来（C-82）。
      *
-     * <p>没有模板（或模板没配节点）时退回单级角色审批（用 {@code approval_config.l2_role}），
+     * <p>快照后管理员再改模板，在途单仍按提交时的层级/角色走完；新模板只影响之后新提交的预约。
+     * 没有模板（或模板没配节点）时退回单级角色审批（用 {@code approval_config.l2_role}），
      * 保证升级后即使没配流程也能正常走。
      */
     @Override
     @Transactional
     public void start(Appointment appointment) {
         ApprovalTemplate template = templateRepository.findEnabledGlobal().orElse(null);
-        ApprovalNode first = template == null ? null : template.firstNode();
-        if (template == null || first == null) {
-            ApprovalConfig config = configRepository.loadGlobal();
-            String role = config.roleOrDefault();
-            long taskId = taskRepository.insert(ApprovalTask.roleTask(appointment.getId(), 1, role,
-                    null, null, "管理端审核"));
-            appointment.setStatus(Appointment.PENDING_L1);
-            appointment.setCurrentTaskId(taskId);
-            appointmentRepository.update(appointment);
-            log.warn("未配置审批模板，退回单级审批 appointment={} role={}",
-                    appointment.getAppointmentNo(), role);
-            return;
-        }
+        List<FlowNode> chain = buildFlowChain(template);
+        flowRepository.saveAll(appointment.getId(), chain);
 
-        long firstTaskId = createNodeTasks(appointment, template, first);
+        FlowNode first = chain.get(0);
+        Long templateId = template == null ? null : template.id();
+        long firstTaskId = createNodeTask(appointment, templateId, first);
         appointment.setStatus(first.seq() <= 1 ? Appointment.PENDING_L1 : Appointment.PENDING_L2);
         appointment.setCurrentTaskId(firstTaskId);
         appointmentRepository.update(appointment);
 
-        // 提交时抄送（只通知、不阻断）
-        for (ApprovalCc cc : template.submitCcs()) {
-            ccPort.ccToRole(cc.targetValue(), appointment.getId(), appointment.getAppointmentNo(),
-                    visitorNameOf(appointment), timeRangeOf(appointment), "提交时");
+        if (template != null) {
+            // 提交时抄送（只通知、不阻断）
+            for (ApprovalCc cc : template.submitCcs()) {
+                ccPort.ccToRole(cc.targetValue(), appointment.getId(), appointment.getAppointmentNo(),
+                        visitorNameOf(appointment), timeRangeOf(appointment), "提交时");
+            }
         }
-        log.info("创建审批任务 appointment={} 模板={} 节点1={} 模式={}",
-                appointment.getAppointmentNo(), template.id(), first.nodeName(), first.modeText());
+        log.info("创建审批任务 appointment={} 模板={} 节点1={} 已快照{}层",
+                appointment.getAppointmentNo(), templateId, first.nodeName(), chain.size());
+    }
+
+    /** 把模板固化成流程链；没有模板时用单级兜底节点。 */
+    private List<FlowNode> buildFlowChain(ApprovalTemplate template) {
+        if (template == null || template.firstNode() == null) {
+            ApprovalConfig config = configRepository.loadGlobal();
+            log.warn("未配置审批模板，退回单级审批 role={}", config.roleOrDefault());
+            return List.of(new FlowNode(1, "管理端审核", config.roleOrDefault(), true, true, List.of()));
+        }
+        List<FlowNode> chain = new ArrayList<>();
+        int seq = 1;
+        for (ApprovalNode node : template.orderedNodes()) {
+            List<String> ccRoles = template.ccsOfNode(node.id()).stream()
+                    .map(ApprovalCc::targetValue).distinct().toList();
+            chain.add(new FlowNode(seq++, node.nodeName(), node.assigneeRole(),
+                    node.allowEditGates(), node.allowQr(), ccRoles));
+        }
+        return chain;
     }
 
     /**
-     * 按节点配置建任务（C-79：产品上只保留「或签」）。
+     * 按快照节点建任务（C-79：产品上只保留「或签」）。
      *
      * <p>一个节点只建**一条角色任务**：该角色任意一人（后台账号或微信审批人）通过即办结，
      * 因此单签/会签的区分已下沉为「用专属角色实现个签」。
      */
-    private long createNodeTasks(Appointment appointment, ApprovalTemplate template, ApprovalNode node) {
+    private long createNodeTask(Appointment appointment, Long templateId, FlowNode node) {
+        return taskRepository.insert(ApprovalTask.roleTask(appointment.getId(), node.seq(),
+                node.assigneeRole(), templateId, null, node.nodeName()));
+    }
+
+    /** 历史在途单（V31 之前提交、没有快照）继续按模板建后续任务。 */
+    private long createTemplateNodeTask(Appointment appointment, ApprovalTemplate template, ApprovalNode node) {
         return taskRepository.insert(ApprovalTask.roleTask(appointment.getId(), node.seq(),
                 node.assigneeRole(), template.id(), node.id(), node.nodeName()));
     }
@@ -241,10 +265,15 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                 operatorType == OPERATOR_APP_USER ? null : operatorId, roles);
         Appointment appointment = loadAppointment(task.appointmentId());
         ApprovalNode node = nodeOf(task);
+        FlowNode flowNode = flowNodeOf(task);
 
         // 节点可以限制"能否改门点 / 能否批二维码"，越权传值直接忽略，避免被前端绕过
-        Boolean effectiveQr = node == null || node.allowQr() ? qrApproved : null;
-        List<Long> effectiveGates = node == null || node.allowEditGates() ? approvedGateIds : null;
+        // 有快照就按**提交时**的限制（改模板不影响在途单）；历史单回落到模板节点
+        boolean allowQr = flowNode != null ? flowNode.allowQr() : node == null || node.allowQr();
+        boolean allowEditGates = flowNode != null ? flowNode.allowEditGates()
+                : node == null || node.allowEditGates();
+        Boolean effectiveQr = allowQr ? qrApproved : null;
+        List<Long> effectiveGates = allowEditGates ? approvedGateIds : null;
         applyQrDecision(appointment, effectiveQr, operatorId);
 
         List<Long> approved = effectiveGates == null
@@ -262,20 +291,45 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                     Appointment.statusText(appointment.getStatus()), true, false);
         }
 
-        ApprovalTemplate template = templateOf(task);
-        if (node != null && template != null) {
-            for (ApprovalCc cc : template.ccsOfNode(node.id())) {
-                ccPort.ccToRole(cc.targetValue(), appointment.getId(), appointment.getAppointmentNo(),
-                        visitorNameOf(appointment), timeRangeOf(appointment),
-                        "节点『" + node.nodeName() + "』已通过");
+        // 节点办结后抄送：快照里的角色（改模板不影响），历史单回落到模板配置
+        List<String> ccRoles = flowNode == null ? List.of() : flowNode.ccRoles();
+        if (flowNode == null && node != null) {
+            ApprovalTemplate templateForCc = templateOf(task);
+            if (templateForCc != null) {
+                ccRoles = templateForCc.ccsOfNode(node.id()).stream()
+                        .map(ApprovalCc::targetValue).distinct().toList();
             }
         }
+        for (String role : ccRoles) {
+            ccPort.ccToRole(role, appointment.getId(), appointment.getAppointmentNo(),
+                    visitorNameOf(appointment), timeRangeOf(appointment),
+                    "节点『" + task.nodeName() + "』已通过");
+        }
 
+        // 下一节点：优先用提交时的快照；历史单（无快照）继续按当前模板
+        FlowNode nextFlow = flowRepository.next(appointment.getId(), task.level()).orElse(null);
+        if (nextFlow != null) {
+            long nextTaskId = createNodeTask(appointment,
+                    task.templateId(), nextFlow);
+            appointment.setStatus(Appointment.PENDING_L2);
+            appointment.setCurrentTaskId(nextTaskId);
+            appointmentRepository.update(appointment);
+            log.info("进入下一审批节点（快照） appointment={} 节点={}({})",
+                    appointment.getAppointmentNo(), nextFlow.seq(), nextFlow.nodeName());
+            return new PassResult(appointment.getAppointmentNo(), appointment.getStatus(),
+                    Appointment.statusText(appointment.getStatus()), true, false);
+        }
+        if (!flowRepository.findByAppointment(appointment.getId()).isEmpty()) {
+            // 有快照且没有下一节点 = 末级通过
+            return finalizeApprove(appointment, false);
+        }
+
+        ApprovalTemplate template = templateOf(task);
         ApprovalNode next = template == null ? null : template.nodeAfter(task.level());
         if (next == null) {
             return finalizeApprove(appointment, false);
         }
-        long nextTaskId = createNodeTasks(appointment, template, next);
+        long nextTaskId = createTemplateNodeTask(appointment, template, next);
         appointment.setStatus(Appointment.PENDING_L2);
         appointment.setCurrentTaskId(nextTaskId);
         appointmentRepository.update(appointment);
@@ -464,8 +518,12 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                 appointmentGateService.appliedGateIds(appointment),
                 appointmentGateService.approvedGateIds(appointment));
         ApprovalNode node = nodeOf(task);
+        FlowNode flowNode = flowNodeOf(task);
         String nodeName = task.nodeName() == null || task.nodeName().isBlank()
                 ? ("第 " + task.level() + " 级审核") : task.nodeName();
+        boolean allowEditGates = flowNode != null ? flowNode.allowEditGates()
+                : node == null || node.allowEditGates();
+        boolean allowQr = flowNode != null ? flowNode.allowQr() : node == null || node.allowQr();
         return new DetailView(task.id(), task.level(), nodeName, task.status(), taskStatusText(task.status()),
                 appointment.getAppointmentNo(), appointment.getStatus(),
                 Appointment.statusText(appointment.getStatus()),
@@ -475,7 +533,7 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                 DATETIME.format(appointment.getStartTime()), DATETIME.format(appointment.getEndTime()),
                 gates, canAct, actions,
                 appointment.isQrRequested(), appointment.isQrApproved(),
-                node == null || node.allowEditGates(), node == null || node.allowQr());
+                allowEditGates, allowQr);
     }
 
     private ApprovalTask requireExists(Long taskId) {
@@ -600,6 +658,11 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     /** 任务对应的模板节点（历史任务没有 node_id，返回 null 表示按默认口径放开）。 */
     private ApprovalNode nodeOf(ApprovalTask task) {
         return task.nodeId() == null ? null : templateRepository.findNode(task.nodeId()).orElse(null);
+    }
+
+    /** 任务对应的**提交时快照**节点（V31 之前的老单没有，返回 null）。 */
+    private FlowNode flowNodeOf(ApprovalTask task) {
+        return flowRepository.find(task.appointmentId(), task.level()).orElse(null);
     }
 
     /** 任务所属模板：优先按 task.template_id，历史任务回落到当前启用模板。 */

@@ -384,11 +384,38 @@ class ApprovalServiceTest {
 
     /* ---------------- 固定数据 ---------------- */
 
+    static class FakeFlowRepo implements com.fangke.visitor.approval.repository.AppointmentFlowRepository {
+        final Map<Long, java.util.List<com.fangke.visitor.approval.model.FlowNode>> store = new LinkedHashMap<>();
+
+        @Override
+        public void saveAll(Long appointmentId, java.util.List<com.fangke.visitor.approval.model.FlowNode> nodes) {
+            store.put(appointmentId, new java.util.ArrayList<>(nodes));
+        }
+
+        @Override
+        public java.util.List<com.fangke.visitor.approval.model.FlowNode> findByAppointment(Long appointmentId) {
+            return store.getOrDefault(appointmentId, java.util.List.of());
+        }
+
+        @Override
+        public java.util.Optional<com.fangke.visitor.approval.model.FlowNode> find(Long appointmentId, int seq) {
+            return findByAppointment(appointmentId).stream()
+                    .filter(n -> n.seq() == seq).findFirst();
+        }
+
+        @Override
+        public java.util.Optional<com.fangke.visitor.approval.model.FlowNode> next(Long appointmentId, int seq) {
+            return findByAppointment(appointmentId).stream()
+                    .filter(n -> n.seq() > seq).findFirst();
+        }
+    }
+
     private FakeConfigRepo configRepo;
     private FakeTemplateRepo templateRepo;
     private FakeTaskRepo taskRepo;
     private FakeActionRepo actionRepo;
     private FakeAppointmentRepo appointmentRepo;
+    private FakeFlowRepo flowRepo;
     private AdminUserRepository adminUserRepo;
     private final List<String> notifications = new ArrayList<>();
     private final List<String> dispatches = new ArrayList<>();
@@ -403,6 +430,7 @@ class ApprovalServiceTest {
         taskRepo = new FakeTaskRepo();
         actionRepo = new FakeActionRepo();
         appointmentRepo = new FakeAppointmentRepo();
+        flowRepo = new FakeFlowRepo();
         adminUserRepo = org.mockito.Mockito.mock(AdminUserRepository.class);
         org.mockito.Mockito.when(adminUserRepo.findActiveUserIdsByRole("GUARD"))
                 .thenReturn(List.of(101L, 102L));
@@ -440,7 +468,7 @@ class ApprovalServiceTest {
         };
 
         service = new ApprovalService(configRepo, templateRepo, taskRepo, actionRepo, appointmentRepo,
-                new FakeVisitorRepo(), adminUserRepo, notify, ccPort, dispatch, gateSelection, qrConfig);
+                new FakeVisitorRepo(), adminUserRepo, notify, ccPort, dispatch, gateSelection, qrConfig, flowRepo);
 
         appointment = new Appointment();
         appointment.setAppointmentNo("A2026111600001");
@@ -612,6 +640,36 @@ class ApprovalServiceTest {
         service.guardPass(pending.get(0).id(), 101L, List.of("GUARD"), "ok", null);
         ApprovalTask next = taskRepo.findPendingByAppointment(appointment.getId()).get(0);
         assertEquals("终审", next.nodeName(), "一人通过即进入下一节点");
+    }
+
+    @Test
+    @DisplayName("C-82：提交后改模板不影响在途单（流程快照生效）")
+    void inFlightFlowFrozenAfterTemplateChange() {
+        ApprovalNode first = node(51L, 13L, 1, "审批", "APPROVER", "ANY", true, true);
+        ApprovalNode second = node(52L, 13L, 2, "领导复核", "LEADER", "ANY", true, true);
+        templateRepo.template = new ApprovalTemplate(13L, "两级流程", "GLOBAL", true, null,
+                List.of(first, second), List.of());
+
+        service.start(appointment);
+
+        // 提交后管理员把模板改成三级，并把第 2 层角色换掉
+        ApprovalNode changedSecond = node(52L, 13L, 2, "保安复核", "GUARD", "ANY", true, true);
+        ApprovalNode addedThird = node(53L, 13L, 3, "领导终审", "LEADER", "ANY", true, true);
+        templateRepo.template = new ApprovalTemplate(13L, "三级流程", "GLOBAL", true, null,
+                List.of(node(51L, 13L, 1, "审批", "APPROVER", "ANY", true, true), changedSecond, addedThird),
+                List.of());
+
+        service.guardPass(onlyTaskId(), 99L, List.of("APPROVER"), "ok", null);
+
+        List<ApprovalTask> pending = taskRepo.findPendingByAppointment(appointment.getId());
+        assertEquals(1, pending.size());
+        assertEquals("领导复核", pending.get(0).nodeName(), "仍走提交时的第 2 层");
+        assertEquals("LEADER", pending.get(0).assigneeRole(), "角色不被新模板改掉");
+
+        service.guardPass(pending.get(0).id(), 99L, List.of("LEADER"), "ok", null);
+
+        assertEquals(Appointment.APPROVED, appointment.getStatus(), "两级走完即终审");
+        assertTrue(dispatches.contains("A2026111600001"), "不会补走新增的第 3 级");
     }
 
     @Test
