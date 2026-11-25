@@ -10,6 +10,7 @@ import com.fangke.visitor.device.model.PlatePayload;
 import com.fangke.visitor.vehicle.service.VehicleAccessService;
 import com.fangke.visitor.vehicle.service.VehicleDeviceService;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -77,6 +80,19 @@ public class VehicleMqttService {
     private final VehicleAccessService accessService;
     private final VehicleDeviceService deviceService;
 
+    /**
+     * 专用于「回调线程里触发的下行」。
+     *
+     * <p>Paho 的 {@code messageArrived} 是接收线程回调，在里面直接 {@code publish} 会
+     * 把接收线程堵住（PINGRESP 处理不了 → 30s 后判定 keepalive 超时 → 连接被杀、下发卡死），
+     * 所以相机 {@code Conn} 上行后的 {@code EnableReply} 必须扔到别的线程发。
+     */
+    private final ExecutorService sideChannel = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "vehicle-mqtt-side");
+        thread.setDaemon(true);
+        return thread;
+    });
+
     public VehicleMqttService(AppProperties props, VehicleMqttGateway gateway,
                               VehicleMqttLogRepository logRepository,
                               VehicleAccessService accessService,
@@ -91,6 +107,11 @@ public class VehicleMqttService {
     @PostConstruct
     public void registerListener() {
         gateway.setListener(this::onUpload);
+    }
+
+    @PreDestroy
+    void shutdownSideChannel() {
+        sideChannel.shutdownNow();
     }
 
     /* ---------------- 平台 → 相机 ---------------- */
@@ -180,7 +201,8 @@ public class VehicleMqttService {
         }
         String message;
         if ("Conn".equalsIgnoreCase(command)) {
-            message = "设备上线" + enableReplyQuietly(deviceSn);
+            message = "设备上线";
+            sideChannel.submit(() -> enableReplyQuietly(deviceSn));
         } else if (plate == null) {
             message = describeWithoutPlate(command, payload);
         } else {
@@ -200,12 +222,12 @@ public class VehicleMqttService {
     }
 
     /** 设备上线时自动使能下行回执；失败只记日志，不影响上行处理。 */
-    private String enableReplyQuietly(String deviceSn) {
+    private void enableReplyQuietly(String deviceSn) {
         try {
             enableReply(deviceSn);
-            return "（已下行使能下行回执）";
+            log.info("设备 {} 上线，已下行使能下行回执", deviceSn);
         } catch (Exception e) {
-            return "（使能回执下发失败：" + e.getMessage() + "）";
+            log.warn("设备 {} 使能回执下发失败：{}", deviceSn, e.getMessage());
         }
     }
 

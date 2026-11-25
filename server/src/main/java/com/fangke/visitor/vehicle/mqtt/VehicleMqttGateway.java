@@ -17,6 +17,11 @@ import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * 车闸 MQTT 连接（docs/22）。
@@ -39,6 +44,13 @@ public class VehicleMqttGateway {
     private volatile boolean connected;
     private volatile String lastError;
     private UploadListener listener;
+
+    /** 下行发布放独立线程，避免 Paho 卡住时把 HTTP 线程也拖死（配合 publish 超时）。 */
+    private final ExecutorService sender = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "vehicle-mqtt-sender");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     public VehicleMqttGateway(AppProperties props) {
         this.props = props;
@@ -187,15 +199,39 @@ public class VehicleMqttGateway {
             }
         }
         String topic = cfg.getDownloadTopicPrefix() + deviceSn;
-        try {
+        int timeoutMs = cfg.getPublishTimeoutMs();
+        Future<?> future = sender.submit(() -> {
             MqttMessage message = new MqttMessage(payload.getBytes(StandardCharsets.UTF_8));
             message.setQos(cfg.getQos());
             message.setRetained(cfg.isRetained());
             client.publish(topic, message);
+            return null;
+        });
+        try {
+            future.get(timeoutMs, TimeUnit.MILLISECONDS);
             log.info("车闸下行 device={} topic={} len={}", deviceSn, topic, payload.length());
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            lastError = "发布超时 " + timeoutMs + "ms（连接可能已半死）";
+            log.warn("车闸下行超时 device={} topic={}，将强制重连", deviceSn, topic);
+            recoverAsync();
+            throw new IllegalStateException("车闸 MQTT 发布超时（连接可能已断），已触发重连，请稍后重试");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("车闸 MQTT 发布被中断： " + e.getMessage(), e);
         } catch (Exception e) {
             throw new IllegalStateException("MQTT 发布失败：" + e.getMessage(), e);
         }
+    }
+
+    /** 强制重建连接（在后台线程里做，避免把调用方卡住）。 */
+    public void recoverAsync() {
+        Thread thread = new Thread(() -> {
+            closeClientQuietly();
+            start();
+        }, "vehicle-mqtt-recover");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     public Map<String, Object> status() {
@@ -211,7 +247,7 @@ public class VehicleMqttGateway {
         return view;
     }
 
-    @PreDestroy
+    /** 只关连接（重连/恢复时也用它，不能关掉发送线程池）。 */
     public void close() {
         try {
             if (client != null && client.isConnected()) {
@@ -229,5 +265,11 @@ public class VehicleMqttGateway {
         }
         client = null;
         connected = false;
+    }
+
+    @PreDestroy
+    public void destroy() {
+        close();
+        sender.shutdownNow();
     }
 }

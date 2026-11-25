@@ -120,6 +120,8 @@ V1 的 `time` 语义：**月租车=到期日期；贵宾车=当前日期**，格
 | 00:09 | 平台 `POST /mqtt/plate` → `AddCarInfo` | ✅ 回执 0 → 白名单出现 `苏A12345` |
 | 00:09 | 平台 `DELETE /mqtt/plate` → `DeleteCarInfo` | ✅ 回执 0 → `totalCnt=0` |
 | 00:04 | 半死连接 | ⚠️ Paho 心跳超时后未自动重连，下发接口卡到 nginx 504；已加看门狗 + 发布前判活 |
+| 00:19 | 再次 504，定位根因 | ⚠️ 两次故障都紧跟相机 `Conn` 之后：`Conn` 处理里**在 MQTT 回调线程直接 publish** `EnableReply`，把 Paho 接收线程堵住 → PINGRESP 处理不了 → 30s 后判定 keepalive 超时 → 连接被杀、HTTP 线程一直等 |
+| 00:24 | 修复验证 | ✅ `EnableReply` 改到独立线程（`vehicle-mqtt-side`），下发超时 5s + 超时即强制重连；重启相机触发 `Conn` 后无任何 keepalive 超时，下发改/删车牌均回执 `errCode=0` |
 
 ## 7. 平台实现映射
 
@@ -130,7 +132,8 @@ V1 的 `time` 语义：**月租车=到期日期；贵宾车=当前日期**，格
 | 回执使能 | `VehicleMqttService.enableReply`（收到 `Conn` 自动下发）+ `POST /api/admin/vehicle/mqtt/enable-reply` |
 | 回执解析 | `describeWithoutPlate`：`errCode=0` → 「下行回执：成功」 |
 | 识别结果解析 | `extractPlate`：`data` 是字符串也能解析，字段优先 `carNO` |
-| 连接可靠性 | `VehicleMqttGateway.ensureConnected` 看门狗（默认 30s，`fangke.vehicle.mqtt.watchdog-ms`）+ `publish` 前判活 |
+| 连接可靠性 | `VehicleMqttGateway.ensureConnected` 看门狗（默认 30s，`fangke.vehicle.mqtt.watchdog-ms`）+ `publish` 前判活 + 发布超时 `publish-timeout-ms`（默认 5s，超时强制重连） |
+| 回调线程安全 | **禁止在 `messageArrived` 里直接 publish**：`Conn` 后的 `EnableReply` 走独立线程池 `vehicle-mqtt-side` |
 | 日志降噪 | 心跳 `Rtd` 与无车 `Image` **不写** `vehicle_mqtt_log`（5s 一条会撑爆库），只打 debug |
 | 管理端 | 「基础资料 → 车闸对接」：状态/重连/使能回执/下发/删除/全量对齐/原始报文/上下行日志 |
 
@@ -177,5 +180,5 @@ Invoke-WebRequest -Uri 'http://<ip>/Signalway.fcgi?命令' -Method Post -Body ([
 | `errCode=1 "Unknow CMD."` | 固件不支持该命令（如 V2） | 换 V1 模板 |
 | 下发成功但相机不抬杆 | 白名单控制模式不是「自动开闸」 | 相机「脱机白名单」改控制模式 |
 | 白名单里有车牌但 `overdue_time=无` | 用了 type 4（贵宾车） | 改 `plate-type=1` |
-| 平台下发 504 / 卡住 | MQTT 半死连接（旧版本） | 升级到含看门狗的版本，或点「重连」 |
+| 平台下发 504 / 卡住 | 在 MQTT 回调线程里 publish 导致 Paho 接收线程被堵（旧版本），或连接半死 | 升级到含「回调线程异步 + 发布超时 + 看门狗」的版本；临时可点「重连」 |
 | 相机连上就断 | 走 4G | 改有线；4G 出口会被中间设备重置 |

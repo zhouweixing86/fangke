@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -136,7 +137,8 @@ class VehicleMqttServiceTest {
                 + "\"requestId\":\"3\",\"sn\":\"" + SN + "\",\"time\":\"2026-11-25 23:40:00\",\"version\":\"1.0.1\"}";
         service.onUpload("upload/" + SN, conn);
         ArgumentCaptor<String> down = ArgumentCaptor.forClass(String.class);
-        verify(gateway).publish(eq(SN), down.capture());
+        // EnableReply 走独立线程发（不能在回调线程里 publish），所以用 timeout 等它
+        verify(gateway, timeout(3000)).publish(eq(SN), down.capture());
         assertTrue(down.getValue().contains("EnableReply"), down.getValue());
         assertTrue(down.getValue().contains("enable"), down.getValue());
 

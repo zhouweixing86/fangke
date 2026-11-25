@@ -560,6 +560,9 @@ public class AppProperties {
             /** 保留消息：相机重连后能立即收到最新指令。 */
             private boolean retained = false;
 
+            /** 下行发布超时（毫秒）：Paho 卡住时最多等这么久，超时即判定连接半死并强制重连。 */
+            private int publishTimeoutMs = 5000;
+
             /** 新增/更新车牌的报文模板（${plate} ${type} ${endDate} ${sn} ${requestId} ${time} 占位）。 */
             private String addTemplate = "{\"command\":\"AddCarInfo\",\"data\":\"{\\\"carInfoList\\\":["
                     + "{\\\"plate\\\":\\\"${plate}\\\",\\\"type\\\":${type},\\\"time\\\":\\\"${endDate}\\\"}]}\","
@@ -680,6 +683,14 @@ public class AppProperties {
 
             public void setPlateType(int plateType) {
                 this.plateType = plateType;
+            }
+
+            public int getPublishTimeoutMs() {
+                return publishTimeoutMs;
+            }
+
+            public void setPublishTimeoutMs(int publishTimeoutMs) {
+                this.publishTimeoutMs = publishTimeoutMs;
             }
         }
         /**
