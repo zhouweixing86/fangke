@@ -119,14 +119,40 @@ public class JdbcDeviceRepository implements DeviceRepository {
     @Override
     public void updateHeartbeat(String deviceSn, String ip, Integer personCount,
                                 LocalDateTime heartbeatAt, Integer clockSkewSeconds, String rawJson) {
+        // 只把「局域网地址」写进 device.ip：云端部署时设备出口是公网 IP，
+        // 写进去会让「本地管理」跳到公网地址（打不开）。公网 IP 只留在 device_heartbeat 样本里。
+        String lanIp = isPrivateAddress(ip) ? ip : null;
         jdbc.update("UPDATE device SET online_state = 1, last_heartbeat = ?, person_count = COALESCE(?, person_count), "
                         + "ip = COALESCE(?, ip) WHERE device_sn = ?",
-                heartbeatAt, personCount, ip, deviceSn);
+                heartbeatAt, personCount, lanIp, deviceSn);
 
         // 样本写入 device_heartbeat：保留策略由 JOB 清理（docs/10 §12），此处不判断抽样
         jdbc.update("INSERT INTO device_heartbeat (device_id, device_sn, device_ip, person_count, device_time, clock_skew_s, raw) "
                         + "SELECT id, ?, ?, ?, ?, ?, ? FROM device WHERE device_sn = ?",
                 deviceSn, ip, personCount, heartbeatAt, clockSkewSeconds, rawJson, deviceSn);
+    }
+
+    /** 10.x / 172.16-31.x / 192.168.x / 127.x 视为局域网地址。 */
+    static boolean isPrivateAddress(String ip) {
+        if (ip == null || ip.isBlank()) {
+            return false;
+        }
+        String value = ip.trim();
+        if (value.startsWith("10.") || value.startsWith("192.168.") || value.startsWith("127.")) {
+            return true;
+        }
+        if (value.startsWith("172.")) {
+            int dot = value.indexOf('.', 4);
+            if (dot > 4) {
+                try {
+                    int second = Integer.parseInt(value.substring(4, dot));
+                    return second >= 16 && second <= 31;
+                } catch (NumberFormatException ignored) {
+                    return false;
+                }
+            }
+        }
+        return false;
     }
 
     @Override
@@ -187,11 +213,11 @@ public class JdbcDeviceRepository implements DeviceRepository {
 
     @Override
     public void updateMeta(Long deviceId, String deviceName, String model, Integer direction,
-                           Long gateId, String remark) {
+                           Long gateId, String remark, String ip) {
         jdbc.update("UPDATE device SET device_name = COALESCE(?, device_name), model = COALESCE(?, model), "
                         + "direction = COALESCE(?, direction), gate_id = COALESCE(?, gate_id), "
-                        + "remark = COALESCE(?, remark) WHERE id = ?",
-                deviceName, model, direction, gateId, remark, deviceId);
+                        + "remark = COALESCE(?, remark), ip = COALESCE(?, ip) WHERE id = ?",
+                deviceName, model, direction, gateId, remark, ip, deviceId);
     }
 
     @Override

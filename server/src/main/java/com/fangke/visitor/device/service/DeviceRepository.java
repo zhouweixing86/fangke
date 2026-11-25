@@ -77,7 +77,7 @@ public interface DeviceRepository {
      * 轮询式终端自动登记后只有 SN/IP，需要在后台分配到真实门点。
      */
     void updateMeta(Long deviceId, String deviceName, String model, Integer direction,
-                    Long gateId, String remark);
+                    Long gateId, String remark, String ip);
 
     /** 改通道（人行终端 ↔ 车闸相机）：单独管理时用来纠正误登记的类型。 */
     void updateChannel(Long deviceId, Device.Channel channel);

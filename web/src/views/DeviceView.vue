@@ -27,7 +27,7 @@
       </el-table-column>
       <el-table-column prop="directionText" label="方向" width="80" />
       <el-table-column prop="deviceSn" label="SN" width="160" />
-      <el-table-column prop="ip" label="IP" width="130" />
+      <el-table-column prop="ip" label="内网 IP" width="130" />
       <el-table-column prop="model" label="型号" width="140" />
       <el-table-column label="通道" width="110">
         <template #default="{ row }">
@@ -102,9 +102,11 @@
           <el-input v-model="editForm.remark" type="textarea" :rows="2" maxlength="255" show-word-limit
             placeholder="现场位置说明，便于运维定位" />
         </el-form-item>
-        <el-form-item label="SN / MAC / IP">
-          <span class="text-muted">{{ editingRow?.deviceSn }} / {{ editingRow?.mac }} /
-            {{ editingRow?.ip || '-' }}</span>
+        <el-form-item label="内网 IP">
+          <el-input v-model="editForm.ip" maxlength="64" placeholder="如 192.168.0.103（「本地管理」用它打开设备后台）" />
+        </el-form-item>
+        <el-form-item label="SN / MAC">
+          <span class="text-muted">{{ editingRow?.deviceSn }} / {{ editingRow?.mac }}</span>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -345,7 +347,8 @@ const editForm = ref({
   direction: 1,
   gateId: 0,
   remark: '',
-  channel: 'PULL'
+  channel: 'PULL',
+  ip: ''
 })
 
 /* ---------------- 车闸相机：车牌名单 ---------------- */
@@ -377,7 +380,8 @@ function openEdit(row: DeviceView) {
     direction: row.direction,
     gateId: row.gateId,
     remark: row.remark,
-    channel: row.channel || 'PULL'
+  channel: row.channel || 'PULL',
+  ip: row.ip || ''
   }
   editVisible.value = true
 }

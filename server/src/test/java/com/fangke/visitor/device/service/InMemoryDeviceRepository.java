@@ -105,7 +105,7 @@ public class InMemoryDeviceRepository implements DeviceRepository {
 
     @Override
     public void updateMeta(Long deviceId, String deviceName, String model, Integer direction,
-                           Long gateId, String remark) {
+                           Long gateId, String remark, String ip) {
         devices.values().stream()
                 .filter(d -> deviceId.equals(d.getId()))
                 .findFirst()
@@ -124,6 +124,9 @@ public class InMemoryDeviceRepository implements DeviceRepository {
                     }
                     if (remark != null) {
                         d.setRemark(remark);
+                    }
+                    if (ip != null) {
+                        d.setIp(ip);
                     }
                 });
     }

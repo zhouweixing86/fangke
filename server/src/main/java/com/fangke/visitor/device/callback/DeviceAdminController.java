@@ -152,7 +152,11 @@ public class DeviceAdminController {
         if (remark != null && remark.length() > 255) {
             throw new BusinessException(ErrorCode.PARAM_TOO_LONG, "备注最长 255 字");
         }
-        deviceRepository.updateMeta(id, deviceName, model, direction, gateId, remark);
+        String ip = blankToNull(request.ip());
+        if (ip != null && !ip.matches("[0-9a-zA-Z.:\\-]{1,64}")) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "设备 IP 格式不正确：" + ip);
+        }
+        deviceRepository.updateMeta(id, deviceName, model, direction, gateId, remark, ip);
         Device.Channel channel = parseChannel(request.channel());
         if (channel != null) {
             deviceRepository.updateChannel(id, channel);
@@ -243,6 +247,8 @@ public class DeviceAdminController {
 
     /** 设备档案补录请求；字段为 null 表示不改该项。 */
     public record DeviceUpdateRequest(String deviceName, String model, Integer direction,
-                                      Long gateId, String remark, String channel) {
+                                      Long gateId, String remark, String channel,
+                                      /** 设备内网 IP（本地管理用）；云端部署时心跳来源是公网，需手工填。 */
+                                      String ip) {
     }
 }
