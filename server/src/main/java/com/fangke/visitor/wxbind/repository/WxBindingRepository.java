@@ -80,6 +80,12 @@ public class WxBindingRepository {
                 (rs, i) -> rs.getString(1), roleId).stream().findFirst();
     }
 
+    /** 角色二维码 token（生成小程序码用）。 */
+    public Optional<String> findTokenByRole(long roleId) {
+        return jdbc.query("SELECT token FROM wx_role_qr WHERE role_id = ? AND status = 1",
+                (rs, i) -> rs.getString(1), roleId).stream().findFirst();
+    }
+
     /** 生成/更新某角色的二维码 token（一个角色一条）。 */
     public void saveToken(long roleId, String roleCode, String token, Long operatorId) {
         Integer count = jdbc.queryForObject("SELECT COUNT(1) FROM wx_role_qr WHERE role_id = ?",

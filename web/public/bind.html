@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>身份绑定 · 请在小程序中打开</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 32px 20px; background: #f5f6f8; color: #1f2329;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.6;
+    }
+    .card {
+      max-width: 520px; margin: 0 auto; background: #fff; border-radius: 14px;
+      padding: 28px 24px; box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
+    }
+    h1 { font-size: 20px; margin: 0 0 6px; }
+    .sub { color: #8a9099; font-size: 14px; margin: 0 0 20px; }
+    .role {
+      display: inline-block; padding: 6px 14px; border-radius: 20px;
+      background: #eaf3fe; color: #1989fa; font-weight: 600; font-size: 15px;
+    }
+    .role.pending { background: #f2f3f5; color: #909399; font-weight: 400; }
+    .box { margin-top: 20px; padding: 16px; background: #fafbfc; border-radius: 10px; }
+    .box h2 { font-size: 15px; margin: 0 0 8px; }
+    ol { margin: 0; padding-left: 20px; font-size: 14px; color: #464c54; }
+    li { margin: 6px 0; }
+    code {
+      font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+      background: #eef1f5; padding: 2px 6px; border-radius: 4px; word-break: break-all;
+    }
+    .warn { color: #e6a23c; font-size: 13px; margin-top: 14px; }
+    .err { color: #e45656; font-size: 14px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>身份绑定</h1>
+    <p class="sub">这是「访客通行」小程序的身份绑定入口</p>
+    <div id="role" class="role pending">正在识别角色…</div>
+
+    <div class="box">
+      <h2>怎么完成绑定？</h2>
+      <ol>
+        <li>在<strong>微信</strong>里打开「访客通行」小程序；</li>
+        <li>扫管理端「角色二维码」页面显示的<strong>小程序码</strong>，或按管理员给的入口进入「绑定身份」页；</li>
+        <li>填写<strong>姓名 + 手机号</strong>提交，即可获得对应身份。</li>
+      </ol>
+      <p class="warn">
+        普通链接二维码用微信扫一扫只会打开网页，进不了小程序；
+        配置好小程序 AppID 后，管理端会自动改用「小程序码」，扫码即可直达。
+      </p>
+    </div>
+
+    <div id="tokenBox" class="box" style="display:none">
+      <h2>当前令牌</h2>
+      <code id="token"></code>
+    </div>
+
+    <div id="error" class="err" style="display:none"></div>
+  </div>
+
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var token = params.get('t') || '';
+      var roleEl = document.getElementById('role');
+      var errorEl = document.getElementById('error');
+      if (!token) {
+        roleEl.textContent = '缺少绑定参数';
+        return;
+      }
+      document.getElementById('token').textContent = token;
+      document.getElementById('tokenBox').style.display = 'block';
+      fetch('/api/app/bind/preview?token=' + encodeURIComponent(token))
+        .then(function (r) { return r.json(); })
+        .then(function (body) {
+          if (body && body.code === 0 && body.data) {
+            roleEl.textContent = '即将获得角色：' + body.data.roleName;
+            roleEl.className = 'role';
+          } else {
+            roleEl.textContent = '二维码已失效';
+            errorEl.textContent = (body && body.message) || '请联系管理员重新生成二维码';
+            errorEl.style.display = 'block';
+          }
+        })
+        .catch(function () {
+          roleEl.textContent = '无法校验二维码';
+          errorEl.textContent = '网络异常，请稍后重试或联系管理员。';
+          errorEl.style.display = 'block';
+        });
+    })();
+  </script>
+</body>
+</html>

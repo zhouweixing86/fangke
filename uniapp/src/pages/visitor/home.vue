@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { onShow } from '@dcloudio/uni-app'
+import { onShareAppMessage, onShareTimeline, onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 import { myApprovalCount } from '@/api'
 import { auth, isApprover } from '@/store/auth'
@@ -81,6 +81,15 @@ onShow(async () => {
   approver.value = isApprover()
   await refreshApprover()
 })
+
+/* ---------------- 分享（C-81）：小程序转发 + 朋友圈 ---------------- */
+onShareAppMessage(() => ({
+  title: '访客通行｜预约申请、刷证进门',
+  path: '/pages/visitor/home'
+}))
+onShareTimeline(() => ({
+  title: '访客通行｜预约申请、刷证进门'
+}))
 </script>
 
 <style scoped>

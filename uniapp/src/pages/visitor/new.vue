@@ -175,7 +175,7 @@
 </template>
 
 <script setup lang="ts">
-import { onShow } from '@dcloudio/uni-app'
+import { onShareAppMessage, onShow } from '@dcloudio/uni-app'
 import { computed, reactive, ref } from 'vue'
 import { createAppointment, appDictOptions, listAppGates, lookupEmployee } from '@/api'
 import type { GateOption, VisitDictOption } from '@/api/types'
@@ -369,6 +369,11 @@ async function submit() {
     submitting.value = false
   }
 }
+
+onShareAppMessage(() => ({
+  title: '访客预约登记',
+  path: '/pages/visitor/new'
+}))
 
 onShow(async () => {
   try {

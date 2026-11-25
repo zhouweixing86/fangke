@@ -44,13 +44,31 @@ public class WxBindService {
     private final EmployeeRepository employeeRepository;
     private final CryptoService crypto;
     private final AppAuthService appAuthService;
+    private final WxacodeService wxacodeService;
 
     public WxBindService(WxBindingRepository repository, EmployeeRepository employeeRepository,
-                         CryptoService crypto, AppAuthService appAuthService) {
+                         CryptoService crypto, AppAuthService appAuthService,
+                         WxacodeService wxacodeService) {
         this.repository = repository;
         this.employeeRepository = employeeRepository;
         this.crypto = crypto;
         this.appAuthService = appAuthService;
+        this.wxacodeService = wxacodeService;
+    }
+
+    /** 小程序码结果：未配置 AppID 时 configured=false，前端回退成链接二维码。 */
+    public record WxacodeView(boolean configured, String imageBase64, String hint) {
+    }
+
+    /** 生成该角色的小程序码（扫了直接进小程序「绑定身份」页）。 */
+    public WxacodeView wxacode(long roleId) {
+        if (!wxacodeService.configured()) {
+            return new WxacodeView(false, null,
+                    "未配置小程序 AppID/Secret，暂用链接二维码；配置 WX_APP_ID/WX_SECRET 后自动切换为小程序码");
+        }
+        String token = repository.findTokenByRole(roleId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_INVALID, "该角色还没有二维码，请先刷新列表"));
+        return new WxacodeView(true, wxacodeService.unlimitedBase64("pages/bind/bind", "t=" + token), null);
     }
 
     /** 管理端列表：所有启用角色 + 二维码（没有的当场生成，省得管理员先点一次）。 */

@@ -468,6 +468,8 @@ public class AppProperties {
         private String appId = "";
         private String secret = "";
         private boolean mock = true;
+        /** 小程序码版本：release / trial / develop（生成角色小程序码时使用）。 */
+        private String envVersion = "release";
 
         public String getAppId() {
             return appId;
@@ -491,6 +493,15 @@ public class AppProperties {
 
         public void setMock(boolean mock) {
             this.mock = mock;
+        }
+
+        /** 小程序码版本：release（正式）/ trial（体验）/ develop（开发）。 */
+        public String getEnvVersion() {
+            return envVersion;
+        }
+
+        public void setEnvVersion(String envVersion) {
+            this.envVersion = envVersion;
         }
     }
 }

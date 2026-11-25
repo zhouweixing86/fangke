@@ -41,7 +41,8 @@ class WxBindServiceTest {
         repository = mock(WxBindingRepository.class);
         employeeRepository = mock(EmployeeRepository.class);
         appAuthService = mock(AppAuthService.class);
-        service = new WxBindService(repository, employeeRepository, new CryptoService(props), appAuthService);
+        service = new WxBindService(repository, employeeRepository, new CryptoService(props),
+                appAuthService, mock(WxacodeService.class));
     }
 
     @Test

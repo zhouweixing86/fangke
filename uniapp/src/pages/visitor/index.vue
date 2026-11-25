@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
+import { onPullDownRefresh, onShareAppMessage, onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 import { myAppointments } from '@/api'
 import type { AppointmentView } from '@/api/types'
@@ -108,6 +108,11 @@ onPullDownRefresh(async () => {
   await load()
   uni.stopPullDownRefresh()
 })
+
+onShareAppMessage(() => ({
+  title: '我的访客预约',
+  path: '/pages/visitor/index'
+}))
 </script>
 
 <style scoped>

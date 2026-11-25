@@ -6,11 +6,15 @@
       小程序首页就会多出「我的审批」。审批模板里配了哪个角色，绑了该角色的微信就能看到对应待办。
     </el-alert>
 
+    <el-alert v-if="hint" type="warning" :closable="false" show-icon class="tip">
+      <template #title>当前显示的是「链接二维码」</template>
+      {{ hint }}
+    </el-alert>
+
     <div class="toolbar">
       <el-button :icon="Refresh" @click="load">刷新</el-button>
       <span class="hint">
-        当前二维码内容：<code>{{ bindUrl('&lt;token&gt;') }}</code>
-        （正式上线需在微信后台配置「扫普通链接二维码打开小程序」，或提供 AppID 后改用小程序码）
+        小程序码：微信扫码直达小程序「绑定身份」页；链接二维码：普通扫一扫只会用浏览器打开，需在小程序内访问
       </span>
     </div>
 
@@ -24,8 +28,12 @@
           <el-tag size="small" type="success">{{ item.bindCount }} 人已绑定</el-tag>
         </div>
         <div class="qr-box">
-          <img v-if="images[item.token]" :src="images[item.token]" class="qr" alt="二维码" />
+          <img v-if="wxacodes[item.roleId]" :src="wxacodes[item.roleId]" class="qr" alt="小程序码" />
+          <img v-else-if="images[item.token]" :src="images[item.token]" class="qr" alt="二维码" />
           <div v-else class="qr placeholder">生成中…</div>
+        </div>
+        <div class="qr-label">
+          {{ wxacodes[item.roleId] ? '小程序码（扫码直达小程序）' : '链接二维码（需在小程序内打开）' }}
         </div>
         <div class="token">{{ item.token }}</div>
         <div class="actions">
@@ -42,11 +50,14 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import QRCode from 'qrcode'
-import { listWxRoleQr, regenerateWxRoleQr } from '@/api'
+import { listWxRoleQr, regenerateWxRoleQr, fetchWxRoleWxacode } from '@/api'
 import type { WxRoleQr } from '@/api/types'
 
 const rows = ref<WxRoleQr[]>([])
 const images = reactive<Record<string, string>>({})
+/** 小程序码（base64），有值时优先展示 */
+const wxacodes = reactive<Record<number, string>>({})
+const hint = ref('')
 const loading = ref(false)
 
 /** 小程序扫码入口：正式环境换成备案域名；本地联调可用开发者工具的「扫码预览」 */
@@ -55,12 +66,31 @@ function bindUrl(token: string) {
   return `${base}?t=${token}`
 }
 
+async function loadWxacode(item: WxRoleQr) {
+  try {
+    const result = await fetchWxRoleWxacode(item.roleId)
+    if (result.configured && result.imageBase64) {
+      wxacodes[item.roleId] = `data:image/png;base64,${result.imageBase64}`
+      delete images[item.token]
+      return true
+    }
+    if (result.hint) {
+      hint.value = result.hint
+    }
+  } catch {
+    // 小程序码拿不到不影响链接二维码
+  }
+  return false
+}
+
 async function load() {
   loading.value = true
+  hint.value = ''
   try {
     rows.value = await listWxRoleQr()
     for (const item of rows.value) {
-      if (!images[item.token]) {
+      const ok = await loadWxacode(item)
+      if (!ok && !images[item.token]) {
         images[item.token] = await QRCode.toDataURL(bindUrl(item.token), { width: 220, margin: 1 })
       }
     }
@@ -80,13 +110,13 @@ async function copy(item: WxRoleQr) {
 
 async function regenerate(item: WxRoleQr) {
   await ElMessageBox.confirm(
-    `重新生成后，「${item.roleName}」的旧二维码立即失效（已绑定的 ${item.bindCount} 人不受影响）。确认？`,
+    `重新生成后，「${item.roleName}」的旧二维码/小程序码立即失效（已绑定的 ${item.bindCount} 人不受影响）。确认？`,
     '重新生成二维码',
     { type: 'warning' }
   )
   const updated = await regenerateWxRoleQr(item.roleId)
   delete images[item.token]
-  images[updated.token] = await QRCode.toDataURL(bindUrl(updated.token), { width: 220, margin: 1 })
+  delete wxacodes[item.roleId]
   ElMessage.success('已重新生成')
   await load()
 }
@@ -153,6 +183,13 @@ onMounted(load)
   font-size: 12px;
   color: var(--el-text-color-secondary);
   word-break: break-all;
+}
+
+.qr-label {
+  text-align: center;
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  margin-bottom: 6px;
 }
 
 .actions {

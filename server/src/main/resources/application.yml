@@ -75,6 +75,8 @@ fangke:
     app-id: ${WX_APP_ID:}
     secret: ${WX_SECRET:}
     mock: ${WX_MOCK:true}
+    # 生成「角色小程序码」用：release 正式 / trial 体验版 / develop 开发版
+    env-version: ${WX_ENV_VERSION:release}
 
   crypto:
     # 敏感字段加密：生产必须用环境变量注入，且两把密钥不同

@@ -314,6 +314,11 @@ export const deleteRole = (id: number) => del<void>(`/admin/roles/${id}`)
 export const listWxRoleQr = () => get<WxRoleQr[]>('/admin/wx-role-qr')
 export const regenerateWxRoleQr = (roleId: number) =>
   post<WxRoleQr>(`/admin/wx-role-qr/${roleId}/regenerate`)
+/** 小程序码（C-81）：未配置 AppID 时 configured=false，前端回退链接二维码 */
+export const fetchWxRoleWxacode = (roleId: number) =>
+  get<{ configured: boolean; imageBase64: string | null; hint: string | null }>(
+    `/admin/wx-role-qr/${roleId}/wxacode`
+  )
 
 /* ---------------- 审批台账（C-80） ---------------- */
 

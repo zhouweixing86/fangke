@@ -37,4 +37,10 @@ public class WxRoleQrAdminController {
         Long operatorId = com.fangke.visitor.security.RoleGuard.currentUserId(request);
         return ApiResponse.ok(wxBindService.regenerate(roleId, operatorId));
     }
+
+    /** 小程序码（C-81）：扫码直接进小程序「绑定身份」页；未配置 AppID 时 configured=false。 */
+    @GetMapping("/{roleId}/wxacode")
+    public ApiResponse<WxBindService.WxacodeView> wxacode(@PathVariable long roleId) {
+        return ApiResponse.ok(wxBindService.wxacode(roleId));
+    }
 }
