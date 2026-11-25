@@ -170,6 +170,14 @@ class VehicleMqttServiceTest {
     }
 
     @Test
+    @DisplayName("字段叫 confidence 时兼容：≤100 当百分比，>100 仍按 0-1000 折算")
+    void confidenceFieldIsTolerated() {
+        assertEquals(95, VehicleMqttService.confidenceOf("{\"data\":\"{\\\"confidence\\\":95}\"}"));
+        assertEquals(95, VehicleMqttService.confidenceOf("{\"data\":\"{\\\"confidence\\\":950}\"}"));
+        assertEquals(91, VehicleMqttService.confidenceOf("{\"data\":\"{\\\"confid\\\":912,\\\"confidence\\\":5}\"}"));
+    }
+
+    @Test
     @DisplayName("手工下发/删除车牌也会同步对账状态，避免下一次对账把它当「未知状态」")
     void manualPlateOpsSyncState() {
         service.addPlate(SN, "苏A1", java.time.LocalDateTime.of(2026, 11, 26, 0, 0),

@@ -518,13 +518,21 @@ public class VehicleMqttService {
 
     /**
      * 相机给的置信度是 0-1000（`confid`），库里统一按 0-100 存（和行人侧的 score 口径一致）。
+     *
+     * <p>个别固件/第三方把字段叫 `confidence` 且直接给百分比，这里兼容取值：`confidence` 不超过 100
+     * 就当作已经是百分比，超过再按 0-1000 折算。
      */
     static Integer confidenceOf(String payload) {
         Integer raw = extractInt(payload, "confid");
+        boolean alreadyPercent = false;
+        if (raw == null) {
+            raw = extractInt(payload, "confidence");
+            alreadyPercent = raw != null && raw <= 100;
+        }
         if (raw == null) {
             return null;
         }
-        int value = Math.round(raw / 10.0f);
+        int value = alreadyPercent ? raw : Math.round(raw / 10.0f);
         return Math.max(0, Math.min(100, value));
     }
 
