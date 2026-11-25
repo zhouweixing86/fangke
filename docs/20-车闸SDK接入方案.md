@@ -13,8 +13,8 @@
 |---|---|---|
 | 连相机 | `HVAPI_OpenEx(ip, apiVer)` / `HVAPI_CloseEx` | 按 IP 直连，**不需要账号密码**；apiVer 传 NULL 用默认 |
 | 识别结果回调 | `HVAPI_SetCallBackEx` + `HVAPI_StartRecvResult` | 回调类型：`CALLBACK_TYPE_RECORD_PLATE`（车牌）、`..._BIGIMAGE/_SMALLIMAGE/_BINARYIMAGE`（大图/小图/二值图）、`..._INFOBEGIN/INFOEND` |
-| 白名单·V1 | `HVAPI_InportNameList` / `GetNameList` / `AddNameList` / `DelNameList` / `QueryNameList` / `GetNameListAvailablePeriod` | 字符串格式：`车牌-有效期(YYYYMMDD)$车牌-有效期$...` |
-| **白名单·V2（推荐）** | `HVAPI_ImportNameListV2`（全量）/ `HVAPI_AddNameListV2`（增量，存在更新/不存在添加）/ `HVAPI_GetNameListV2`（分页查询）/ `HVAPI_DelNameListV2`（删除） | 结构体 `CWhiteListInfo`，**UTF-8** |
+| 白名单·V1（**本机实测可用**） | `HVAPI_InportNameList` / `GetNameList` / `AddNameList` / `DelNameList` / `QueryNameList` | 字符串格式：`车牌-有效期(YYYYMMDD)$车牌-有效期$...`（**每个条目必须带 `$`**，GBK 编码） |
+| 白名单·V2 | `HVAPI_ImportNameListV2` / `AddNameListV2` / `GetNameListV2` / `DelNameListV2` | 结构体 `CWhiteListInfo`（车辆类型/时间段/备注，UTF-8）——**本机固件 21.2.0.3045 实测不支持，全部返回 E_FAIL**，其它型号可能支持 |
 | 停车场车牌名单 | `HVAPI_SavePlateListToCamera` / `ReadPlateListInfo` / `DeletePlateList` / `DeleteAllPlateList` | 结构体 `PLATE_LIST_INFO{车牌, 起始时间, 结束时间, nFlag}` |
 | 参数/命令 | `HVAPI_SetParamEx` / `GetParamEx` / `ExecCmdEx` | XML/JSON 命令通道（改设备参数、屏显等）；平台协议配置项未在手册里单列 |
 
@@ -76,18 +76,44 @@ enum EnVehicleType {
 
 ---
 
-## 4. 待确认（决定能否落地 C）
+## 5. 实测（2026-11-25，Windows + JDK17 + JNA 5.13，直连 `192.168.10.152`）
+
+用开发包里的 `HvDevice.dll` 写了 POC（源码在 `private/hv-sdk-poc/`，未入库）实测：
+
+| 调用 | 结果 |
+|---|---|
+| `HVAPI_GetDevTypeEx` | `ret=0` |
+| `HVAPI_OpenEx(ip, NULL)` | 返回有效句柄（**不需要账号密码**） |
+| `HVAPI_GetNameList` | `ret=0`，白名单为空（与 Web 后台「脱机白名单 → 暂无数据」一致） |
+| `HVAPI_AddNameList("京A00000-20261231")` | `ret=0` **但读回为空** ← 少了结尾 `$`，静默不生效 |
+| `HVAPI_AddNameList("京A00000-20261231$")` | `ret=0`，`GetNameList` 立刻读回 `京A00000-20261231$` ✅ |
+| `HVAPI_DelNameList("京A00000$")` | `ret=0`，读回为空 ✅（Web 后台也恢复「暂无数据」，测试数据已清理） |
+| `HVAPI_ImportNameListV2 / AddNameListV2 / GetNameListV2 / DelNameListV2` | 全部返回 `E_FAIL(0x80004005)` —— **该固件（21.2.0.3045）不支持 V2** |
+| `HVAPI_GetNameListAvailablePeriod` | `E_FAIL`（不支持） |
+
+**踩到的坑与结论**：
+
+1. 名单字符串**每个条目必须以 `$` 结尾**（`车牌-YYYYMMDD$车牌2-YYYYMMDD$`）。缺 `$` 时接口返回成功但**什么都没写**，很难发现。
+2. V1 名单编码是 **GBK/ANSI**（不是 UTF-8），有效期只到**日**（`YYYYMMDD`）。
+3. V2（`CWhiteListInfo`，带车辆类型/时间段/备注）在这台相机上不可用 → 只用 V1；
+   车辆类型由相机「脱机白名单 → 控制模式」按类型决定（当前：白名单=脱机后自动开闸）。
+4. Web 后台的「脱机白名单」列表与 SDK 操作的是**同一份数据**，可用来核对。
+5. SDK 连接与相机现有「标准协议(MQTT)」是两条独立连接（设备信息里「结果链接 0/5」），实测连接/读写期间现有平台仍在线。
+
+## 6. 待确认（决定能否落地 C）
 
 1. **现场有没有常开的机器**能跑边缘网关（Windows 10/11 或 Linux x64 都行，Java 17 一处构建两边跑）？还是需要新买一台小主机/工控机？
-2. 相机是否允许多客户端同时连（手册显示结果链接上限 5，现在 0）；接上后现有 MQTT 平台是否仍正常。
-3. 白名单要用的**车辆类型**：访客车/员工车各用哪个（枚举里没有"访客"，建议 `VEH_CUSTOM_WHITELIST(6)` 或按现场控制模式定）。
-4. 白名单**容量上限**（车位数/名单条数）。
-5. 有效期格式统一用 `yyyy-MM-dd HH:mm:ss`（`CWhiteListInfo` 要求），访客按预约起止、员工按档案有效期（无到期给 2099-12-31）。
+2. 相机是否允许多客户端同时连（手册显示结果链接上限 5，现在 0）；接上后现有 MQTT 平台是否仍正常（实测短连接无影响，长期运行待观察）。
+3. 白名单**容量上限**（车位数/名单条数）与**车牌匹配模式**（当前「完全匹配」）。
+4. 员工/访客车牌是否都进同一个白名单（V1 没有车辆类型，只有车牌+到期日；如需要类型区分只能靠 V2，本机不支持）。
 
-## 5. 建议的落地步骤
+## 7. 建议的落地步骤
 
-1. 在开发机上用 `HvDeviceDemo(c#)\PCM500FSPUTV14(蜂晶系列)` 连一次相机，验证 `OpenEx` + `StartRecvResult` + `AddNameListV2`；
-2. 现场机器装 JDK 17，部署「边缘网关」jar（内置 `HvDevice.dll`/`libHvDevice.so` + `HvDevice.ini`）；
-3. 云平台加 `/api/edge/**`（边缘令牌）与「车牌下发通道 = EDGE」开关，复用现有 `vehicle_plate_push` 差分逻辑；
-4. 联调：加一个测试车牌 → 边缘日志显示 `AddNameListV2 OK` → 相机「脱机白名单」列表出现该车牌 → 车过 → 云平台收到识别记录；
-5. 验证删除、有效期变更、相机离线重连、云平台重启等边界。
+1. 边缘网关（Java 17 + JNA）：
+   - `HVAPI_OpenEx` 长连接 + 断线重连；
+   - 名单：`HVAPI_GetNameList` 读回 → 与云平台快照 diff → `AddNameList`/`DelNameList`（格式 `车牌-YYYYMMDD$`）；
+     首次可直接 `HVAPI_InportNameList` 全量覆盖；
+   - 识别结果：`HVAPI_SetCallBackEx` + `HVAPI_StartRecvResult`（`CALLBACK_TYPE_RECORD_PLATE` + 图片）→ POST 云平台；
+2. 云平台加 `/api/edge/**`（边缘令牌）与「车牌下发通道 = EDGE」开关，复用现有 `vehicle_plate_push` 差分逻辑；
+3. 联调：加一个测试车牌 → 边缘日志 `AddNameList OK` → 相机「脱机白名单」出现该车牌 → 车过 → 云平台收到识别记录；
+4. 验证删除、到期日变更、相机离线重连、云平台重启等边界。
