@@ -68,7 +68,9 @@ public class WxBindService {
         }
         String token = repository.findTokenByRole(roleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_INVALID, "该角色还没有二维码，请先刷新列表"));
-        return new WxacodeView(true, wxacodeService.unlimitedBase64("pages/bind/bind", "t=" + token), null);
+        // scene 上限 32 字符：令牌本身就是 32 位十六进制，不能再加 "t=" 前缀
+        String scene = token.length() > 32 ? token.substring(0, 32) : token;
+        return new WxacodeView(true, wxacodeService.unlimitedBase64("pages/bind/bind", scene), null);
     }
 
     /** 管理端列表：所有启用角色 + 二维码（没有的当场生成，省得管理员先点一次）。 */
