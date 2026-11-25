@@ -112,9 +112,15 @@ public class VehiclePlateService {
                 AppointmentGateRepository.STAGE_APPROVED);
         Map<Long, String> visitorNames = visitorRepository.findNamesByIds(
                 appointments.stream().map(Appointment::getVisitorId).filter(Objects::nonNull).distinct().toList());
+        Set<Long> blacklistedVisitors = visitorRepository.findBlacklistedIds(
+                appointments.stream().map(Appointment::getVisitorId).filter(Objects::nonNull).distinct().toList());
         for (Appointment appointment : appointments) {
             String plate = VehicleAccessService.normalize(appointment.getPlateNo());
             if (plate.isEmpty() || byPlate.containsKey(plate)) {
+                continue;
+            }
+            // 访客被拉黑：即使预约单还在有效期，也不能继续下发（已下发的下一轮会被删掉）
+            if (appointment.getVisitorId() != null && blacklistedVisitors.contains(appointment.getVisitorId())) {
                 continue;
             }
             List<Long> gates = gatesByAppointment.getOrDefault(appointment.getId(), List.of());

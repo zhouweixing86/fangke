@@ -54,5 +54,21 @@ public interface VisitorRepository {
         }
         return view;
     }
+
+    /**
+     * 批量取「已拉黑」的访客 id。
+     *
+     * <p>车闸车牌清单要排除他们：访客被拉黑后，即使预约单还在有效期内，也不能继续放行。
+     */
+    default java.util.Set<Long> findBlacklistedIds(java.util.Collection<Long> ids) {
+        java.util.Set<Long> view = new java.util.LinkedHashSet<>();
+        if (ids == null) {
+            return view;
+        }
+        for (Long id : ids) {
+            findById(id).filter(v -> v.isBlacklist()).ifPresent(v -> view.add(id));
+        }
+        return view;
+    }
 }
 

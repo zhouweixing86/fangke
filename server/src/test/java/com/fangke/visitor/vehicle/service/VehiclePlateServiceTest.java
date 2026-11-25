@@ -127,6 +127,22 @@ class VehiclePlateServiceTest {
     }
 
     @Test
+    @DisplayName("访客被拉黑：即使预约单有效也不进车牌清单（已下发的下一轮会被删）")
+    void snapshotSkipsBlacklistedVisitor() {
+        when(employeeRepo.findActiveWithPlate()).thenReturn(List.of());
+        when(appointmentRepo.findPlateAppointmentsOnDate(any()))
+                .thenReturn(List.of(appointment("京T11111", 9L, 200L)));
+        when(appointmentGateRepo.findGateIds(org.mockito.ArgumentMatchers.<java.util.Collection<Long>>any(), anyInt()))
+                .thenReturn(java.util.Map.of(200L, List.of(1L)));
+        when(visitorRepo.findNamesByIds(org.mockito.ArgumentMatchers.<java.util.Collection<Long>>any()))
+                .thenReturn(java.util.Map.of(9L, "黑名单访客"));
+        when(visitorRepo.findBlacklistedIds(org.mockito.ArgumentMatchers.<java.util.Collection<Long>>any()))
+                .thenReturn(java.util.Set.of(9L));
+
+        assertTrue(service.snapshot(1L).isEmpty(), "拉黑访客的车牌不应下发");
+    }
+
+    @Test
     @DisplayName("下发：厂商协议未接入的车闸相机记 PENDING_VENDOR，不抛异常")
     void syncMarksPendingVendor() {
         when(employeeRepo.findActiveWithPlate()).thenReturn(List.of(employee("京A12345", "张三")));

@@ -84,6 +84,20 @@ public class JdbcVisitorRepository implements VisitorRepository {
     }
 
     @Override
+    public java.util.Set<Long> findBlacklistedIds(java.util.Collection<Long> ids) {
+        java.util.Set<Long> view = new java.util.LinkedHashSet<>();
+        if (ids == null || ids.isEmpty()) {
+            return view;
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        jdbc.query("SELECT id FROM visitor WHERE id IN (" + placeholders + ") AND is_blacklist = 1",
+                rs -> {
+                    view.add(rs.getLong(1));
+                }, ids.toArray());
+        return view;
+    }
+
+    @Override
     public Optional<Visitor> findByPersonNo(String personNo) {
         if (personNo == null || personNo.isBlank()) {
             return Optional.empty();

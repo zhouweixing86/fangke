@@ -284,6 +284,7 @@ Invoke-WebRequest -Uri 'http://<ip>/Signalway.fcgi?命令' -Method Post -Body ([
 | 车牌快照逐单查门点与访客姓名 | 预约多时每 20 秒 N+1 查询 | 改批量 `IN` 查询 |
 | nginx 反代后 `remoteAddr=127.0.0.1` | 被当成内网 IP 写进设备档案 → 「本地管理」跳到本机 | `isPrivateAddress` 排除 127./::1；设备 IP 只认真实内网地址 |
 | 对账并发（定时任务 + `Conn` 触发） | 可能重复推送 | `syncDevicePlates` 加同步锁 |
+| 访客审批后**被拉黑** | 车牌仍在相机白名单里，车照样能开进来 | 车牌快照排除 `visitor.is_blacklist=1` 的访客；实测拉黑 → `DeleteCarInfo`，解除拉黑 → `AddCarInfo` |
 
 ### 11.4 压测与实测记录
 
@@ -300,6 +301,8 @@ Invoke-WebRequest -Uri 'http://<ip>/Signalway.fcgi?命令' -Method Post -Body ([
 | 超大原始报文（200KB） | 295ms 内发出，日志按 20KB 截断，相机回 `Data Parse Json Fail.` 并 WARN 落日志 |
 | 立即对齐接口 SN 打错 | 返回 400「设备不存在」，不再往不存在的主题发报文 |
 | 相机回执失败自愈 | 发一条 `data` 非 JSON 的 `AddCarInfo` → 相机回 `errCode=1 Data Parse Json Fail.` → **对账状态立即清空** → 下一轮（≤20s）自动重推 → 状态恢复 |
+| 访客拉黑/解除 | 有效预约 `苏T11111` 已下发 → 置 `is_blacklist=1` → 下一轮 `DeleteCarInfo`；再改回 0 → `AddCarInfo` 恢复 |
+| 停机期间改数据 | 停服 → 删员工 → 起服：20 秒内 `DeleteCarInfo` 删掉相机里的车牌（状态收敛） |
 
 ### 11.5 终验（2026-11-26 02:19–02:25，最终构建）
 
