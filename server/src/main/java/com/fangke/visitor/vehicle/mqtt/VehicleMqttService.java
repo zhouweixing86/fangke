@@ -82,6 +82,14 @@ public class VehicleMqttService {
             + PROTOCOL_SUFFIX;
     /** 开闸，见协议 §4.4.2（data 为空串）。 */
     private static final String OPEN_GATE = "{\"command\":\"Open\",\"data\":\"\"," + PROTOCOL_SUFFIX;
+    /**
+     * 协议配置开关，见协议 §4.4.22：设备 Conn 后下发。
+     *
+     * <p>`enableReply=1` 让相机每条下行都回执；`enableOffline=1` 让它在断网期间缓存识别结果、
+     * 恢复后补传（否则现场网络抖一下，那几辆车的通行记录就丢了）。
+     */
+    private static final String CONFIG_SWITCH =
+            "{\"command\":\"Config\",\"data\":\"{\\\"enableReply\\\":1,\\\"enableOffline\\\":1}\"," + PROTOCOL_SUFFIX;
 
 
     private final AppProperties props;
@@ -187,6 +195,14 @@ public class VehicleMqttService {
         gateway.publish(deviceSn, payload);
         logRepository.save("DOWN", deviceSn, topicOf(deviceSn), payload, "使能下行回执");
         return result("ENABLE_REPLY", deviceSn, "", payload);
+    }
+
+    /** 下发协议配置开关（回执 + 离线结果补传），见协议 §4.4.22。 */
+    public Map<String, Object> applyConfig(String deviceSn) {
+        String payload = fill(CONFIG_SWITCH, envelopeValues(deviceSn, Map.of()));
+        gateway.publish(deviceSn, payload);
+        logRepository.save("DOWN", deviceSn, topicOf(deviceSn), payload, "配置：回执 + 离线结果补传");
+        return result("CONFIG", deviceSn, "", payload);
     }
 
     /**
@@ -319,7 +335,7 @@ public class VehicleMqttService {
             message = "设备上线（" + (device == null ? "未登记门点" : "通道=" + device.getChannel()
                     + "，门点=" + (device.getGateId() == null ? "待分配" : device.getGateId())) + "）";
             sideChannel.submit(() -> {
-                enableReplyQuietly(deviceSn);
+                configQuietly(deviceSn);
                 syncQuietly(deviceSn, device == null ? null : device.getGateId());
             });
         } else if (plate == null) {
@@ -342,13 +358,13 @@ public class VehicleMqttService {
         log.debug("车闸上行 topic={} device={} plate={} msg={}", topic, deviceSn, plate, message);
     }
 
-    /** 设备上线时自动使能下行回执；失败只记日志，不影响上行处理。 */
-    private void enableReplyQuietly(String deviceSn) {
+    /** 设备上线时下发配置（回执 + 离线补传）；失败只记日志，不影响上行处理。 */
+    private void configQuietly(String deviceSn) {
         try {
-            enableReply(deviceSn);
-            log.info("设备 {} 上线，已下行使能下行回执", deviceSn);
+            applyConfig(deviceSn);
+            log.info("设备 {} 上线，已下发配置（回执 + 离线结果补传）", deviceSn);
         } catch (Exception e) {
-            log.warn("设备 {} 使能回执下发失败：{}", deviceSn, e.getMessage());
+            log.warn("设备 {} 配置下发失败：{}", deviceSn, e.getMessage());
         }
     }
 

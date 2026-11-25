@@ -112,6 +112,16 @@ public class VehicleMqttController {
         return ApiResponse.ok(service.enableReply(deviceSn.trim()));
     }
 
+    /** 下发协议配置开关（回执 + 离线结果补传）。 */
+    @PostMapping("/config")
+    @AuditLog(module = "VEHICLE", action = "MQTT_CONFIG")
+    public ApiResponse<Map<String, Object>> config(@RequestParam String deviceSn) {
+        if (deviceSn == null || deviceSn.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_MISSING, "deviceSn 不能为空");
+        }
+        return ApiResponse.ok(service.applyConfig(deviceSn.trim()));
+    }
+
     /** 人工远程开闸（协议 Open）：可带车牌，带车牌时会记进该人的通行记录。 */
     @PostMapping("/open")
     @AuditLog(module = "VEHICLE", action = "MQTT_OPEN_GATE")

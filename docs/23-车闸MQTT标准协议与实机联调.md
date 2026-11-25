@@ -129,7 +129,7 @@ V1 的 `time` 语义：**月租车=到期日期；贵宾车=当前日期**，格
 |---|---|
 | 信封与模板 | `VehicleMqttService.DEFAULT_ADD/DELETE/IMPORT`、`AppProperties.Vehicle.Mqtt.*Template`、`application.yml` `fangke.vehicle.mqtt.*` |
 | 固定车类型 | `fangke.vehicle.mqtt.plate-type` / `VEHICLE_MQTT_PLATE_TYPE`（默认 1） |
-| 回执使能 | `VehicleMqttService.enableReply`（收到 `Conn` 自动下发）+ `POST /api/admin/vehicle/mqtt/enable-reply` |
+| 回执使能 | `VehicleMqttService.applyConfig`（`Conn` 后自动下发 `Config{enableReply:1, enableOffline:1}`）+ `POST /api/admin/vehicle/mqtt/config`、`/enable-reply` |
 | 回执解析 | `describeWithoutPlate`：`errCode=0` → 「下行回执：成功」 |
 | 识别结果解析 | `extractPlate`：`data` 是字符串也能解析，字段优先 `carNO` |
 | 连接可靠性 | `VehicleMqttGateway.ensureConnected` 看门狗（默认 30s，`fangke.vehicle.mqtt.watchdog-ms`）+ `publish` 前判活 + 发布超时 `publish-timeout-ms`（默认 5s，超时强制重连） |
@@ -224,6 +224,8 @@ Invoke-WebRequest -Uri 'http://<ip>/Signalway.fcgi?命令' -Method Post -Body ([
 - 相机 `Result` 上行 → `vehicle_event`：车牌(`carNO`)、置信度(`confid`)、方向（按设备档案的进/出）、判定结果；
 - 抓拍图：相机给的是 OSS 外链（`picN_full` / `picMin_full`），存 `vehicle_event.photo_url`；
   通行记录明细里直接显示缩略图（`photo_key` 那套是设备直传 base64 的旧通道，两者二选一）；
+- **离线补传**：相机 `Conn` 后平台自动下发 `Config{enableReply:1, enableOffline:1}`
+  （协议 §4.4.22）。不开的话，网络抖动期间识别到的车会**丢记录**，恢复后也不补；开了就会缓存补传。
 - 通行记录汇总本来就合并 `vehicle_event`（按 `person_no` 归到人、按天聚合），
   只要判定得出来人（员工/有效访客）就会和行人记录合并成一行，`通行方式` 显示「车辆」。
 

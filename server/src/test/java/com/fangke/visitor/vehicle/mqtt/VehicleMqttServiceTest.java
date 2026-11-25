@@ -175,10 +175,10 @@ class VehicleMqttServiceTest {
                 + "\"requestId\":\"3\",\"sn\":\"" + SN + "\",\"time\":\"2026-11-25 23:40:00\",\"version\":\"1.0.1\"}";
         service.onUpload("upload/" + SN, conn);
         ArgumentCaptor<String> down = ArgumentCaptor.forClass(String.class);
-        // EnableReply 走独立线程发（不能在回调线程里 publish），所以用 timeout 等它
+        // 配置开关走独立线程发（不能在回调线程里 publish），所以用 timeout 等它
         verify(gateway, timeout(3000)).publish(eq(SN), down.capture());
-        assertTrue(down.getValue().contains("EnableReply"), down.getValue());
-        assertTrue(down.getValue().contains("enable"), down.getValue());
+        assertTrue(down.getValue().contains("Config"), down.getValue());
+        assertTrue(down.getValue().contains("enableOffline"), down.getValue());
 
         String ack = "{\"command\":\"AddCarInfo\",\"data\":\"{\\\"errCode\\\":0,\\\"errInfo\\\":\\\"\\\"}\","
                 + "\"requestId\":\"4\",\"sn\":\"" + SN + "\",\"time\":\"2026-11-25 23:41:00\",\"version\":\"1.0.1\"}";
