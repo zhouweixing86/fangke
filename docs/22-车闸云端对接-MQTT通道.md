@@ -73,6 +73,10 @@ VEHICLE_MQTT_DOWNLOAD_PREFIX=download/
 # VEHICLE_MQTT_DELETE_TEMPLATE={"command":"DeleteCarInfo","data":"{\"plateList\":[\"${plate}\"]}","requestId":"${requestId}","sn":"${sn}","time":"${time}","version":"1.0.1"}
 # 固定车类型：1 月租车（按日期过期，访客默认）/ 4 贵宾车（实测相机存「无」=永不过期）
 VEHICLE_MQTT_PLATE_TYPE=1
+# 下发 QoS：必须是 1（broker 重投直到相机确认）。实测 QoS0 下 50 条只有 44 条回执，可能静默丢车牌
+VEHICLE_MQTT_QOS=1
+# 车牌自动对账间隔（毫秒，默认 20 秒）
+# VEHICLE_MQTT_SYNC_MS=20000
 ```
 
 改完 `systemctl restart fangke-visitor`。
