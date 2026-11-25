@@ -8,7 +8,7 @@
         <view class="row"><text class="label">证件号</text><text>{{ detail.idCardMask }}</text></view>
         <view class="row"><text class="label">类型/事由</text><text>{{ detail.visitorType }} · {{ detail.purpose || '-' }}</text></view>
         <view class="row"><text class="label">来访时间</text><text>{{ detail.startTime }} ~ {{ detail.endTime }}</text></view>
-        <view class="row"><text class="label">被访人手机</text><text>{{ detail.visitPhoneMask }}</text></view>
+        <view class="row"><text class="label">被访人手机</text><text>{{ detail.visitPhoneMask || '-' }}</text></view>
         <view class="row">
           <text class="label">审批节点</text>
           <text>{{ detail.nodeName || ('第 ' + detail.level + ' 级') }}（{{ detail.statusText }}）</text>

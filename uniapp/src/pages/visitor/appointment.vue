@@ -23,7 +23,7 @@
       </view>
 
       <view v-if="qrPending" class="card" style="margin-top: 10px">
-        <view class="muted">已申请二维码开门，等待被访人/门卫审批同意。同意后这里会出现「生成通行码」。</view>
+        <view class="muted">已申请二维码开门，等待审批人同意。同意后这里会出现「生成通行码」。</view>
       </view>
 
       <button v-if="canShowQr" class="btn btn--primary btn--block" :loading="qrLoading" @click="refreshQr">

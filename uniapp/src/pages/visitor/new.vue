@@ -41,15 +41,15 @@
       </view>
 
       <view class="row">
-        <text class="label required">被访人手机</text>
+        <text class="label">被访人手机</text>
         <input v-model="form.visitPhone" class="input" type="number" maxlength="11"
-          placeholder="由被访人提供" @blur="lookupHost" />
+          placeholder="选填，由被访人提供" @blur="lookupHost" />
       </view>
 
       <view class="row">
-        <text class="label required">被访人</text>
+        <text class="label">被访人</text>
         <view class="row-value">
-          <text :class="hostName ? 'host' : 'ph'">{{ hostName || '由手机号自动匹配' }}</text>
+          <text :class="hostName ? 'host' : 'ph'">{{ hostName || '选填，由手机号自动匹配' }}</text>
         </view>
       </view>
 
@@ -132,7 +132,7 @@
           <text class="qr-apply__label">申请二维码开门</text>
         </label>
         <text class="qr-apply__tip">
-          勾选后需被访人/门卫审批同意；同意后可在「我的预约」出示二维码进闸（60 秒有效）。
+          勾选后需审批人同意；同意后可在「我的预约」出示二维码进闸（60 秒有效）。
           未同意时仍按正常流程刷身份证进门。
         </text>
       </view>
@@ -307,7 +307,10 @@ async function lookupHost() {
 
 async function submit() {
   if (!form.date) return showToast('请选择来访日期')
-  if (!form.visitPhone) return showToast('请填写被访人手机号')
+  // 被访人手机改为选填（C-83：不再由被访人审批）；填了才校验格式
+  if (form.visitPhone && !/^1\d{10}$/.test(form.visitPhone.trim())) {
+    return showToast('被访人手机号格式不正确')
+  }
   if (!form.name) return showToast('请填写姓名')
   if (!/^1\d{10}$/.test(form.phone.trim())) return showToast('请填写正确的手机号')
   if (!form.company.trim()) return showToast('请填写公司')
@@ -332,7 +335,7 @@ async function submit() {
     // 首次预约要把 openid 带上，后端据此绑定访客档案，否则「我的预约」查不到自己的单
     const openid = await visitorOpenid()
     const result = await createAppointment({
-      visitPhone: form.visitPhone.trim(),
+      visitPhone: form.visitPhone.trim() || undefined,
       visitorType: form.visitorType,
       purpose: form.purpose || undefined,
       areaId: form.areaId,

@@ -119,8 +119,8 @@ public class AppointmentService {
         appointment.setSource(source);
         appointment.setVisitorId(visitor.getId());
         appointment.setVisitEmployeeId(v.visitEmployeeId);
-        appointment.setVisitPhoneEnc(crypto.encrypt(v.visitPhone));
-        appointment.setVisitPhoneMask(CryptoService.maskPhone(v.visitPhone));
+        appointment.setVisitPhoneEnc(v.visitPhone == null ? null : crypto.encrypt(v.visitPhone));
+        appointment.setVisitPhoneMask(v.visitPhone == null ? null : CryptoService.maskPhone(v.visitPhone));
         appointment.setVisitorType(v.visitorType);
         appointment.setPurpose(v.purpose);
         appointment.setAreaId(v.areaId);
@@ -267,10 +267,8 @@ public class AppointmentService {
             throw new BusinessException(ErrorCode.PARAM_MISSING, "访客身份证号必填（到闸机需刷身份证进门）");
         }
         String visitorPhone = EmployeeValidator.validatePhone(request.visitor().phone());
+        // C-83：不再由被访人审批，被访人手机/被访人信息改为选填
         String visitPhone = EmployeeValidator.validatePhone(request.visitPhone());
-        if (visitPhone == null) {
-            throw new BusinessException(ErrorCode.PARAM_MISSING, "被访人手机号不能为空");
-        }
 
         String visitorType = EmployeeValidator.requireText(request.visitorType(), "访客类型");
         if (!VISITOR_TYPES.contains(visitorType)) {
@@ -362,7 +360,8 @@ public class AppointmentService {
             throw new BusinessException(ErrorCode.BLACKLISTED, "该人员已被列入黑名单，请联系门卫");
         }
 
-        Long visitEmployeeId = visitEmployeeResolver.resolveByPhoneHmac(crypto.hmac(visitPhone)).orElse(null);
+        Long visitEmployeeId = visitPhone == null ? null
+                : visitEmployeeResolver.resolveByPhoneHmac(crypto.hmac(visitPhone)).orElse(null);
 
         String consentVersion = request.consentVersion() == null ? "v1.0" : request.consentVersion();
         // 公司/职务：优先取预约单顶层字段，其次取访客信息里的（老调用只传 visitor.company）

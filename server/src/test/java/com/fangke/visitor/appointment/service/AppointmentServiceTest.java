@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -279,6 +280,22 @@ class AppointmentServiceTest {
         BusinessException e = assertThrows(BusinessException.class,
                 () -> service.create(badArea, Appointment.SOURCE_SELF, "ip", "ua"));
         assertEquals(ErrorCode.PARAM_INVALID.code(), e.getCode());
+    }
+
+    @Test
+    @DisplayName("C-83：被访人手机选填，不填也能提交预约")
+    void createWithoutHostPhone() {
+        AppointmentCreateRequest noHost = new AppointmentCreateRequest(
+                null, "行政部", "商务", "技术交流", "",
+                LocalDate.now().plusDays(1), LocalTime.of(9, 0), LocalTime.of(11, 0),
+                new AppointmentCreateRequest.VisitorInfo("王五", VISITOR_ID, "13900139002", "某某科技"),
+                List.of(), 0, "v1.0", null, null, null, null, null, null, null, null);
+
+        AppointmentView view = service.create(noHost, Appointment.SOURCE_SELF, "ip", "ua");
+
+        assertEquals(Appointment.PENDING_L1, view.status());
+        assertNull(view.visitPhoneMask());
+        assertNull(appointmentRepo.store.values().iterator().next().getVisitEmployeeId());
     }
 
     @Test
