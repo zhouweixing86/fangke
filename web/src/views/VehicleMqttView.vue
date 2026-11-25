@@ -10,6 +10,9 @@
       <span class="spacer" />
       <el-button :icon="Refresh" :loading="loading" @click="loadAll">刷新</el-button>
       <el-button :loading="reconnecting" @click="doReconnect">重连</el-button>
+      <el-button :disabled="!form.deviceSn" :loading="busy === 'reply'" @click="doEnableReply">
+        使能回执
+      </el-button>
     </div>
 
     <el-alert v-if="status && !status.enabled" type="warning" :closable="false" show-icon
@@ -98,6 +101,7 @@ import {
   vehicleMqttAddPlate,
   vehicleMqttClearLogs,
   vehicleMqttDeletePlate,
+  vehicleMqttEnableReply,
   vehicleMqttImport,
   vehicleMqttLogs,
   vehicleMqttRaw,
@@ -160,12 +164,28 @@ async function doReconnect() {
   }
 }
 
+async function doEnableReply() {
+  if (!form.value.deviceSn) {
+    ElMessage.warning('请先选择车闸设备')
+    return
+  }
+  busy.value = 'reply'
+  try {
+    await vehicleMqttEnableReply(form.value.deviceSn)
+    ElMessage.success('已下发「使能回执」，之后每条下行相机都会回执 errCode（见下方日志）')
+    await loadLogs()
+  } catch (error) {
+    ElMessage.error(errorText(error))
+  } finally {
+    busy.value = ''
+  }
+}
+
 async function doAdd() {
   if (!form.value.deviceSn || !form.value.plateNo.trim()) {
     ElMessage.warning('请选择设备并填写车牌号')
     return
-  }
-  busy.value = 'add'
+  }  busy.value = 'add'
   try {
     await vehicleMqttAddPlate({
       deviceSn: form.value.deviceSn,

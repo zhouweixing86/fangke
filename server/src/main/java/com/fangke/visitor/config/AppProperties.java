@@ -560,12 +560,23 @@ public class AppProperties {
             /** 保留消息：相机重连后能立即收到最新指令。 */
             private boolean retained = false;
 
-            /** 新增/更新车牌的报文模板（${plate} ${begin} ${end} ${sn} 占位）。 */
-            private String addTemplate = "{\"CmdName\":\"AddNameList\",\"Data\":{\"plateNumber\":\"${plate}\",\"beginTime\":\"${begin}\",\"endTime\":\"${end}\"}}";
-            /** 删除车牌的报文模板（${plate} ${sn} 占位）。 */
-            private String deleteTemplate = "{\"CmdName\":\"DelNameList\",\"Data\":{\"plateNumber\":\"${plate}\"}}";
-            /** 全量覆盖车牌的报文模板（${items} 展开为 JSON 数组片段）。 */
-            private String importTemplate = "{\"CmdName\":\"ImportNameList\",\"Data\":{\"items\":[${items}]}}";
+            /** 新增/更新车牌的报文模板（${plate} ${type} ${endDate} ${sn} ${requestId} ${time} 占位）。 */
+            private String addTemplate = "{\"command\":\"AddCarInfo\",\"data\":\"{\\\"carInfoList\\\":["
+                    + "{\\\"plate\\\":\\\"${plate}\\\",\\\"type\\\":${type},\\\"time\\\":\\\"${endDate}\\\"}]}\","
+                    + "\"requestId\":\"${requestId}\",\"sn\":\"${sn}\",\"time\":\"${time}\",\"version\":\"1.0.1\"}";
+            /** 删除车牌的报文模板。 */
+            private String deleteTemplate = "{\"command\":\"DeleteCarInfo\",\"data\":\"{\\\"plateList\\\":[\\\"${plate}\\\"]}\","
+                    + "\"requestId\":\"${requestId}\",\"sn\":\"${sn}\",\"time\":\"${time}\",\"version\":\"1.0.1\"}";
+            /** 全量覆盖车牌的报文模板（${items} 展开为 CarInfo 数组片段）。 */
+            private String importTemplate = "{\"command\":\"AddCarInfo\",\"data\":\"{\\\"carInfoList\\\":[${items}]}\","
+                    + "\"requestId\":\"${requestId}\",\"sn\":\"${sn}\",\"time\":\"${time}\",\"version\":\"1.0.1\"}";
+            /**
+             * 固定车类型（协议 §5.1）：1 月租车 / 2 产权车 / 3 储值车 / 4 贵宾车 / 5 黑名单 / 6 自定义白名单。
+             *
+             * <p>访客用 1（月租车）：协议里它的 {@code time} 是「到期日期」，相机会按日期失效；
+             * 实测 4（贵宾车）会把到期时间存成「无」= 永不过期，不适合有有效期的访客。
+             */
+            private int plateType = 1;
 
             public boolean isEnabled() {
                 return enabled;
@@ -661,6 +672,14 @@ public class AppProperties {
 
             public void setImportTemplate(String importTemplate) {
                 this.importTemplate = importTemplate;
+            }
+
+            public int getPlateType() {
+                return plateType;
+            }
+
+            public void setPlateType(int plateType) {
+                this.plateType = plateType;
             }
         }
         /**

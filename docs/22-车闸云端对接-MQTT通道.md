@@ -29,9 +29,11 @@
                                     ▼
 云端：Mosquitto(1883, 账号 fangke) ──► Spring Boot「车闸 MQTT 网关」
         ▲                                   ├─ 订阅 upload/+ → 解析车牌 → 车辆通行记录/判定
-        └── publish: download/{SN} ◄────────┤ 下发车牌（AddNameList）
-             （白名单增/删）                  └─ 管理页「车闸对接」下发/删除/全量对齐/报文日志
+        └── publish: download/{SN} ◄────────┤ 下发车牌（AddCarInfo / DeleteCarInfo）
+             （固定车白名单增/删）             └─ 管理页「车闸对接」下发/删除/全量对齐/报文日志
 ```
+
+> 报文格式已按厂商《信路通路外停车 MQTT 协议接口规范 V14》实机核对，详见 [23-车闸MQTT标准协议与实机联调.md](./23-车闸MQTT标准协议与实机联调.md)。
 
 ## 3. 相机侧配置（一次配好，之后不用动）
 
@@ -65,9 +67,12 @@ VEHICLE_MQTT_PASSWORD=<broker 密码>
 # 主题可按现场改
 VEHICLE_MQTT_UPLOAD_TOPIC=upload/+
 VEHICLE_MQTT_DOWNLOAD_PREFIX=download/
-# 抓到真实报文后，用模板覆盖即可，不用改代码
-# VEHICLE_MQTT_ADD_TEMPLATE={"CmdName":"AddNameList","Data":{"plateNumber":"${plate}","beginTime":"${begin}","endTime":"${end}"}}
-# VEHICLE_MQTT_DELETE_TEMPLATE={"CmdName":"DelNameList","Data":{"plateNumber":"${plate}"}}
+# 抓到的真实报文如果字段变了，用模板覆盖即可，不用改代码
+# 可替换占位：${plate} ${type} ${begin} ${end} ${endDate} ${sn} ${requestId} ${time} ${items}
+# VEHICLE_MQTT_ADD_TEMPLATE={"command":"AddCarInfo","data":"{\"carInfoList\":[{\"plate\":\"${plate}\",\"type\":${type},\"time\":\"${endDate}\"}]}","requestId":"${requestId}","sn":"${sn}","time":"${time}","version":"1.0.1"}
+# VEHICLE_MQTT_DELETE_TEMPLATE={"command":"DeleteCarInfo","data":"{\"plateList\":[\"${plate}\"]}","requestId":"${requestId}","sn":"${sn}","time":"${time}","version":"1.0.1"}
+# 固定车类型：1 月租车（按日期过期，访客默认）/ 4 贵宾车（实测相机存「无」=永不过期）
+VEHICLE_MQTT_PLATE_TYPE=1
 ```
 
 改完 `systemctl restart fangke-visitor`。
@@ -78,6 +83,7 @@ VEHICLE_MQTT_DOWNLOAD_PREFIX=download/
 |---|---|
 | `GET /api/admin/vehicle/mqtt` | 连接状态、主题、当前报文模板 |
 | `POST /api/admin/vehicle/mqtt/reconnect` | 重连 broker |
+| `POST /api/admin/vehicle/mqtt/enable-reply?deviceSn=` | 使能下行回执（相机之后每条下行都回 `errCode`） |
 | `POST /api/admin/vehicle/mqtt/plate` | 下发/更新车牌：`{deviceSn, plateNo, beginTime, endTime}` |
 | `DELETE /api/admin/vehicle/mqtt/plate?deviceSn=&plateNo=` | 删除车牌 |
 | `POST /api/admin/vehicle/mqtt/raw` | 发原始报文（协议探测） |
@@ -89,34 +95,59 @@ VEHICLE_MQTT_DOWNLOAD_PREFIX=download/
 
 ## 6. 报文与协议
 
-默认按相机命令风格（`CmdName + Data`，与厂商 SDK 文档里 LCD 命令同风格）：
+相机用的是厂商**标准协议（MQTT）**：公共报文头 `{command, data, requestId, time, version, sn}`，
+且 **`data` 必须是把业务 JSON 序列化成字符串后的值**（协议原文要求）。
+
+白名单在协议里叫「固定车 CarInfo」，不是本地接口的 `AddNameList`（那个只在本机 HTTP/XML 与 SDK 里存在）：
 
 ```json
-// 下行（我们 → 相机，topic download/{SN}）
-{"CmdName":"AddNameList","Data":{"plateNumber":"京A12345","beginTime":"2026-11-26 08:00:00","endTime":"2026-11-26 20:00:00"}}
-{"CmdName":"DelNameList","Data":{"plateNumber":"京A12345"}}
-{"CmdName":"ImportNameList","Data":{"items":[{"plateNumber":"京A12345","beginTime":"...","endTime":"..."}]}}
+// 下发/更新车牌（topic download/{SN}）
+{"command":"AddCarInfo","data":"{\"carInfoList\":[{\"plate\":\"苏A12345\",\"type\":1,\"time\":\"2026-12-31\"}]}","requestId":"1795622980551","sn":"COPCM-E10-LS26050994","time":"2026-11-26 00:09:40","version":"1.0.1"}
 
-// 上行（相机 → 我们，topic upload/{SN}）
-{"plateNumber":"京A12345","inout":1,"time":"2026-11-26 09:12:33"}
+// 删除车牌
+{"command":"DeleteCarInfo","data":"{\"plateList\":[\"苏A12345\"]}","requestId":"1795622989287","sn":"COPCM-E10-LS26050994","time":"2026-11-26 00:09:49","version":"1.0.1"}
+
+// 使能回执（相机 Conn 上行后平台自动下发）
+{"command":"EnableReply","data":"{\"enable\":1}","requestId":"1795622137258","sn":"COPCM-E10-LS26050994","time":"2026-11-25 23:55:37","version":"1.0.1"}
+
+// 相机上行：心跳 / 回执 / 识别结果
+{"command":"Rtd","data":"{\"hasCar\":2}","requestId":"...","sn":"...","time":"...","version":"1.0.1"}
+{"command":"AddCarInfo","data":"{\"errCode\":0,\"errInfo\":\"\"}","requestId":"<与下行同值>","sn":"...","time":"...","version":"1.0.1"}
+{"command":"Result","data":"{\"carNO\":\"苏A12345\",\"carNOC\":\"蓝\",\"confid\":885,\"openGate\":0,...}",...}
 ```
 
-- 上行解析兼容多种字段：`plateNumber/plateNo/plate/license/carNo`，解析失败会退化为正则从原文提车牌；
-  仍然解析不出时**只留痕不报错**（报文可在「车闸对接」日志里看到）。
-- **如果现场抓到的真实报文不是这个格式**：把 `VEHICLE_MQTT_ADD_TEMPLATE` / `DELETE_TEMPLATE`
-  按真实报文改掉（支持 `${plate}` `${begin}` `${end}` `${sn}` `${items}`），不用改代码、不用重新发版。
+要点：
+
+- **V1 优先**：`AddCarInfoV2/QueryCarInfoV2/DlCarInfoV2` 在本机固件（APP `21.1.22.15541_20260408`）回
+  `errCode=1 / "Unknow CMD."`，所以默认走 V1；换新固件可只改模板切 V2。
+- **回执**：`EnableReply` 之后每条下行相机都回同名 command + `{errCode, errInfo}`，`requestId` 与下行一致；
+  平台把 `errCode=0` 记成「下行回执：成功」。
+- **类型**：`plateType` 默认 1（月租车，按 `time` 日期过期）。实测 4（贵宾车）相机会把到期时间存成「无」=永不过期。
+- **上行解析**：先找 `data` 里的 `carNO`（协议字段），再兼容 `plateNo/plate/plateNumber/carNo/license`，最后正则兜底；
+  解析不到只留痕不报错。相机若开了车牌加密，`carNO` 是密文，日志会提示「车牌已加密」。
 - 协议探测：页面「原始报文」直接发；所有上下行都会写 `vehicle_mqtt_log`（大图截断 20KB）。
 
-## 7. 已验证（2026-11-25 22:28–22:31，生产服务器）
+## 7. 已验证
+
+### 7.1 平台侧（2026-11-25 22:28–22:31，模拟设备）
 
 | 项 | 结果 |
 |---|---|
 | MQTT 网关连接 broker | ✅ `connected=true`（客户端 ID `fangke-vehicle-gateway`） |
-| 平台下发车牌 | ✅ `POST /mqtt/plate` → broker 抓到 `download/TEST-SN` 报文（内容为模板渲染结果） |
-| 平台删除车牌 | ✅ 同一通道（`DelNameList` 模板） |
-| 上行识别结果 | ✅ 模拟 `upload/TEST-SN` → 平台解析出车牌、判定「未登记车辆」、写入 `vehicle_event`（`event_uuid=MQTTe61e…`） |
+| 平台下发车牌 | ✅ `POST /mqtt/plate` → broker 抓到 `download/TEST-SN` 报文 |
+| 上行识别结果 | ✅ 模拟 `upload/TEST-SN` → 平台解析出车牌、判定、写入 `vehicle_event` |
 | 迁移 | ✅ Flyway V35 `vehicle_mqtt_log` |
-| 单测 | ✅ 261 全绿 |
+
+### 7.2 真机闭环（2026-11-25 23:39–2026-11-26 00:10）
+
+| 步 | 结果 |
+|---|---|
+| 相机连云 broker | ✅ 每 5s 心跳 `Rtd`（`hasCar:2`）+ `Image`，`EnableReply` 回执 `errCode=0` |
+| 平台下发车牌 | ✅ `AddCarInfo` → 回执 `errCode=0` → 相机「脱机白名单」读到 `苏A12345`（月租车，到期 2026-12-31 23:59:59） |
+| 平台删除车牌 | ✅ `DeleteCarInfo` → 回执 `errCode=0` → 白名单 `totalCnt=0` |
+| 相机网络 | ✅ 改 DHCP 后插电脑共享网口自动拿到 `192.168.137.166`，出网 IP 为办公网 `117.89.73.58` |
+| 半死连接 | ⚠️ 出现过 Paho 心跳超时后不再自动重连、下发卡到 nginx 504；已加**看门狗**（每 30s 检查并重建连接）+ 发布前判活 |
+| 单测 | ✅ 264 全绿 |
 
 > 剩下的唯一不确定项：**相机真实下行报文格式**。它不影响架构，只要现场连上后看「车闸对接」日志，
 > 把模板调成真实格式即可（或在 log 里直接把相机对平台指令的回执贴给我）。

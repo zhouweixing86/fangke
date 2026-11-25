@@ -139,10 +139,12 @@ fangke:
       download-topic-prefix: ${VEHICLE_MQTT_DOWNLOAD_PREFIX:download/}
       qos: ${VEHICLE_MQTT_QOS:0}
       retained: ${VEHICLE_MQTT_RETAINED:false}
-      # 报文模板：默认按相机「标准协议」的命令风格（CmdName + Data），可在 .env 覆盖
+      # 报文模板：默认按相机「标准协议」信封（command/data，data 是转义后的 JSON 字符串），可在 .env 覆盖
       add-template: ${VEHICLE_MQTT_ADD_TEMPLATE:}
       delete-template: ${VEHICLE_MQTT_DELETE_TEMPLATE:}
       import-template: ${VEHICLE_MQTT_IMPORT_TEMPLATE:}
+      # 固定车类型（协议 §5.1）：1 月租车 / 2 产权车 / 3 储值车 / 4 贵宾车(=永不过期) / 5 黑名单 / 6 自定义白名单
+      plate-type: ${VEHICLE_MQTT_PLATE_TYPE:1}
 
   storage:
     # 照片存对象存储（S3 兼容）。默认指向内网 MinIO —— 照片不出园区。

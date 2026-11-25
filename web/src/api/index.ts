@@ -228,6 +228,11 @@ export const vehicleMqttDeletePlate = (deviceSn: string, plateNo: string) =>
 /** 发原始报文（协议探测/联调） */
 export const vehicleMqttRaw = (data: { deviceSn: string; payload: string }) =>
   post<Record<string, unknown>>('/admin/vehicle/mqtt/raw', data)
+/** 使能下行回执：之后每条下行相机都会回 errCode，便于确认下发是否被接受 */
+export const vehicleMqttEnableReply = (deviceSn: string) =>
+  post<Record<string, unknown>>(
+    `/admin/vehicle/mqtt/enable-reply?deviceSn=${encodeURIComponent(deviceSn)}`
+  )
 /** 全量对齐：把平台当前车牌推给所有车闸相机 */
 export const vehicleMqttImport = (gateId?: number) =>
   post<{ plateTotal: number; devices: unknown[] }>('/admin/vehicle/mqtt/import', undefined, gateId ? { gateId } : undefined)

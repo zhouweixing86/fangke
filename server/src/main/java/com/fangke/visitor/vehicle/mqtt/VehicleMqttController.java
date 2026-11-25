@@ -98,6 +98,16 @@ public class VehicleMqttController {
         return ApiResponse.ok(service.deletePlate(deviceSn.trim(), plateNo));
     }
 
+    /** 使能下行回执（相机回复 errCode，便于确认下发是否被接受）。 */
+    @PostMapping("/enable-reply")
+    @AuditLog(module = "VEHICLE", action = "MQTT_ENABLE_REPLY")
+    public ApiResponse<Map<String, Object>> enableReply(@RequestParam String deviceSn) {
+        if (deviceSn == null || deviceSn.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_MISSING, "deviceSn 不能为空");
+        }
+        return ApiResponse.ok(service.enableReply(deviceSn.trim()));
+    }
+
     /** 直接发一段原始报文（协议探测/联调）。 */
     @PostMapping("/raw")
     @AuditLog(module = "VEHICLE", action = "MQTT_RAW")
