@@ -158,24 +158,24 @@ public class VehiclePlateService {
                         plates.size()));
                 continue;
             }
-            if (!capabilityService.supports(device, DeviceCapability.PLATE_UPSERT)) {
-                // 车闸相机走 MQTT 通道（协议无「读名单」能力，但增/删是支持的）
-                com.fangke.visitor.vehicle.mqtt.VehicleMqttService mqtt = mqttServiceProvider.getIfAvailable();
-                if (device.getChannel() == Device.Channel.VEHICLE && mqtt != null && mqtt.ready()) {
-                    try {
-                        Map<String, Object> outcome = mqtt.syncDevicePlates(device.getDeviceSn(), device.getGateId());
-                        results.add(new DeviceResult(device.getId(), device.getDeviceSn(), device.getDeviceName(),
-                                device.getGateId(), "PUSHED",
-                                "MQTT 已下发（新增 " + outcome.get("added") + " / 更新 " + outcome.get("updated")
-                                        + " / 删除 " + outcome.get("removed") + " / 未变 " + outcome.get("unchanged") + "）",
-                                plates.size()));
-                    } catch (Exception e) {
-                        results.add(new DeviceResult(device.getId(), device.getDeviceSn(), device.getDeviceName(),
-                                device.getGateId(), "FAILED", "MQTT 下发失败：" + e.getMessage(), plates.size()));
-                        log.warn("车牌 MQTT 下发失败 device={}：{}", device.getDeviceSn(), e.getMessage());
-                    }
-                    continue;
+            // 车闸相机走 MQTT 通道（能力位里也标了 PLATE_UPSERT，但适配器那套是老通道，这里优先走 MQTT）
+            com.fangke.visitor.vehicle.mqtt.VehicleMqttService mqtt = mqttServiceProvider.getIfAvailable();
+            if (device.getChannel() == Device.Channel.VEHICLE && mqtt != null && mqtt.ready()) {
+                try {
+                    Map<String, Object> outcome = mqtt.syncDevicePlates(device.getDeviceSn(), device.getGateId());
+                    results.add(new DeviceResult(device.getId(), device.getDeviceSn(), device.getDeviceName(),
+                            device.getGateId(), "PUSHED",
+                            "MQTT 已下发（新增 " + outcome.get("added") + " / 更新 " + outcome.get("updated")
+                                    + " / 删除 " + outcome.get("removed") + " / 未变 " + outcome.get("unchanged") + "）",
+                            plates.size()));
+                } catch (Exception e) {
+                    results.add(new DeviceResult(device.getId(), device.getDeviceSn(), device.getDeviceName(),
+                            device.getGateId(), "FAILED", "MQTT 下发失败：" + e.getMessage(), plates.size()));
+                    log.warn("车牌 MQTT 下发失败 device={}：{}", device.getDeviceSn(), e.getMessage());
                 }
+                continue;
+            }
+            if (!capabilityService.supports(device, DeviceCapability.PLATE_UPSERT)) {
                 pending++;
                 results.add(new DeviceResult(device.getId(), device.getDeviceSn(), device.getDeviceName(),
                         device.getGateId(), "PENDING_VENDOR",

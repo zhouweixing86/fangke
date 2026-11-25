@@ -2,6 +2,7 @@ package com.fangke.visitor.device.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fangke.visitor.common.ErrorCode;
+import com.fangke.visitor.config.AppProperties;
 import com.fangke.visitor.device.adapter.DeviceAdapter;
 import com.fangke.visitor.device.adapter.DeviceAdapterFactory;
 import com.fangke.visitor.device.adapter.DeviceException;
@@ -27,8 +28,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DeviceCapabilityServiceTest {
 
+    private final AppProperties props = new AppProperties();
     private final DeviceCapabilityService service = new DeviceCapabilityService(
-            new DeviceAdapterFactory(List.of(new StubAdapter())));
+            new DeviceAdapterFactory(List.of(new StubAdapter())), props);
 
     private Device device(String capabilityJson) {
         Device d = new Device();
@@ -120,6 +122,26 @@ class DeviceCapabilityServiceTest {
         Device cloud = device(null);
         cloud.setChannel(Device.Channel.CLOUD);
         assertTrue(service.effective(cloud).isEmpty());
+    }
+
+    @Test
+    @DisplayName("车闸 MQTT 通道补上名单下发/开闸能力位")
+    void vehicleMqttChannelExposesPlateCapabilities() {
+        props.getVehicle().getMqtt().setEnabled(true);
+        Device gate = device(null);
+        gate.setChannel(Device.Channel.VEHICLE);
+        Set<DeviceCapability> caps = service.effective(gate);
+        assertTrue(caps.contains(DeviceCapability.PLATE_UPSERT));
+        assertTrue(caps.contains(DeviceCapability.PLATE_REMOVE));
+        assertTrue(caps.contains(DeviceCapability.DOOR_OPEN));
+    }
+
+    @Test
+    @DisplayName("MQTT 未启用时车闸通道不给能力位")
+    void vehicleChannelWithoutMqttHasNoPlateCapability() {
+        Device gate = device(null);
+        gate.setChannel(Device.Channel.VEHICLE);
+        assertTrue(service.effective(gate).isEmpty());
     }
 
     /** 模拟“新设备适配器”：声明列表由测试控制。 */

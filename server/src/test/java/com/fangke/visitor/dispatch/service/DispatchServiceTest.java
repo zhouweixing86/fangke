@@ -432,7 +432,7 @@ class DispatchServiceTest {
         visitorRepo = new FakeVisitorRepo();
         deviceRepo = new InMemoryDeviceRepository();
         adapter = new FakeAdapter();
-        capabilityService = new DeviceCapabilityService(new DeviceAdapterFactory(List.of(adapter)));
+        capabilityService = new DeviceCapabilityService(new DeviceAdapterFactory(List.of(adapter)), props);
         appointmentGateService = new AppointmentGateService(
                 new InMemoryAppointmentGateRepository(),
                 new GateService(InMemoryGateRepository.withUnassigned(), props));

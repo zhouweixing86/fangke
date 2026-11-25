@@ -37,10 +37,13 @@ public class DeviceCapabilityService {
     private static final Logger log = LoggerFactory.getLogger(DeviceCapabilityService.class);
 
     private final DeviceAdapterFactory adapterFactory;
+    private final com.fangke.visitor.config.AppProperties props;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public DeviceCapabilityService(DeviceAdapterFactory adapterFactory) {
+    public DeviceCapabilityService(DeviceAdapterFactory adapterFactory,
+                                   com.fangke.visitor.config.AppProperties props) {
         this.adapterFactory = adapterFactory;
+        this.props = props;
     }
 
     /** 单台设备当前真正可用的能力集。 */
@@ -51,7 +54,13 @@ public class DeviceCapabilityService {
         } catch (DeviceException e) {
             // 通道没有可用适配器（例如 CLOUD 未实现）时按“零能力”处理，由调用方给出提示
             log.warn("设备通道无可用适配器 device={} channel={}", device.getDeviceSn(), device.getChannel());
-            return base;
+        }
+        // 车闸相机实际走的是「相机连我们云端 broker」的 MQTT 通道，适配器那套能力位反映不了
+        // 「平台下发名单 / 远程开闸」，按通道补上，否则管理端会显示不支持。
+        if (device.getChannel() == Device.Channel.VEHICLE && props.getVehicle().getMqtt().isEnabled()) {
+            base.add(DeviceCapability.PLATE_UPSERT);
+            base.add(DeviceCapability.PLATE_REMOVE);
+            base.add(DeviceCapability.DOOR_OPEN);
         }
         return applyOverride(base, device);
     }
