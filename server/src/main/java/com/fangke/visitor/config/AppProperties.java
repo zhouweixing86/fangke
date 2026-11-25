@@ -556,7 +556,12 @@ public class AppProperties {
             private String uploadTopic = "upload/+";
             /** 下行主题前缀（我们发布指令），完整主题 = 前缀 + 设备SN。 */
             private String downloadTopicPrefix = "download/";
-            private int qos = 0;
+            /**
+             * 下发 QoS：1 = broker 重投直到相机确认。
+             *
+             * <p>实测 QoS0 下 50 条车牌只有 38 条回执——静默丢消息意味着现场可能开不了门，不能用 0。
+             */
+            private int qos = 1;
             /** 保留消息：相机重连后能立即收到最新指令。 */
             private boolean retained = false;
 

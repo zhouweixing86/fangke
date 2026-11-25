@@ -137,7 +137,8 @@ fangke:
       client-id: ${VEHICLE_MQTT_CLIENT_ID:fangke-vehicle-gateway}
       upload-topic: ${VEHICLE_MQTT_UPLOAD_TOPIC:upload/+}
       download-topic-prefix: ${VEHICLE_MQTT_DOWNLOAD_PREFIX:download/}
-      qos: ${VEHICLE_MQTT_QOS:0}
+      # 下发 QoS：1 = broker 重投直到相机确认（车牌丢了现场就开不了门，不能用 0）
+      qos: ${VEHICLE_MQTT_QOS:1}
       retained: ${VEHICLE_MQTT_RETAINED:false}
       # 报文模板：默认按相机「标准协议」信封（command/data，data 是转义后的 JSON 字符串），可在 .env 覆盖
       add-template: ${VEHICLE_MQTT_ADD_TEMPLATE:}
