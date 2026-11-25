@@ -299,6 +299,7 @@ Invoke-WebRequest -Uri 'http://<ip>/Signalway.fcgi?命令' -Method Post -Body ([
 | broker 重启 | 重启 mosquitto 后相机 1 秒内重连、网关 1 秒内重连（持久会话），随即触发 `Conn` 配置 + 车牌重推 |
 | 超大原始报文（200KB） | 295ms 内发出，日志按 20KB 截断，相机回 `Data Parse Json Fail.` 并 WARN 落日志 |
 | 立即对齐接口 SN 打错 | 返回 400「设备不存在」，不再往不存在的主题发报文 |
+| 相机回执失败自愈 | 发一条 `data` 非 JSON 的 `AddCarInfo` → 相机回 `errCode=1 Data Parse Json Fail.` → **对账状态立即清空** → 下一轮（≤20s）自动重推 → 状态恢复 |
 
 ### 11.5 终验（2026-11-26 02:19–02:25，最终构建）
 
