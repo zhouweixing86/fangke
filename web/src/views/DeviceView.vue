@@ -292,7 +292,7 @@
     <!-- 车闸相机：车牌名单（来源=员工档案 + 访客预约，docs/18） -->
     <el-dialog v-model="platesVisible" :title="`车牌名单 · ${platesRow?.deviceName || '全部车闸'}`" width="720px">
       <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
-        title="车牌不用单独维护：员工档案/访客预约填的车牌会汇总到这里。车场接口启用后按差分自动下发（新增/修改/删除），未启用时只算差异。" />
+        title="车牌不用单独维护：员工档案/访客预约填的车牌会汇总到这里，平台每 20 秒自动对账并通过 MQTT 下发到车闸相机（新增/更新/删除）。下面的按钮只是立即触发一次。" />
       <div class="toolbar">
         <el-button :loading="platesLoading" :icon="Refresh" @click="loadPlates">刷新清单</el-button>
         <el-button type="primary" :loading="platesSyncing" @click="doSyncPlates">下发到车闸相机</el-button>
@@ -441,8 +441,14 @@ const syncResult = ref<VehiclePlateSyncResult | null>(null)
 const pushState = ref<VehiclePlatePushState | null>(null)
 
 const syncAlertType = computed(() => {
-  const cloud = syncResult.value?.cloud
-  if (!cloud) return syncResult.value?.pendingDevices ? 'warning' : 'success'
+  const result = syncResult.value
+  const cloud = result?.cloud
+  if (!cloud) {
+    const devices = result?.devices || []
+    if (devices.some((d) => d.status === 'FAILED')) return 'error'
+    if (devices.some((d) => d.status === 'PENDING_VENDOR')) return 'warning'
+    return 'success'
+  }
   if (cloud.failed > 0) return 'error'
   return cloud.dryRun ? 'warning' : 'success'
 })
@@ -452,7 +458,15 @@ const syncAlertText = computed(() => {
   if (!result) return ''
   const cloud = result.cloud
   if (!cloud) {
-    return `已备好 ${result.plateTotal} 条车牌；待接入厂商协议的相机 ${result.pendingDevices} 台`
+    const devices = result.devices || []
+    const pushed = devices.filter((d) => d.status === 'PUSHED').length
+    const failed = devices.filter((d) => d.status === 'FAILED').length
+    const pending = devices.filter((d) => d.status === 'PENDING_VENDOR').length
+    const detail = devices.filter((d) => d.status === 'PUSHED').map((d) => d.message).join('；')
+    return `车牌 ${result.plateTotal} 条：已下发 ${pushed} 台`
+      + (failed ? ` / 失败 ${failed} 台` : '')
+      + (pending ? ` / 待接入 ${pending} 台` : '')
+      + (detail ? `（${detail}）` : '')
   }
   const detail = `车牌 ${result.plateTotal} 条：新增 ${cloud.added} / 修改 ${cloud.modified} / ` +
     `删除 ${cloud.removed} / 无变化 ${cloud.unchanged} / 失败 ${cloud.failed}`

@@ -56,7 +56,7 @@
       <el-col :span="12">
         <el-card shadow="never" header="原始报文（协议探测）">
           <el-input v-model="raw.payload" type="textarea" :rows="6"
-            placeholder='例如 {"CmdName":"AddNameList","Data":{"plateNumber":"京A12345","beginTime":"2026-11-26 00:00:00","endTime":"2026-11-27 00:00:00"}}' />
+            placeholder='例如 {"command":"AddCarInfo","data":"{\"carInfoList\":[{\"plate\":\"京A12345\",\"type\":1,\"time\":\"2026-12-31\"}]}","requestId":"1","sn":"<SN>","time":"2026-11-26 00:00:00","version":"1.0.1"}' />
           <div class="toolbar" style="margin-top: 8px">
             <span class="text-muted">发到 {{ status?.downloadTopicPrefix }}{{ form.deviceSn || '<SN>' }}</span>
             <span class="spacer" />
