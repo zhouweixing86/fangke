@@ -80,8 +80,14 @@ export function request<T>(method: Method, path: string, data?: unknown): Promis
         }
       },
       fail: (err) => {
-        showToast('网络异常，请检查后端地址')
-        reject(new Error(err.errMsg))
+        const msg = String((err as any)?.errMsg || '')
+        if (msg.indexOf('url not in domain list') >= 0) {
+          // 真机上的开发版/体验版默认校验域名；用 IP + HTTP 测试时必须先「打开调试」
+          showToast('域名未配置：请点右上角 ··· → 打开调试后重进')
+        } else {
+          showToast('网络异常，请检查后端地址')
+        }
+        reject(new Error(msg || '网络异常'))
       }
     })
   })
