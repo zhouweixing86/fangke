@@ -45,6 +45,13 @@ public class VehicleMqttGateway {
     private volatile String lastError;
     private UploadListener listener;
 
+    /**
+     * 启动缓冲：持久会话补投的消息可能在业务监听器注册之前就到达
+     * （网关 {@code @PostConstruct} 先 connect，业务层的 {@code setListener} 后执行），
+     * 先攒着，注册后立刻补处理。
+     */
+    private final java.util.Deque<Runnable> pending = new java.util.concurrent.ConcurrentLinkedDeque<>();
+
     /** 下行发布放独立线程，避免 Paho 卡住时把 HTTP 线程也拖死（配合 publish 超时）。 */
     private final ExecutorService sender = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "vehicle-mqtt-sender");
@@ -58,6 +65,10 @@ public class VehicleMqttGateway {
 
     public void setListener(UploadListener listener) {
         this.listener = listener;
+        Runnable task;
+        while ((task = pending.poll()) != null) {
+            task.run();
+        }
     }
 
     private AppProperties.Vehicle.Mqtt config() {
@@ -93,13 +104,12 @@ public class VehicleMqttGateway {
                     @Override
                     public void messageArrived(String topic, MqttMessage message) {
                         String payload = new String(message.getPayload(), StandardCharsets.UTF_8);
-                        try {
-                            if (listener != null) {
-                                listener.onUpload(topic, payload);
-                            }
-                        } catch (Exception e) {
-                            log.warn("车闸上行报文处理失败 topic={}：{}", topic, e.getMessage());
+                        UploadListener current = listener;
+                        if (current == null) {
+                            pending.add(() -> deliver(topic, payload));
+                            return;
                         }
+                        deliver(topic, payload);
                     }
 
                     @Override
@@ -119,10 +129,23 @@ public class VehicleMqttGateway {
         }
     }
 
+    private void deliver(String topic, String payload) {
+        try {
+            UploadListener current = listener;
+            if (current != null) {
+                current.onUpload(topic, payload);
+            }
+        } catch (Exception e) {
+            log.warn("车闸上行报文处理失败 topic={}：{}", topic, e.getMessage());
+        }
+    }
+
     private MqttConnectOptions connectOptions(AppProperties.Vehicle.Mqtt cfg) {
         MqttConnectOptions options = new MqttConnectOptions();
         options.setAutomaticReconnect(true);
-        options.setCleanSession(true);
+        // 持久会话：网关重启/网络抖动期间，broker 会把相机发上来的识别结果排队，恢复后补投。
+        // 用 cleanSession=true 的话这段窗口的记录会直接丢（相机自己的离线补传只管它自己断网）。
+        options.setCleanSession(false);
         options.setConnectionTimeout(10);
         options.setKeepAliveInterval(30);
         if (cfg.getUsername() != null && !cfg.getUsername().isBlank()) {
@@ -168,8 +191,10 @@ public class VehicleMqttGateway {
     private void subscribe() {
         AppProperties.Vehicle.Mqtt cfg = config();
         try {
-            client.subscribe(cfg.getUploadTopic(), cfg.getQos());
-            log.info("车闸 MQTT 订阅上行主题 {}", cfg.getUploadTopic());
+            // 订阅用至少 QoS1：相机按 QoS1 发识别结果，只有订阅 QoS1 时 broker 才会在
+            // 我们离线期间把消息排队（配合上面的持久会话）
+            client.subscribe(cfg.getUploadTopic(), Math.max(cfg.getQos(), 1));
+            log.info("车闸 MQTT 订阅上行主题 {}（QoS {}）", cfg.getUploadTopic(), Math.max(cfg.getQos(), 1));
         } catch (Exception e) {
             log.warn("车闸 MQTT 订阅失败 {}：{}", cfg.getUploadTopic(), e.getMessage());
         }
