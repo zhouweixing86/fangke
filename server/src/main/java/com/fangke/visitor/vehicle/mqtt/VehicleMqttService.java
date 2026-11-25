@@ -175,6 +175,7 @@ public class VehicleMqttService {
 
     /** 只负责发 `AddCarInfo` + 留痕，状态由调用方维护（定时对账与手工下发口径不同）。 */
     private String sendAdd(String deviceSn, String plate, LocalDateTime begin, LocalDateTime end) {
+        plate = VehicleAccessService.normalize(plate);
         String template = template(props.getVehicle().getMqtt().getAddTemplate(), DEFAULT_ADD);
         String payload = fill(template, envelopeValues(deviceSn, Map.of(
                 "plate", plate,
@@ -189,6 +190,7 @@ public class VehicleMqttService {
 
     /** 只负责发 `DeleteCarInfo` + 留痕。 */
     private String sendDelete(String deviceSn, String plate) {
+        plate = VehicleAccessService.normalize(plate);
         String template = template(props.getVehicle().getMqtt().getDeleteTemplate(), DEFAULT_DELETE);
         String payload = fill(template, envelopeValues(deviceSn, Map.of("plate", plate)));
         gateway.publish(deviceSn, payload);

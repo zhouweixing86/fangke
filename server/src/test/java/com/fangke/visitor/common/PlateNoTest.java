@@ -20,4 +20,12 @@ class PlateNoTest {
         assertNull(PlateNo.normalizeToNull(null));
         assertEquals("粤B12345D", PlateNo.normalizeToNull("粤b12345d"));
     }
+
+    @Test
+    @DisplayName("丢掉会拼坏下发报文的字符（引号/反斜杠/花括号/换行）")
+    void stripsCharactersThatBreakPayload() {
+        assertEquals("苏A123", PlateNo.normalize("苏A\"1{2}\\3"));
+        assertEquals("苏A1234", PlateNo.normalize("苏A\n1 2\r3\t4"));
+        assertEquals("粤Z·1234港", PlateNo.normalize("粤Z·1234港"));
+    }
 }

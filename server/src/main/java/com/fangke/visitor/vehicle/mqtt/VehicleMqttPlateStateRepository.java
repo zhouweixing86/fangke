@@ -33,12 +33,12 @@ public class VehicleMqttPlateStateRepository {
                         VALUES (?, ?, ?, ?)
                         ON DUPLICATE KEY UPDATE fingerprint = VALUES(fingerprint), pushed_at = VALUES(pushed_at)
                         """,
-                deviceSn, plateNo, fingerprint, LocalDateTime.now());
+                deviceSn, com.fangke.visitor.common.PlateNo.normalize(plateNo), fingerprint, LocalDateTime.now());
     }
 
     public void remove(String deviceSn, String plateNo) {
         jdbc.update("DELETE FROM vehicle_mqtt_plate_state WHERE device_sn = ? AND plate_no = ?",
-                deviceSn, plateNo);
+                deviceSn, com.fangke.visitor.common.PlateNo.normalize(plateNo));
     }
 
     /** 设备档案删掉时清掉它的对账状态。 */

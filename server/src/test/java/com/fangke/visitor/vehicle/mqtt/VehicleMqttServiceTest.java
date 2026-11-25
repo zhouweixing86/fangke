@@ -91,6 +91,21 @@ class VehicleMqttServiceTest {
     }
 
     @Test
+    @DisplayName("车牌里的引号/花括号不会拼坏下发报文")
+    void plateWithQuoteKeepsPayloadValid() throws Exception {
+        service.addPlate(SN, "苏A\"1{2}\\345",
+                LocalDateTime.of(2026, 11, 25, 0, 0),
+                LocalDateTime.of(2026, 12, 31, 23, 59, 59));
+
+        ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+        verify(gateway).publish(eq(SN), payload.capture());
+
+        JsonNode node = envelope(payload.getValue());
+        JsonNode car = MAPPER.readTree(node.path("data").asText()).path("carInfoList").get(0);
+        assertEquals("苏A12345", car.path("plate").asText());
+    }
+
+    @Test
     @DisplayName("删除走 DeleteCarInfo，全量对齐走批量 AddCarInfo")
     void deleteAndImportUseProtocolCommands() throws Exception {
         service.deletePlate(SN, "苏A12345");
