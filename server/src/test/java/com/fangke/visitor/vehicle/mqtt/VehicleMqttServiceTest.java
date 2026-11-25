@@ -18,6 +18,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -181,6 +182,23 @@ class VehicleMqttServiceTest {
         verify(gateway, times(3)).publish(eq(SN), org.mockito.ArgumentMatchers.anyString());
         verify(stateRepository).upsert(SN, "苏A11111", fingerprint);
         verify(stateRepository).remove(SN, "苏A99999");
+    }
+
+    @Test
+    @DisplayName("人工开闸：设备不存在或相机离线时明确报错，不假装成功")
+    void openGateRejectsUnknownOrOfflineDevice() {
+        com.fangke.visitor.device.model.Device offline = new com.fangke.visitor.device.model.Device();
+        offline.setDeviceSn(SN);
+        offline.setOnline(true);
+        offline.setLastHeartbeat(java.time.LocalDateTime.now().minusMinutes(10));
+
+        when(deviceService.list(null)).thenReturn(List.of(offline));
+        assertThrows(com.fangke.visitor.common.BusinessException.class,
+                () -> service.openGate(SN, "苏A1", "admin"), "离线相机应拒绝开闸");
+
+        when(deviceService.list(null)).thenReturn(List.of());
+        assertThrows(com.fangke.visitor.common.BusinessException.class,
+                () -> service.openGate("NOT-EXIST", null, "admin"), "未知设备应拒绝");
     }
 
     @Test

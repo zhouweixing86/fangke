@@ -94,6 +94,9 @@ public class VehicleMqttService {
             "{\"command\":\"Config\",\"data\":\"{\\\"enableReply\\\":1,\\\"enableOffline\\\":1}\"," + PROTOCOL_SUFFIX;
 
 
+    /** 心跳新鲜度阈值（秒）：超过这个时间没有心跳就认为相机离线（心跳间隔 5 秒，留足抖动余量）。 */
+    private static final int OFFLINE_SECONDS = 120;
+
     private final AppProperties props;
     private final VehicleMqttGateway gateway;
     private final VehicleMqttLogRepository logRepository;
@@ -226,9 +229,21 @@ public class VehicleMqttService {
      * 不传车牌只记一条「人工开闸」，不进按人汇总。
      */
     public Map<String, Object> openGate(String deviceSn, String plateNo, String operator) {
-        Device device = deviceService.resolveOrRegister(deviceSn, null);
-        Long gateId = device == null ? null : device.getGateId();
-        int direction = device == null ? 0 : device.getDirection();
+        // 先按心跳判断在线：相机是 MQTT 客户端（cleanSession=1），离线期间发的指令它会丢，
+        // 直接回「开闸成功」会让人以为闸开了。离线就明确报错。
+        Device device = deviceService.list(null).stream()
+                .filter(d -> deviceSn.equals(d.getDeviceSn()))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_INVALID,
+                        "设备不存在：" + deviceSn + "（先在「设备管理 → 车闸相机」登记）"));
+        if (!device.isFreshOnline(OFFLINE_SECONDS)) {
+            String last = device.getLastHeartbeat() == null ? "从未上报"
+                    : DATETIME.format(device.getLastHeartbeat());
+            throw new BusinessException(ErrorCode.PARAM_INVALID,
+                    "车闸相机当前离线（最近心跳 " + last + "），开闸指令收不到，请先确认现场网络");
+        }
+        Long gateId = device.getGateId();
+        int direction = device.getDirection();
         String plate = plateNo == null ? "" : VehicleAccessService.normalize(plateNo);
 
         String payload = fill(OPEN_GATE, envelopeValues(deviceSn, Map.of()));
