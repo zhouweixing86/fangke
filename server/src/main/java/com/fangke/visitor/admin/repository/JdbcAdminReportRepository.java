@@ -188,11 +188,14 @@ public class JdbcAdminReportRepository implements AdminReportRepository {
                      WHERE event_time >= ? AND event_time < ?
                     UNION ALL
                     SELECT '20' AS k, result_status FROM vehicle_event
-                     WHERE event_time >= ? AND event_time < ?
+                     WHERE event_time >= ? AND event_time < ? AND COALESCE(fail_reason, '') NOT LIKE '人工远程开闸%'
+                    UNION ALL
+                    SELECT '9' AS k, result_status FROM vehicle_event
+                     WHERE event_time >= ? AND event_time < ? AND fail_reason LIKE '人工远程开闸%'
                 ) t
                 GROUP BY k
                 ORDER BY total DESC
-                """, fromTs, toTs, fromTs, toTs);
+                """, fromTs, toTs, fromTs, toTs, fromTs, toTs);
     }
 
     private List<VisitorStat> visitorStats(String sql, Object... args) {
