@@ -22,6 +22,7 @@ public class AppProperties {
     private final Bootstrap bootstrap = new Bootstrap();
     private final App app = new App();
     private final Wx wx = new Wx();
+    private final Vehicle vehicle = new Vehicle();
     private List<String> corsAllowedOrigins = new ArrayList<>(
             List.of("http://localhost:5173", "http://127.0.0.1:5173"));
 
@@ -74,6 +75,10 @@ public class AppProperties {
 
     public Wx getWx() {
         return wx;
+    }
+
+    public Vehicle getVehicle() {
+        return vehicle;
     }
 
     public List<String> getCorsAllowedOrigins() {
@@ -502,6 +507,143 @@ public class AppProperties {
 
         public void setEnvVersion(String envVersion) {
             this.envVersion = envVersion;
+        }
+    }
+
+    /* ---------------- 车闸（云车场 OpenAPI，docs/19） ---------------- */
+
+    public static class Vehicle {
+
+        private final Cloud cloud = new Cloud();
+
+        public Cloud getCloud() {
+            return cloud;
+        }
+
+        /**
+         * 云车场开放接口（`/thirdServer/v1/openApi`）。
+         *
+         * <p>「接口需要客户付费才可以调用」，凭据由车场方分配；未配置时只做 dry-run（算差异但不发送），
+         * 现场仍可核对「应该下发什么」。
+         */
+        public static class Cloud {
+            /** 总开关：拿到 park_id / secret 并开通接口后再打开。 */
+            private boolean enabled = false;
+            /** 形如 https://xxx.com/thirdServer/v1/openApi */
+            private String baseUrl = "";
+            /** 车场编号。 */
+            private String parkId = "";
+            /** 签名密钥（每个车场不同）。 */
+            private String secret = "";
+            /** 出口通道编号（query_channels 查出来填）。 */
+            private int channelId = 0;
+            /** visitor_sync 的二维码类型：0 访客预约码 / 1 入口登记码。 */
+            private int visitorType = 0;
+            /** 调用超时（秒）。 */
+            private int timeoutSeconds = 8;
+            /** 定时对账间隔（毫秒）。 */
+            private long syncMs = 60_000L;
+            /** 启动后首次对账延迟（毫秒），避免和启动任务抢资源。 */
+            private long syncInitialDelayMs = 45_000L;
+            /** 员工车牌走月卡接口（month_dataSync）而不是访客接口；车场确认后再开。 */
+            private boolean employeeAsMonthCard = false;
+            /** 月卡接口必填的车辆类型 id（employeeAsMonthCard=true 时用）。 */
+            private int authType = 0;
+
+            public boolean isEnabled() {
+                return enabled;
+            }
+
+            public void setEnabled(boolean enabled) {
+                this.enabled = enabled;
+            }
+
+            public String getBaseUrl() {
+                return baseUrl;
+            }
+
+            public void setBaseUrl(String baseUrl) {
+                this.baseUrl = baseUrl;
+            }
+
+            public String getParkId() {
+                return parkId;
+            }
+
+            public void setParkId(String parkId) {
+                this.parkId = parkId;
+            }
+
+            public String getSecret() {
+                return secret;
+            }
+
+            public void setSecret(String secret) {
+                this.secret = secret;
+            }
+
+            public int getChannelId() {
+                return channelId;
+            }
+
+            public void setChannelId(int channelId) {
+                this.channelId = channelId;
+            }
+
+            public int getVisitorType() {
+                return visitorType;
+            }
+
+            public void setVisitorType(int visitorType) {
+                this.visitorType = visitorType;
+            }
+
+            public int getTimeoutSeconds() {
+                return timeoutSeconds;
+            }
+
+            public void setTimeoutSeconds(int timeoutSeconds) {
+                this.timeoutSeconds = timeoutSeconds;
+            }
+
+            public long getSyncMs() {
+                return syncMs;
+            }
+
+            public void setSyncMs(long syncMs) {
+                this.syncMs = syncMs;
+            }
+
+            public long getSyncInitialDelayMs() {
+                return syncInitialDelayMs;
+            }
+
+            public void setSyncInitialDelayMs(long syncInitialDelayMs) {
+                this.syncInitialDelayMs = syncInitialDelayMs;
+            }
+
+            public boolean isEmployeeAsMonthCard() {
+                return employeeAsMonthCard;
+            }
+
+            public void setEmployeeAsMonthCard(boolean employeeAsMonthCard) {
+                this.employeeAsMonthCard = employeeAsMonthCard;
+            }
+
+            public int getAuthType() {
+                return authType;
+            }
+
+            public void setAuthType(int authType) {
+                this.authType = authType;
+            }
+
+            /** 凭据齐全才认为可真实调用。 */
+            public boolean configured() {
+                return baseUrl != null && !baseUrl.isBlank()
+                        && parkId != null && !parkId.isBlank()
+                        && secret != null && !secret.isBlank();
+            }
         }
     }
 }

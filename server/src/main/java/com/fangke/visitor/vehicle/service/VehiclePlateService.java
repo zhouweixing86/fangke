@@ -13,6 +13,7 @@ import com.fangke.visitor.device.model.PlatePayload;
 import com.fangke.visitor.device.service.DeviceCapabilityService;
 import com.fangke.visitor.employee.model.Employee;
 import com.fangke.visitor.employee.repository.EmployeeRepository;
+import com.fangke.visitor.vehicle.cloud.VehiclePlateCloudService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -47,7 +48,8 @@ public class VehiclePlateService {
     }
 
     /** 一次下发的汇总。 */
-    public record SyncResult(int plateTotal, int pendingDevices, List<DeviceResult> devices) {
+    public record SyncResult(int plateTotal, int pendingDevices, List<DeviceResult> devices,
+                             VehiclePlateCloudService.SyncResult cloud) {
     }
 
     private final EmployeeRepository employeeRepository;
@@ -57,6 +59,7 @@ public class VehiclePlateService {
     private final VehicleDeviceService vehicleDeviceService;
     private final DeviceAdapterFactory adapterFactory;
     private final DeviceCapabilityService capabilityService;
+    private final VehiclePlateCloudService cloudService;
 
     public VehiclePlateService(EmployeeRepository employeeRepository,
                                AppointmentRepository appointmentRepository,
@@ -64,7 +67,8 @@ public class VehiclePlateService {
                                VisitorRepository visitorRepository,
                                VehicleDeviceService vehicleDeviceService,
                                DeviceAdapterFactory adapterFactory,
-                               DeviceCapabilityService capabilityService) {
+                               DeviceCapabilityService capabilityService,
+                               VehiclePlateCloudService cloudService) {
         this.employeeRepository = employeeRepository;
         this.appointmentRepository = appointmentRepository;
         this.appointmentGateRepository = appointmentGateRepository;
@@ -72,6 +76,7 @@ public class VehiclePlateService {
         this.vehicleDeviceService = vehicleDeviceService;
         this.adapterFactory = adapterFactory;
         this.capabilityService = capabilityService;
+        this.cloudService = cloudService;
     }
 
     /**
@@ -118,13 +123,23 @@ public class VehiclePlateService {
      */
     public SyncResult sync(Long gateId) {
         List<PlatePayload> plates = snapshot(gateId);
+        // 云车场（docs/19）：先对账下发，再按设备回显结果；未启用时只算差异（dry-run）
+        VehiclePlateCloudService.SyncResult cloud = cloudService.reconcile(plates);
         List<Device> devices = vehicleDeviceService.list(gateId);
         if (devices.isEmpty()) {
-            return new SyncResult(plates.size(), 0, List.of());
+            return new SyncResult(plates.size(), 0, List.of(), cloud);
         }
         List<DeviceResult> results = new ArrayList<>();
         int pending = 0;
         for (Device device : devices) {
+            if (cloudService.enabled()) {
+                results.add(new DeviceResult(device.getId(), device.getDeviceSn(), device.getDeviceName(),
+                        device.getGateId(), cloud.failed() > 0 ? "CLOUD_PARTIAL" : "CLOUD_PUSHED",
+                        "已通过车场开放接口下发（新增 " + cloud.added() + " / 修改 " + cloud.modified()
+                                + " / 删除 " + cloud.removed() + " / 失败 " + cloud.failed() + "）",
+                        plates.size()));
+                continue;
+            }
             if (!capabilityService.supports(device, DeviceCapability.PLATE_UPSERT)) {
                 pending++;
                 results.add(new DeviceResult(device.getId(), device.getDeviceSn(), device.getDeviceName(),
@@ -145,7 +160,7 @@ public class VehiclePlateService {
             }
         }
         log.info("车牌名单下发 gate={} 车牌={} 台数={} 待接入={}", gateId, plates.size(), devices.size(), pending);
-        return new SyncResult(plates.size(), pending, results);
+        return new SyncResult(plates.size(), pending, results, cloud);
     }
 
     /** 清单按来源统计（管理端展示用）。 */

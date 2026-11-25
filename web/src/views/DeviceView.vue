@@ -11,6 +11,9 @@
         @change="load">
         <el-option v-for="g in gates" :key="g.id" :value="g.id" :label="g.gateName" />
       </el-select>
+      <el-button v-if="deviceKind === 'VEHICLE'" type="primary" plain @click="openPlates()">
+        车牌名单 / 下发
+      </el-button>
       <span class="spacer" />
       <span class="text-muted">
         名单与记录走「设备心跳」；开门有两种：心跳队列（云端也能用，≤一个心跳周期）与远程直连（秒级，需同网）
@@ -286,9 +289,9 @@
     </el-dialog>
 
     <!-- 车闸相机：车牌名单（来源=员工档案 + 访客预约，docs/18） -->
-    <el-dialog v-model="platesVisible" :title="`车牌名单 · ${platesRow?.deviceName || ''}`" width="720px">
+    <el-dialog v-model="platesVisible" :title="`车牌名单 · ${platesRow?.deviceName || '全部车闸'}`" width="720px">
       <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
-        title="车牌不用单独维护：填员工档案或访客预约时填的车牌号会自动汇总到这里。厂商协议接入后可一键下发到相机本地。" />
+        title="车牌不用单独维护：员工档案/访客预约填的车牌会汇总到这里。车场接口启用后按差分自动下发（新增/修改/删除），未启用时只算差异。" />
       <div class="toolbar">
         <el-button :loading="platesLoading" :icon="Refresh" @click="loadPlates">刷新清单</el-button>
         <el-button type="primary" :loading="platesSyncing" @click="doSyncPlates">下发到车闸相机</el-button>
@@ -298,9 +301,11 @@
           共 {{ plates?.summary.total || 0 }} 辆
         </span>
       </div>
-      <el-alert v-if="syncResult" :type="syncResult.pendingDevices ? 'warning' : 'success'"
-        :closable="false" show-icon style="margin-bottom: 8px"
-        :title="`已备好 ${syncResult.plateTotal} 条车牌；待接入厂商协议的相机 ${syncResult.pendingDevices} 台`" />
+      <el-alert v-if="syncResult" :type="syncAlertType" :closable="false" show-icon
+        style="margin-bottom: 8px" :title="syncAlertText" />
+      <div v-if="syncResult?.cloud?.errors?.length" class="text-muted" style="margin-bottom: 8px">
+        <div v-for="(err, idx) in syncResult.cloud.errors" :key="idx" class="mono">{{ err }}</div>
+      </div>
       <el-table :data="plates?.plates || []" border size="small" max-height="360">
         <el-table-column prop="plateNo" label="车牌" width="120" />
         <el-table-column label="来源" width="80">
@@ -322,6 +327,32 @@
             : d.status === 'PENDING_VENDOR' ? 'warning' : 'danger'">{{ d.status }}</el-tag>
           <span class="mono">{{ d.deviceSn }}</span>
           <span class="text-muted">{{ d.message }}</span>
+        </div>
+      </div>
+      <div v-if="pushState" style="margin-top: 12px">
+        <div class="toolbar">
+          <span class="text-muted">
+            车场接口：{{ pushState.enabled ? '已启用' : '未启用' }} ·
+            {{ pushState.configured ? '凭据已配置' : '缺少 base-url / park-id / secret' }} ·
+            每 {{ pushState.syncSeconds }} 秒自动对账 · 已下发 {{ pushState.rows.length }} 条
+          </span>
+          <span class="spacer" />
+          <el-button size="small" :icon="Refresh" @click="loadPushState">刷新下发状态</el-button>
+        </div>
+        <el-table v-if="pushState.rows.length" :data="pushState.rows" size="small" border max-height="200">
+          <el-table-column prop="plateNo" label="车牌" width="110" />
+          <el-table-column prop="personName" label="姓名" width="100" />
+          <el-table-column prop="beginTime" label="生效" width="150" />
+          <el-table-column prop="endTime" label="到期" width="150" />
+          <el-table-column label="状态" width="90">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.state === 'PUSHED' ? 'success' : 'danger'">{{ row.state }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="lastError" label="错误" show-overflow-tooltip />
+        </el-table>
+        <div v-else class="text-muted" style="margin-top: 4px">
+          还没有下发记录：点上方「下发到车闸」可立即对账一次。
         </div>
       </div>
       <template #footer>
@@ -355,6 +386,7 @@ import {
   deviceRemoteSwitches,
   deviceRemoteTip,
   getVehiclePlates,
+  getVehiclePlatePushState,
   listDevices,
   listGates,
   openDeviceDoor,
@@ -366,6 +398,7 @@ import {
 import type {
   DeviceView,
   GateRow,
+  VehiclePlatePushState,
   VehiclePlateSnapshot,
   VehiclePlateSyncResult
 } from '@/api/types'
@@ -402,6 +435,27 @@ const platesSyncing = ref(false)
 const platesRow = ref<DeviceView | null>(null)
 const plates = ref<VehiclePlateSnapshot | null>(null)
 const syncResult = ref<VehiclePlateSyncResult | null>(null)
+/** 车场侧已收到的车牌快照（云车场 visitor_sync） */
+const pushState = ref<VehiclePlatePushState | null>(null)
+
+const syncAlertType = computed(() => {
+  const cloud = syncResult.value?.cloud
+  if (!cloud) return syncResult.value?.pendingDevices ? 'warning' : 'success'
+  if (cloud.failed > 0) return 'error'
+  return cloud.dryRun ? 'warning' : 'success'
+})
+
+const syncAlertText = computed(() => {
+  const result = syncResult.value
+  if (!result) return ''
+  const cloud = result.cloud
+  if (!cloud) {
+    return `已备好 ${result.plateTotal} 条车牌；待接入厂商协议的相机 ${result.pendingDevices} 台`
+  }
+  const detail = `车牌 ${result.plateTotal} 条：新增 ${cloud.added} / 修改 ${cloud.modified} / ` +
+    `删除 ${cloud.removed} / 无变化 ${cloud.unchanged} / 失败 ${cloud.failed}`
+  return cloud.dryRun ? `${cloud.message}（${detail}）` : detail
+})
 
 async function load() {
   loading.value = true
@@ -460,19 +514,29 @@ async function doDelete(row: DeviceView) {
 
 /* ---------------- 车闸相机：车牌名单 ---------------- */
 
-async function openPlates(row: DeviceView) {
-  platesRow.value = row
+/** 打开车牌名单；不传设备时按「全部车闸」查看/下发（云车场按车场下发，不依赖某台相机） */
+async function openPlates(row?: DeviceView) {
+  platesRow.value = row ?? null
   platesVisible.value = true
   syncResult.value = null
   plates.value = null
-  await loadPlates()
+  pushState.value = null
+  await Promise.all([loadPlates(), loadPushState()])
+}
+
+/** 车场侧已下发的车牌（含失败原因），用于判断「业务改了车牌后有没有真到车场」 */
+async function loadPushState() {
+  try {
+    pushState.value = await getVehiclePlatePushState()
+  } catch {
+    pushState.value = null
+  }
 }
 
 async function loadPlates() {
-  if (!platesRow.value) return
   platesLoading.value = true
   try {
-    plates.value = await getVehiclePlates(platesRow.value.gateId || undefined)
+    plates.value = await getVehiclePlates(platesRow.value?.gateId || undefined)
   } catch (error) {
     showRemoteError(error)
   } finally {
@@ -480,17 +544,26 @@ async function loadPlates() {
   }
 }
 
-/** 下发车牌名单：厂商协议未接入时会返回 PENDING_VENDOR，这里如实提示，不当成失败 */
+/** 下发车牌名单：云车场启用时走 visitor_sync 差分；未接入时才返回 PENDING_VENDOR */
 async function doSyncPlates() {
-  if (!platesRow.value) return
   platesSyncing.value = true
   try {
-    syncResult.value = await syncVehiclePlates(platesRow.value.gateId || undefined)
-    if (syncResult.value.pendingDevices > 0) {
+    syncResult.value = await syncVehiclePlates(platesRow.value?.gateId || undefined)
+    const cloud = syncResult.value.cloud
+    if (cloud && !cloud.dryRun) {
+      if (cloud.failed > 0) {
+        ElMessage.warning(`已下发，但有 ${cloud.failed} 条失败，详见下方错误`)
+      } else {
+        ElMessage.success(`已同步到车场：新增 ${cloud.added} / 修改 ${cloud.modified} / 删除 ${cloud.removed}`)
+      }
+    } else if (cloud && cloud.dryRun) {
+      ElMessage.warning(cloud.message)
+    } else if (syncResult.value.pendingDevices > 0) {
       ElMessage.warning('车牌清单已备好，但车闸相机厂商协议还没接入，暂时投不到相机本地')
     } else {
       ElMessage.success(`已下发 ${syncResult.value.plateTotal} 条车牌`)
     }
+    await Promise.all([loadPlates(), loadPushState()])
   } catch (error) {
     showRemoteError(error)
   } finally {

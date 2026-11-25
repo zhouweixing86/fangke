@@ -691,6 +691,43 @@ export interface VehiclePlateSyncResult {
   plateTotal: number
   pendingDevices: number
   devices: VehiclePlateSyncDevice[]
+  /** 云车场开放接口对账结果（docs/19）；未启用/未配置时为 dry-run */
+  cloud?: VehiclePlateCloudResult
+}
+
+/** 云车场车牌对账（visitor_sync） */
+export interface VehiclePlateCloudResult {
+  enabled: boolean
+  dryRun: boolean
+  added: number
+  modified: number
+  removed: number
+  failed: number
+  unchanged: number
+  message: string
+  errors: string[]
+}
+
+/** 已下发到车场的车牌快照 */
+export interface VehiclePlatePushRow {
+  plateNo: string
+  ownerType: string
+  personName: string
+  beginTime: string
+  endTime: string
+  state: string
+  lastError: string
+  pushedAt: string
+}
+
+export interface VehiclePlatePushState {
+  enabled: boolean
+  configured: boolean
+  baseUrl: string
+  parkId: string
+  channelId: number
+  syncSeconds: number
+  rows: VehiclePlatePushRow[]
 }
 
 /** 通行记录汇总：一人一天一行（C-69） */

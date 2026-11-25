@@ -7,6 +7,8 @@ import com.fangke.visitor.device.model.Device;
 import com.fangke.visitor.device.model.PlatePayload;
 import com.fangke.visitor.gate.service.GateService;
 import com.fangke.visitor.vehicle.model.VehicleEvent;
+import com.fangke.visitor.vehicle.cloud.CloudParkingClient;
+import com.fangke.visitor.vehicle.cloud.VehiclePlateCloudService;
 import com.fangke.visitor.vehicle.repository.VehicleEventRepository;
 import com.fangke.visitor.vehicle.service.VehicleDeviceService;
 import com.fangke.visitor.vehicle.service.VehiclePlateService;
@@ -36,15 +38,20 @@ public class AdminVehicleController {
     private final GateService gateService;
     private final VehicleDeviceService deviceService;
     private final VehiclePlateService plateService;
+    private final VehiclePlateCloudService plateCloudService;
+    private final CloudParkingClient cloudClient;
     private final com.fangke.visitor.config.AppProperties props;
 
     public AdminVehicleController(VehicleEventRepository eventRepository, GateService gateService,
                                   VehicleDeviceService deviceService, VehiclePlateService plateService,
+                                  VehiclePlateCloudService plateCloudService, CloudParkingClient cloudClient,
                                   com.fangke.visitor.config.AppProperties props) {
         this.eventRepository = eventRepository;
         this.gateService = gateService;
         this.deviceService = deviceService;
         this.plateService = plateService;
+        this.plateCloudService = plateCloudService;
+        this.cloudClient = cloudClient;
         this.props = props;
     }
 
@@ -97,6 +104,24 @@ public class AdminVehicleController {
         return ApiResponse.ok(plateService.sync(gateId));
     }
 
+    /**
+     * 车闸车牌下发状态（云端对账快照，docs/19 §3）：已下发到车场的车牌 + 失败原因。
+     *
+     * <p>与 {@code /plate} 的区别：{@code /plate} 是「平台期望清单」，这里是「车场实际已收到的」。
+     */
+    @GetMapping("/plate/push-state")
+    public ApiResponse<Map<String, Object>> platePushState() {
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("enabled", plateCloudService.enabled());
+        view.put("configured", plateCloudService.configured());
+        view.put("baseUrl", props.getVehicle().getCloud().getBaseUrl());
+        view.put("parkId", props.getVehicle().getCloud().getParkId());
+        view.put("channelId", props.getVehicle().getCloud().getChannelId());
+        view.put("syncSeconds", props.getVehicle().getCloud().getSyncMs() / 1000);
+        view.put("rows", plateCloudService.stateRows());
+        return ApiResponse.ok(view);
+    }
+
     private Map<String, Object> toDeviceView(Device d) {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("id", d.getId());
@@ -112,6 +137,22 @@ public class AdminVehicleController {
         view.put("lastHeartbeat", d.getLastHeartbeat() == null ? "" : DATETIME.format(d.getLastHeartbeat()));
         view.put("remark", d.getRemark() == null ? "" : d.getRemark());
         return view;
+    }
+
+    /**
+     * 查车场的通道列表（{@code query_channels}）：联调第一步，用来确认出口道闸的 channelId / deviceSN。
+     *
+     * <p>返回体原样是车场的 `data[]`（channelId / channelName / channelType 1进2出 / deviceSN…）。
+     */
+    @PostMapping("/plate/query-channels")
+    @AuditLog(module = "VEHICLE", action = "QUERY_CHANNELS")
+    public ApiResponse<Map<String, Object>> queryChannels() {
+        if (!cloudClient.configured()) {
+            throw new com.fangke.visitor.common.BusinessException(
+                    com.fangke.visitor.common.ErrorCode.PARAM_INVALID,
+                    "车场接口未启用或缺少凭据（fangke.vehicle.cloud.*，见 docs/19 §3.1）");
+        }
+        return ApiResponse.ok(cloudClient.queryChannels());
     }
 
     @GetMapping("/event")

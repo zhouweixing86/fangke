@@ -111,6 +111,21 @@ fangke:
     remote-password: ${DEVICE_REMOTE_PASSWORD:888888}
     remote-timeout-seconds: ${DEVICE_REMOTE_TIMEOUT:5}
 
+  # 车闸：云车场开放接口（docs/19）。接口需车场方付费开通；凭据未配置时只算差异不发送
+  vehicle:
+    cloud:
+      enabled: ${VEHICLE_CLOUD_ENABLED:false}
+      base-url: ${VEHICLE_CLOUD_BASE_URL:}
+      park-id: ${VEHICLE_CLOUD_PARK_ID:}
+      secret: ${VEHICLE_CLOUD_SECRET:}
+      channel-id: ${VEHICLE_CLOUD_CHANNEL_ID:0}
+      visitor-type: ${VEHICLE_CLOUD_VISITOR_TYPE:0}
+      timeout-seconds: ${VEHICLE_CLOUD_TIMEOUT:8}
+      sync-ms: ${VEHICLE_CLOUD_SYNC_MS:60000}
+      sync-initial-delay-ms: ${VEHICLE_CLOUD_SYNC_INITIAL_DELAY_MS:45000}
+      employee-as-month-card: ${VEHICLE_CLOUD_EMPLOYEE_MONTH:false}
+      auth-type: ${VEHICLE_CLOUD_AUTH_TYPE:0}
+
   storage:
     # 照片存对象存储（S3 兼容）。默认指向内网 MinIO —— 照片不出园区。
     # 换云 OSS/COS 只改这四项，业务代码不动。

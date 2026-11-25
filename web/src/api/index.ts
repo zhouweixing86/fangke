@@ -51,7 +51,8 @@ import type {
   WxRoleQr,
   WxBindingRow,
   ApprovalRecordRow,
-  VehiclePlateSyncResult
+  VehiclePlateSyncResult,
+  VehiclePlatePushState
 } from './types'
 
 /** 响应拦截器已解包 ApiResponse，这里只做类型断言。 */
@@ -517,9 +518,13 @@ export const listVehicleEvents = (params: Record<string, unknown>) =>
 export const getVehiclePlates = (gateId?: number) =>
   get<VehiclePlateSnapshot>('/admin/vehicle/plate', gateId ? { gateId } : undefined)
 
-/** 下发车牌名单到车闸相机；厂商协议未接入时返回 PENDING_VENDOR */
+/** 下发车牌名单到车闸相机；云车场启用时走 visitor_sync 差分下发 */
 export const syncVehiclePlates = (gateId?: number) =>
   post<VehiclePlateSyncResult>('/admin/vehicle/plate/sync', undefined, gateId ? { gateId } : undefined)
+
+/** 车闸车牌下发状态：车场侧已收到的车牌快照（docs/19） */
+export const getVehiclePlatePushState = () =>
+  get<VehiclePlatePushState>('/admin/vehicle/plate/push-state')
 
 /* ---------------- 通行记录（C-69：行人 + 车辆合并） ---------------- */
 

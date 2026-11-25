@@ -12,6 +12,7 @@ import com.fangke.visitor.device.model.PlatePayload;
 import com.fangke.visitor.device.service.DeviceCapabilityService;
 import com.fangke.visitor.employee.model.Employee;
 import com.fangke.visitor.employee.repository.EmployeeRepository;
+import com.fangke.visitor.vehicle.cloud.VehiclePlateCloudService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,7 @@ class VehiclePlateServiceTest {
     private VehicleDeviceService deviceService;
     private DeviceCapabilityService capabilityService;
     private VehiclePlateService service;
+    private VehiclePlateCloudService cloudService;
 
     @BeforeEach
     void setUp() {
@@ -50,8 +52,12 @@ class VehiclePlateServiceTest {
         visitorRepo = mock(VisitorRepository.class);
         deviceService = mock(VehicleDeviceService.class);
         capabilityService = mock(DeviceCapabilityService.class);
+        cloudService = mock(VehiclePlateCloudService.class);
+        when(cloudService.enabled()).thenReturn(false);
+        when(cloudService.reconcile(any())).thenReturn(
+                new VehiclePlateCloudService.SyncResult(false, true, 0, 0, 0, 0, 0, "未启用", List.of()));
         service = new VehiclePlateService(employeeRepo, appointmentRepo, appointmentGateRepo, visitorRepo,
-                deviceService, mock(DeviceAdapterFactory.class), capabilityService);
+                deviceService, mock(DeviceAdapterFactory.class), capabilityService, cloudService);
     }
 
     private Employee employee(String plate, String name) {
