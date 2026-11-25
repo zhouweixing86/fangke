@@ -215,9 +215,14 @@ Invoke-WebRequest -Uri 'http://<ip>/Signalway.fcgi?命令' -Method Post -Body ([
 `POST /api/admin/vehicle/mqtt/open`，`{deviceSn, plateNo?}`（页面：设备管理 → 车闸相机 → 开闸）：
 
 - 下发协议 `Open`（`data` 为空串），相机回执 `errCode=0` 即已抬杆；
+- **相机离线时直接报错**（按心跳 120 秒判断），避免"点了开闸但其实没发出去"；
 - 带车牌时会按车牌判定一次并把匹配到的人写进 `vehicle_event`，因此**会出现在该人当天的通行记录里**；
 - 不带车牌只记一条「人工开闸」（不进按人汇总）；
 - 操作人写进审计日志（`VEHICLE/MQTT_OPEN_GATE`）。
+
+> 手工「下发/更新车牌」是**临时**的：平台以员工档案 + 当天已授权访客为准，
+> 下一轮对账（≤20 秒）会把这个车牌清掉（`DeleteCarInfo`）。
+> 要长期生效，请把车牌填到员工档案或访客预约里。
 
 ### 10.3 通行记录与照片
 
@@ -305,6 +310,7 @@ Invoke-WebRequest -Uri 'http://<ip>/Signalway.fcgi?命令' -Method Post -Body ([
 | 访客拉黑/解除 | 有效预约 `苏T11111` 已下发 → 置 `is_blacklist=1` → 下一轮 `DeleteCarInfo`；再改回 0 → `AddCarInfo` 恢复 |
 | 停机期间改数据 | 停服 → 删员工 → 起服：20 秒内 `DeleteCarInfo` 删掉相机里的车牌（状态收敛） |
 | 离线相机开闸 | 造一台 10 分钟没心跳的设备 → 开闸返回 **400**「车闸相机当前离线（最近心跳 …）」；在线相机同接口 200 |
+| 手工下发车牌 | `POST /mqtt/plate 苏U11111` → `AddCarInfo` + 立即写对账状态 → 17 秒后定时对账按平台数据把它删掉（`DeleteCarInfo`，符合预期：平台是唯一事实源） |
 
 ### 11.5 终验（2026-11-26 02:19–02:25，最终构建）
 
