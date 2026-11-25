@@ -133,8 +133,14 @@ public class JdbcDeviceRepository implements DeviceRepository {
                 deviceSn, ip, personCount, heartbeatAt, clockSkewSeconds, rawJson, deviceSn);
     }
 
-    /** 10.x / 172.16-31.x / 192.168.x / 127.x 视为局域网地址。 */
-    static boolean isPrivateAddress(String ip) {
+    @Override
+    public void touchHeartbeat(String deviceSn, String ip, LocalDateTime at) {
+        String lanIp = isPrivateAddress(ip) ? ip : null;
+        jdbc.update("UPDATE device SET online_state = 1, last_heartbeat = ?, ip = COALESCE(?, ip) "
+                + "WHERE device_sn = ?", at, lanIp, deviceSn);
+    }
+
+    /** 10.x / 172.16-31.x / 192.168.x / 127.x 视为局域网地址。 */    static boolean isPrivateAddress(String ip) {
         if (ip == null || ip.isBlank()) {
             return false;
         }

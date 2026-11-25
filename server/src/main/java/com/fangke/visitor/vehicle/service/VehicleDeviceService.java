@@ -74,6 +74,14 @@ public class VehicleDeviceService {
         return device;
     }
 
+    /** 车闸相机心跳：只刷新在线状态与内网 IP（不写心跳样本表）。 */
+    public void touch(String deviceSn, String ip) {
+        if (deviceSn == null || deviceSn.isBlank()) {
+            return;
+        }
+        deviceRepository.touchHeartbeat(deviceSn.trim(), ip, LocalDateTime.now());
+    }
+
     /** 车闸相机列表（可按门点过滤）。 */
     public List<Device> list(Long gateId) {
         List<Device> all = deviceRepository.findActiveByChannel(Device.Channel.VEHICLE);

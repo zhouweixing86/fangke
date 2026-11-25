@@ -52,6 +52,15 @@ public interface DeviceRepository {
     void updateHeartbeat(String deviceSn, String ip, Integer personCount,
                          LocalDateTime heartbeatAt, Integer clockSkewSeconds, String rawJson);
 
+    /**
+     * 只刷新在线状态与内网 IP，不写 device_heartbeat 样本。
+     *
+     * <p>给 MQTT 车闸相机用：它 5 秒一条心跳，按样本写库会撑爆表。
+     */
+    default void touchHeartbeat(String deviceSn, String ip, LocalDateTime at) {
+        updateHeartbeat(deviceSn, ip, null, at, null, null);
+    }
+
     void updateFirmware(String deviceSn, String firmware, String model);
 
     /**

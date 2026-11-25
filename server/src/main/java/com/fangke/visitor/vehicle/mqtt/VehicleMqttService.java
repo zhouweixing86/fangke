@@ -50,6 +50,11 @@ public class VehicleMqttService {
     /** 宽松车牌识别：汉字 + 字母 + 5~6 位字母数字。 */
     private static final Pattern PLATE_PATTERN =
             Pattern.compile("[京津冀晋蒙辽吉黑沪苏浙皖闽赣鲁豫鄂湘粤桂琼渝川贵云藏陕甘青宁新][A-Z][A-Z0-9]{4,6}");
+    /** 相机 `Conn` 上行里的内网 IP：`devIP~192.168.1.4`。 */
+    private static final Pattern DEVICE_IP =
+            Pattern.compile("devIP~([0-9]{1,3}(?:\\.[0-9]{1,3}){3})");
+    /** 心跳刷新在线状态的限流（SN → 最近一次刷新时间戳）。 */
+    private final Map<String, Long> lastTouch = new java.util.concurrent.ConcurrentHashMap<>();
 
     /** 相机标准协议版本号（实测上行固定 1.0.1）。 */
     private static final String PROTOCOL_VERSION = "1.0.1";
@@ -297,8 +302,10 @@ public class VehicleMqttService {
         String deviceSn = extractDeviceSn(topic);
         String command = extractText(payload, "command");
         if ("Rtd".equalsIgnoreCase(command)) {
-            // 5 秒一条心跳，写日志表会把库撑爆（每天 3 万+ 行），只打 debug
+            // 5 秒一条心跳，写日志表会把库撑爆（每天 3 万+ 行），只打 debug；
+            // 但要顺带刷新「在线状态/内网 IP」，否则设备列表一直显示离线（限流 1 分钟一次）
             log.debug("车闸心跳 device={}", deviceSn);
+            touchQuietly(deviceSn);
             return;
         }
         String plate = extractPlate(payload);
@@ -308,7 +315,7 @@ public class VehicleMqttService {
         }
         String message;
         if ("Conn".equalsIgnoreCase(command)) {
-            Device device = registerQuietly(deviceSn);
+            Device device = registerQuietly(deviceSn, extractDeviceIp(payload));
             message = "设备上线（" + (device == null ? "未登记门点" : "通道=" + device.getChannel()
                     + "，门点=" + (device.getGateId() == null ? "待分配" : device.getGateId())) + "）";
             sideChannel.submit(() -> {
@@ -346,13 +353,42 @@ public class VehicleMqttService {
     }
 
     /** 相机上线时登记/刷新设备档案（「设备管理 → 车闸相机」才看得到它和心跳）。 */
-    private Device registerQuietly(String deviceSn) {
+    private Device registerQuietly(String deviceSn, String ip) {
         try {
-            return deviceService.resolveOrRegister(deviceSn, null);
+            return deviceService.resolveOrRegister(deviceSn, ip);
         } catch (Exception e) {
             log.warn("设备登记失败 sn={}：{}", deviceSn, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * 心跳顺带刷新在线状态；限流 1 分钟一次，避免每 5 秒一条把库写满。
+     */
+    private void touchQuietly(String deviceSn) {
+        if (deviceSn == null || deviceSn.isBlank()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        Long last = lastTouch.get(deviceSn);
+        if (last != null && now - last < 60_000L) {
+            return;
+        }
+        lastTouch.put(deviceSn, now);
+        try {
+            deviceService.touch(deviceSn, null);
+        } catch (Exception e) {
+            log.debug("刷新设备在线状态失败 sn={}：{}", deviceSn, e.getMessage());
+        }
+    }
+
+    /** 相机 `Conn` 上行里带 `devIP~192.168.1.4`，拿它当设备档案的内网 IP。 */
+    private static String extractDeviceIp(String payload) {
+        if (payload == null) {
+            return null;
+        }
+        Matcher matcher = DEVICE_IP.matcher(payload);
+        return matcher.find() ? matcher.group(1) : null;
     }
 
     /** 相机上线后把车牌清单对齐一次（断网期间平台改过的也能追上）。 */
