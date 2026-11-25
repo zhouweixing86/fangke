@@ -6,6 +6,7 @@ import com.fangke.visitor.config.AppProperties;
 import com.fangke.visitor.device.model.PlatePayload;
 import com.fangke.visitor.vehicle.service.VehicleAccessService;
 import com.fangke.visitor.vehicle.service.VehicleDeviceService;
+import com.fangke.visitor.vehicle.service.VehiclePlateService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,8 @@ class VehicleMqttServiceTest {
     private VehicleMqttLogRepository logRepository;
     private VehicleAccessService accessService;
     private VehicleDeviceService deviceService;
+    private VehiclePlateService plateService;
+    private VehicleMqttPlateStateRepository stateRepository;
     private VehicleMqttService service;
 
     @BeforeEach
@@ -49,7 +52,12 @@ class VehicleMqttServiceTest {
         logRepository = mock(VehicleMqttLogRepository.class);
         accessService = mock(VehicleAccessService.class);
         deviceService = mock(VehicleDeviceService.class);
-        service = new VehicleMqttService(new AppProperties(), gateway, logRepository, accessService, deviceService);
+        plateService = mock(VehiclePlateService.class);
+        stateRepository = mock(VehicleMqttPlateStateRepository.class);
+        when(plateService.snapshot(any())).thenReturn(List.of());
+        when(stateRepository.fingerprints(any())).thenReturn(new java.util.LinkedHashMap<>());
+        service = new VehicleMqttService(new AppProperties(), gateway, logRepository, accessService,
+                deviceService, plateService, stateRepository);
     }
 
     private static JsonNode envelope(String payload) throws Exception {
@@ -101,6 +109,36 @@ class VehicleMqttServiceTest {
         assertEquals(1, list.size());
         assertEquals("苏A12345", list.get(0).path("plate").asText());
         assertEquals("2026-12-31", list.get(0).path("time").asText());
+    }
+
+    @Test
+    @DisplayName("车牌对账：新增→AddCarInfo、内容变了→重发、清单里没有→DeleteCarInfo")
+    void syncPushesAddsUpdatesAndDeletes() {
+        LocalDateTime begin = LocalDateTime.of(2026, 11, 26, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 12, 31, 23, 59, 59);
+        String fingerprint = "1|2026-11-26 00:00:00|2026-12-31 23:59:59";
+
+        PlatePayload fresh = new PlatePayload("苏A11111", PlatePayload.OWNER_EMPLOYEE, 1L, "张三", "E0001", begin, end);
+        PlatePayload same = new PlatePayload("苏A22222", PlatePayload.OWNER_EMPLOYEE, 2L, "李四", "E0002", begin, end);
+        PlatePayload changed = new PlatePayload("苏A33333", PlatePayload.OWNER_VISITOR, 3L, "王五", null, begin, end);
+
+        when(plateService.snapshot(null)).thenReturn(List.of(fresh, same, changed));
+        java.util.Map<String, String> existing = new java.util.LinkedHashMap<>();
+        existing.put("苏A22222", fingerprint);
+        existing.put("苏A33333", "old-fingerprint");
+        existing.put("苏A99999", fingerprint);
+        when(stateRepository.fingerprints(SN)).thenReturn(existing);
+
+        java.util.Map<String, Object> outcome = service.syncDevicePlates(SN, null);
+
+        assertEquals(1, outcome.get("added"));
+        assertEquals(1, outcome.get("updated"));
+        assertEquals(1, outcome.get("removed"));
+        assertEquals(1, outcome.get("unchanged"));
+        // 3 次下行：新增、更新、删除
+        verify(gateway, times(3)).publish(eq(SN), org.mockito.ArgumentMatchers.anyString());
+        verify(stateRepository).upsert(SN, "苏A11111", fingerprint);
+        verify(stateRepository).remove(SN, "苏A99999");
     }
 
     @Test

@@ -158,16 +158,18 @@ public class AdminTrafficController {
         List<Map<String, Object>> records = jdbc.query("""
                         SELECT t.event_time, t.channel, t.direction, t.method_code, t.plate_no,
                                t.device_sn, d.device_name, t.gate_id, g.gate_name, t.person_name,
-                               t.event_id
+                               t.event_id, t.photo_url
                         FROM (
                             SELECT a.event_time, 'PEDESTRIAN' AS channel, a.direction,
                                    a.identify_type AS method_code, NULL AS plate_no,
-                                   a.device_sn, a.gate_id, a.person_name, a.id AS event_id
+                                   a.device_sn, a.gate_id, a.person_name, a.id AS event_id,
+                                   NULL AS photo_url
                             FROM access_event a
                             WHERE a.person_no = ? AND a.event_time >= ? AND a.event_time < ?
                             UNION ALL
                             SELECT v.event_time, 'VEHICLE', v.direction, ?,
-                                   v.plate_no, v.device_sn, v.gate_id, v.matched_name, NULL
+                                   v.plate_no, v.device_sn, v.gate_id, v.matched_name, NULL,
+                                   v.photo_url
                             FROM vehicle_event v
                             WHERE v.person_no = ? AND v.event_time >= ? AND v.event_time < ?
                         ) t
@@ -194,6 +196,7 @@ public class AdminTrafficController {
                     row.put("gateName", rs.getString("gate_name") == null ? "" : rs.getString("gate_name"));
                     long eventId = rs.getLong("event_id");
                     row.put("eventId", rs.wasNull() ? null : eventId);
+                    row.put("photoUrl", rs.getString("photo_url") == null ? "" : rs.getString("photo_url"));
                     return row;
                 },
                 personNo, Timestamp.valueOf(date.atStartOfDay()), Timestamp.valueOf(date.plusDays(1).atStartOfDay()),

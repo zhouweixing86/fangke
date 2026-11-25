@@ -19,8 +19,10 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -73,12 +75,17 @@ public class VehicleMqttService {
     /** 使能下行回执，见协议 §4.4.21：设备 Conn 上行后由平台下发，之后每条下行都会回 errCode。 */
     private static final String ENABLE_REPLY = "{\"command\":\"EnableReply\",\"data\":\"{\\\"enable\\\":1}\","
             + PROTOCOL_SUFFIX;
+    /** 开闸，见协议 §4.4.2（data 为空串）。 */
+    private static final String OPEN_GATE = "{\"command\":\"Open\",\"data\":\"\"," + PROTOCOL_SUFFIX;
+
 
     private final AppProperties props;
     private final VehicleMqttGateway gateway;
     private final VehicleMqttLogRepository logRepository;
     private final VehicleAccessService accessService;
     private final VehicleDeviceService deviceService;
+    private final com.fangke.visitor.vehicle.service.VehiclePlateService plateService;
+    private final VehicleMqttPlateStateRepository stateRepository;
 
     /**
      * 专用于「回调线程里触发的下行」。
@@ -96,12 +103,16 @@ public class VehicleMqttService {
     public VehicleMqttService(AppProperties props, VehicleMqttGateway gateway,
                               VehicleMqttLogRepository logRepository,
                               VehicleAccessService accessService,
-                              VehicleDeviceService deviceService) {
+                              VehicleDeviceService deviceService,
+                              com.fangke.visitor.vehicle.service.VehiclePlateService plateService,
+                              VehicleMqttPlateStateRepository stateRepository) {
         this.props = props;
         this.gateway = gateway;
         this.logRepository = logRepository;
         this.accessService = accessService;
         this.deviceService = deviceService;
+        this.plateService = plateService;
+        this.stateRepository = stateRepository;
     }
 
     @PostConstruct
@@ -173,6 +184,102 @@ public class VehicleMqttService {
         return result("ENABLE_REPLY", deviceSn, "", payload);
     }
 
+    /**
+     * 人工远程开闸（协议 §4.4.2）。
+     *
+     * <p>传了车牌就按车牌判定一次，把匹配到的人写进通行记录（能和该员工的通行记录合并）；
+     * 不传车牌只记一条「人工开闸」，不进按人汇总。
+     */
+    public Map<String, Object> openGate(String deviceSn, String plateNo, String operator) {
+        Device device = deviceService.resolveOrRegister(deviceSn, null);
+        Long gateId = device == null ? null : device.getGateId();
+        int direction = device == null ? 0 : device.getDirection();
+        String plate = plateNo == null ? "" : VehicleAccessService.normalize(plateNo);
+
+        String payload = fill(OPEN_GATE, envelopeValues(deviceSn, Map.of()));
+        gateway.publish(deviceSn, payload);
+        logRepository.save("DOWN", deviceSn, topicOf(deviceSn), payload,
+                "人工开闸" + (plate.isEmpty() ? "" : " " + plate) + (operator == null ? "" : "（" + operator + "）"));
+
+        try {
+            VehicleAccessService.Decision judged = plate.isEmpty() ? null : accessService.judge(plate, gateId, LocalDateTime.now());
+            VehicleAccessService.Decision decision = new VehicleAccessService.Decision(true,
+                    "人工远程开闸" + (operator == null ? "" : "（" + operator + "）"),
+                    judged == null ? null : judged.matchedType(),
+                    judged == null ? null : judged.matchedId(),
+                    judged == null ? null : judged.matchedName(),
+                    judged == null ? null : judged.personNo());
+            accessService.record("MQA" + UUID.randomUUID().toString().replace("-", "").substring(0, 20),
+                    deviceSn, gateId, plate, direction, LocalDateTime.now(), null, decision, null, null, payload);
+        } catch (Exception e) {
+            log.warn("人工开闸记录写入失败 device={}：{}", deviceSn, e.getMessage());
+        }
+        Map<String, Object> view = result("OPEN", deviceSn, plate, payload);
+        view.put("operator", operator == null ? "" : operator);
+        return view;
+    }
+
+    /**
+     * 把平台期望车牌同步到某台相机（差分）：新增/变更发 {@code AddCarInfo}，不在清单里的发 {@code DeleteCarInfo}。
+     *
+     * <p>这是「员工车牌 / 访客车牌自动下发、停用与到期自动删除」的落地点，由定时对账与相机上线触发。
+     */
+    public Map<String, Object> syncDevicePlates(String deviceSn, Long gateId) {
+        List<PlatePayload> desired = plateService.snapshot(gateId);
+        Map<String, String> existing = stateRepository.fingerprints(deviceSn);
+        int added = 0;
+        int updated = 0;
+        int removed = 0;
+        int unchanged = 0;
+        Set<String> desiredPlates = new LinkedHashSet<>();
+        for (PlatePayload plate : desired) {
+            desiredPlates.add(plate.plateNo());
+            String fingerprint = fingerprint(plate);
+            String last = existing.get(plate.plateNo());
+            if (fingerprint.equals(last)) {
+                unchanged++;
+                continue;
+            }
+            // 没写有效期的（员工长期车）给 10 年，别按「明天到期」下发
+            LocalDateTime end = plate.validTo() == null
+                    ? LocalDateTime.now().plusYears(10) : plate.validTo();
+            addPlate(deviceSn, plate.plateNo(), plate.validFrom(), end);
+            stateRepository.upsert(deviceSn, plate.plateNo(), fingerprint);
+            if (last == null) {
+                added++;
+            } else {
+                updated++;
+            }
+        }
+        for (String plate : existing.keySet()) {
+            if (!desiredPlates.contains(plate)) {
+                deletePlate(deviceSn, plate);
+                stateRepository.remove(deviceSn, plate);
+                removed++;
+            }
+        }
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("deviceSn", deviceSn);
+        view.put("desired", desired.size());
+        view.put("added", added);
+        view.put("updated", updated);
+        view.put("removed", removed);
+        view.put("unchanged", unchanged);
+        return view;
+    }
+
+    /** 相机是否可下发（开关打开且 broker 已连）。 */
+    public boolean ready() {
+        return props.getVehicle().getMqtt().isEnabled() && gateway.isConnected();
+    }
+
+    /** 车牌内容指纹：类型 + 起止时间，变了就重新下发（相机侧覆盖更新）。 */
+    private String fingerprint(PlatePayload plate) {
+        return props.getVehicle().getMqtt().getPlateType() + "|"
+                + (plate.validFrom() == null ? "" : DATETIME.format(plate.validFrom())) + "|"
+                + (plate.validTo() == null ? "" : DATETIME.format(plate.validTo()));
+    }
+
     /** 直接发一段原始报文（协议探测/联调用）。 */
     public Map<String, Object> publishRaw(String deviceSn, String payload) {
         if (payload == null || payload.isBlank()) {
@@ -201,17 +308,24 @@ public class VehicleMqttService {
         }
         String message;
         if ("Conn".equalsIgnoreCase(command)) {
-            message = "设备上线";
-            sideChannel.submit(() -> enableReplyQuietly(deviceSn));
+            Device device = registerQuietly(deviceSn);
+            message = "设备上线（" + (device == null ? "未登记门点" : "通道=" + device.getChannel()
+                    + "，门点=" + (device.getGateId() == null ? "待分配" : device.getGateId())) + "）";
+            sideChannel.submit(() -> {
+                enableReplyQuietly(deviceSn);
+                syncQuietly(deviceSn, device == null ? null : device.getGateId());
+            });
         } else if (plate == null) {
             message = describeWithoutPlate(command, payload);
         } else {
             try {
                 Device device = deviceSn == null ? null : deviceService.resolveOrRegister(deviceSn, null);
                 Long gateId = device == null ? null : device.getGateId();
+                int direction = device == null ? 1 : device.getDirection();
                 VehicleAccessService.Decision decision = accessService.judge(plate, gateId, LocalDateTime.now());
                 accessService.record("MQTT" + UUID.randomUUID().toString().replace("-", "").substring(0, 20),
-                        deviceSn, gateId, plate, 1, LocalDateTime.now(), null, decision, null, payload);
+                        deviceSn, gateId, plate, direction, LocalDateTime.now(),
+                        extractInt(payload, "confid"), decision, null, extractPhotoUrl(payload), payload);
                 message = plate + " 判定=" + (decision.allowed() ? "放行" : "拒绝") + "：" + decision.reason();
             } catch (Exception e) {
                 message = "落库失败：" + e.getMessage();
@@ -228,6 +342,46 @@ public class VehicleMqttService {
             log.info("设备 {} 上线，已下行使能下行回执", deviceSn);
         } catch (Exception e) {
             log.warn("设备 {} 使能回执下发失败：{}", deviceSn, e.getMessage());
+        }
+    }
+
+    /** 相机上线时登记/刷新设备档案（「设备管理 → 车闸相机」才看得到它和心跳）。 */
+    private Device registerQuietly(String deviceSn) {
+        try {
+            return deviceService.resolveOrRegister(deviceSn, null);
+        } catch (Exception e) {
+            log.warn("设备登记失败 sn={}：{}", deviceSn, e.getMessage());
+            return null;
+        }
+    }
+
+    /** 相机上线后把车牌清单对齐一次（断网期间平台改过的也能追上）。 */
+    private void syncQuietly(String deviceSn, Long gateId) {
+        try {
+            log.info("设备 {} 上线对齐车牌：{}", deviceSn, syncDevicePlates(deviceSn, gateId));
+        } catch (Exception e) {
+            log.warn("设备 {} 上线对齐车牌失败：{}", deviceSn, e.getMessage());
+        }
+    }
+
+    /** 相机上报的抓拍图外链（大图优先，其次小图）。 */
+    private static String extractPhotoUrl(String payload) {
+        String url = extractText(payload, "picN_full");
+        if (url == null || url.isBlank()) {
+            url = extractText(payload, "picMin_full");
+        }
+        return url == null || url.isBlank() ? null : url;
+    }
+
+    private static Integer extractInt(String payload, String field) {
+        String text = extractText(payload, field);
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        try {
+            return (int) Double.parseDouble(text.trim());
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 

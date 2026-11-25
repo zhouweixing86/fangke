@@ -26,6 +26,7 @@ public record VehicleEvent(
         int resultStatus,
         String failReason,
         String photoKey,
+        String photoUrl,
         String rawJson) {
 
     public static final int TYPE_EMPLOYEE = 1;

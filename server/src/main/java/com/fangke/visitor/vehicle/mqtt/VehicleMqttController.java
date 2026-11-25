@@ -41,6 +41,10 @@ public class VehicleMqttController {
     public record RawRequest(String deviceSn, String payload) {
     }
 
+    /** 人工开闸请求：车牌可选，带上就会记进该人的通行记录。 */
+    public record OpenRequest(String deviceSn, String plateNo) {
+    }
+
     private final VehicleMqttService service;
     private final VehicleDeviceService deviceService;
     private final VehiclePlateService plateService;
@@ -106,6 +110,33 @@ public class VehicleMqttController {
             throw new BusinessException(ErrorCode.PARAM_MISSING, "deviceSn 不能为空");
         }
         return ApiResponse.ok(service.enableReply(deviceSn.trim()));
+    }
+
+    /** 人工远程开闸（协议 Open）：可带车牌，带车牌时会记进该人的通行记录。 */
+    @PostMapping("/open")
+    @AuditLog(module = "VEHICLE", action = "MQTT_OPEN_GATE")
+    public ApiResponse<Map<String, Object>> openGate(@RequestBody OpenRequest request,
+                                                     jakarta.servlet.http.HttpServletRequest http) {
+        if (request == null || request.deviceSn() == null || request.deviceSn().isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_MISSING, "deviceSn 不能为空");
+        }
+        String operator = (String) http.getAttribute(com.fangke.visitor.security.AuthInterceptor.ATTR_USER_NAME);
+        return ApiResponse.ok(service.openGate(request.deviceSn().trim(), request.plateNo(), operator));
+    }
+
+    /** 立即对齐某台相机的车牌（不等定时任务）。 */
+    @PostMapping("/sync")
+    @AuditLog(module = "VEHICLE", action = "MQTT_PLATE_SYNC")
+    public ApiResponse<Map<String, Object>> sync(@RequestParam String deviceSn) {
+        if (deviceSn == null || deviceSn.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_MISSING, "deviceSn 不能为空");
+        }
+        String sn = deviceSn.trim();
+        Long gateId = deviceService.list(null).stream()
+                .filter(d -> sn.equals(d.getDeviceSn()))
+                .map(Device::getGateId)
+                .findFirst().orElse(null);
+        return ApiResponse.ok(service.syncDevicePlates(sn, gateId));
     }
 
     /** 直接发一段原始报文（协议探测/联调）。 */

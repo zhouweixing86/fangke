@@ -87,6 +87,8 @@ VEHICLE_MQTT_PLATE_TYPE=1
 | `POST /api/admin/vehicle/mqtt/plate` | 下发/更新车牌：`{deviceSn, plateNo, beginTime, endTime}` |
 | `DELETE /api/admin/vehicle/mqtt/plate?deviceSn=&plateNo=` | 删除车牌 |
 | `POST /api/admin/vehicle/mqtt/raw` | 发原始报文（协议探测） |
+| `POST /api/admin/vehicle/mqtt/open` | 人工远程开闸：`{deviceSn, plateNo?}`（带车牌会记进该人通行记录） |
+| `POST /api/admin/vehicle/mqtt/sync?deviceSn=` | 立即对齐这台相机的车牌（不等定时任务） |
 | `POST /api/admin/vehicle/mqtt/import?gateId=` | 把「员工 + 当天已授权访客」车牌全量推给所有车闸 |
 | `GET /api/admin/vehicle/mqtt/logs?limit=` | 最近上下行报文 |
 | `DELETE /api/admin/vehicle/mqtt/logs` | 清空日志 |
@@ -126,6 +128,10 @@ VEHICLE_MQTT_PLATE_TYPE=1
 - **上行解析**：先找 `data` 里的 `carNO`（协议字段），再兼容 `plateNo/plate/plateNumber/carNo/license`，最后正则兜底；
   解析不到只留痕不报错。相机若开了车牌加密，`carNO` 是密文，日志会提示「车牌已加密」。
 - 协议探测：页面「原始报文」直接发；所有上下行都会写 `vehicle_mqtt_log`（大图截断 20KB）。
+
+> 车牌自动跟随（员工/访客新增、停用、到期）走 `VehicleMqttPlateSyncJob` 定时差分对账，
+> 手动开闸走 `Open`，通行照片存 `vehicle_event.photo_url` —— 详见
+> [23-车闸MQTT标准协议与实机联调.md](./23-车闸MQTT标准协议与实机联调.md) §10。
 
 ## 7. 已验证
 

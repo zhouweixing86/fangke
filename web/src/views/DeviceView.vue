@@ -54,6 +54,7 @@
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">档案</el-button>
           <template v-if="row.channel === 'VEHICLE'">
+            <el-button link type="primary" @click="openVehicleGate(row)">开闸</el-button>
             <el-button link type="primary" @click="openPlates(row)">车牌名单</el-button>
           </template>
           <template v-else>
@@ -392,6 +393,7 @@ import {
   openDeviceDoor,
   syncVehiclePlates,
   updateDevice,
+  vehicleMqttOpen,
   type DeviceCommandStatus,
   type DeviceRemoteInfo
 } from '@/api'
@@ -571,8 +573,31 @@ async function doSyncPlates() {
   }
 }
 
-async function openDoor(row: DeviceView) {
-  await ElMessageBox.confirm(
+/** 车闸相机：人工远程开闸（走 MQTT，不依赖局域网） */
+async function openVehicleGate(row: DeviceView) {
+  const result = await ElMessageBox.prompt(
+    `确认远程打开「${row.deviceName}」的道闸？\n可选：填车牌会按车牌判定并记进该人的通行记录（留空只记一条人工开闸）。`,
+    '远程开闸',
+    {
+      type: 'warning',
+      inputPlaceholder: '车牌号，可留空',
+      inputValue: '',
+      inputValidator: (value: string) =>
+        !value || /^[京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤青藏川宁琼A-Z][A-Z][A-Z0-9]{4,6}$/.test(
+          value.trim().toUpperCase()
+        ) || '车牌格式不对（如 苏A12345）'
+    }
+  )
+  const plate = String((result as { value?: string }).value || '').trim()
+  try {
+    await vehicleMqttOpen(row.deviceSn, plate)
+    ElMessage.success('开闸指令已下发（相机在线即刻抬杆）')
+  } catch (error) {
+    showRemoteError(error)
+  }
+}
+
+async function openDoor(row: DeviceView) {  await ElMessageBox.confirm(
     `确认远程打开「${row.deviceName}」？指令随设备下一次心跳生效（当前心跳间隔 5 秒，最长等一个间隔）。`,
     '远程开门',
     { type: 'warning' }

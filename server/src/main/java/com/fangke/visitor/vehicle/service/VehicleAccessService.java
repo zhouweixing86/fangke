@@ -132,6 +132,21 @@ public class VehicleAccessService {
     public VehicleEvent record(String eventUuid, String deviceSn, Long gateId, String plateNo,
                                int direction, LocalDateTime eventTime, Integer confidence,
                                Decision decision, String photoBase64, String rawJson) {
+        return record(eventUuid, deviceSn, gateId, plateNo, direction, eventTime, confidence,
+                decision, photoBase64, null, rawJson);
+    }
+
+    /**
+     * 落库一条车辆通行记录（含可选抓拍图）。
+     *
+     * @param photoBase64 抓拍图 base64（可空）；存对象存储失败只记日志
+     * @param photoUrl    相机直传的抓拍图外链（如厂商 OSS 地址，可空）
+     * @return 写入后的记录；重复事件返回 null（幂等）
+     */
+    @Transactional
+    public VehicleEvent record(String eventUuid, String deviceSn, Long gateId, String plateNo,
+                               int direction, LocalDateTime eventTime, Integer confidence,
+                               Decision decision, String photoBase64, String photoUrl, String rawJson) {
         String plate = normalize(plateNo);
         String photoKey = savePhoto(plate, eventUuid, photoBase64);
         VehicleEvent event = new VehicleEvent(null, eventUuid, deviceSn, gateId, plate, direction,
@@ -143,7 +158,7 @@ public class VehicleAccessService {
                 decision != null && decision.allowed()
                         ? VehicleEvent.RESULT_PASS : VehicleEvent.RESULT_DENY,
                 decision == null ? null : decision.reason(),
-                photoKey, rawJson);
+                photoKey, photoUrl, rawJson);
         boolean inserted = eventRepository.insertIfAbsent(event);
         if (!inserted) {
             log.debug("车辆事件重复，已忽略 uuid={}", eventUuid);

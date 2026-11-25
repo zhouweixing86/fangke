@@ -18,7 +18,7 @@ public class JdbcVehicleEventRepository implements VehicleEventRepository {
     private static final String SELECT = """
             SELECT id, event_uuid, device_sn, gate_id, plate_no, direction, event_time, confidence,
                    matched_type, matched_id, matched_name, person_no, result_status, fail_reason,
-                   photo_key, raw_json
+                   photo_key, photo_url, raw_json
             FROM vehicle_event
             """;
 
@@ -47,6 +47,7 @@ public class JdbcVehicleEventRepository implements VehicleEventRepository {
                 rs.getInt("result_status"),
                 rs.getString("fail_reason"),
                 rs.getString("photo_key"),
+                rs.getString("photo_url"),
                 rs.getString("raw_json"));
     };
 
@@ -62,8 +63,8 @@ public class JdbcVehicleEventRepository implements VehicleEventRepository {
             var ps = connection.prepareStatement("""
                     INSERT IGNORE INTO vehicle_event (event_uuid, device_sn, gate_id, plate_no, direction,
                         event_time, confidence, matched_type, matched_id, matched_name, person_no,
-                        result_status, fail_reason, photo_key, raw_json)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        result_status, fail_reason, photo_key, photo_url, raw_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """);
             ps.setString(1, e.eventUuid());
             ps.setString(2, e.deviceSn());
@@ -95,7 +96,8 @@ public class JdbcVehicleEventRepository implements VehicleEventRepository {
             ps.setInt(12, e.resultStatus());
             ps.setString(13, e.failReason());
             ps.setString(14, e.photoKey());
-            ps.setString(15, e.rawJson());
+            ps.setString(15, e.photoUrl());
+            ps.setString(16, e.rawJson());
             return ps;
         });
         return rows > 0;

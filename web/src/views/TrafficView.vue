@@ -210,7 +210,9 @@
           <el-table-column prop="plateNo" label="车牌" width="110" />
           <el-table-column label="照片" width="85">
             <template #default="{ row }">
-              <el-button v-if="row.eventId" link type="primary" @click="showMedia(row)">查看</el-button>
+              <el-image v-if="row.photoUrl" :src="row.photoUrl" :preview-src-list="[row.photoUrl]"
+                fit="cover" style="width: 44px; height: 32px" preview-teleported />
+              <el-button v-else-if="row.eventId" link type="primary" @click="showMedia(row)">查看</el-button>
               <span v-else class="text-muted">-</span>
             </template>
           </el-table-column>

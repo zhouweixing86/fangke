@@ -233,6 +233,14 @@ export const vehicleMqttEnableReply = (deviceSn: string) =>
   post<Record<string, unknown>>(
     `/admin/vehicle/mqtt/enable-reply?deviceSn=${encodeURIComponent(deviceSn)}`
   )
+/** 人工远程开闸（车闸相机，走 MQTT）；带车牌会记进该人的通行记录 */
+export const vehicleMqttOpen = (deviceSn: string, plateNo?: string) =>
+  post<Record<string, unknown>>('/admin/vehicle/mqtt/open', { deviceSn, plateNo })
+/** 立即对齐某台相机车牌（不等定时对账） */
+export const vehicleMqttSync = (deviceSn: string) =>
+  post<Record<string, unknown>>(
+    `/admin/vehicle/mqtt/sync?deviceSn=${encodeURIComponent(deviceSn)}`
+  )
 /** 全量对齐：把平台当前车牌推给所有车闸相机 */
 export const vehicleMqttImport = (gateId?: number) =>
   post<{ plateTotal: number; devices: unknown[] }>('/admin/vehicle/mqtt/import', undefined, gateId ? { gateId } : undefined)

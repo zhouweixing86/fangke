@@ -149,6 +149,9 @@ fangke:
       publish-timeout-ms: ${VEHICLE_MQTT_PUBLISH_TIMEOUT_MS:5000}
       # 看门狗间隔（毫秒）：未连接时兜底重建
       watchdog-ms: ${VEHICLE_MQTT_WATCHDOG_MS:30000}
+      # 车牌自动对账间隔（毫秒）：员工/访客车牌变化、停用、到期都在这一轮跟上
+      sync-ms: ${VEHICLE_MQTT_SYNC_MS:20000}
+      sync-initial-delay-ms: ${VEHICLE_MQTT_SYNC_INITIAL_DELAY_MS:25000}
 
   storage:
     # 照片存对象存储（S3 兼容）。默认指向内网 MinIO —— 照片不出园区。
