@@ -256,8 +256,12 @@ public class AppAuthService {
                     .readTree(body);
             String openid = node.path("openid").asText("");
             if (openid.isBlank()) {
-                throw new BusinessException(ErrorCode.THIRD_PARTY_ERROR,
-                        "微信登录失败：" + node.path("errmsg").asText(body));
+                int errcode = node.path("errcode").asInt(0);
+                // 40029/40163：code 无效或已被使用（一次性），提示重试即可
+                String reason = (errcode == 40029 || errcode == 40163)
+                        ? "微信登录凭证已失效，请重新进入小程序重试"
+                        : node.path("errmsg").asText(body);
+                throw new BusinessException(ErrorCode.THIRD_PARTY_ERROR, "微信登录失败：" + reason);
             }
             return openid;
         } catch (BusinessException e) {

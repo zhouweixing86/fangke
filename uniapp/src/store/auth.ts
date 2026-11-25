@@ -136,17 +136,20 @@ export function requireLogin(kind: AuthKind = 'APP') {
 /* ---------------- 微信登录辅助 ---------------- */
 
 const WX_CODE_KEY = 'fk_wx_code'
+const WX_MOCK_KEY = 'fk_wx_mock'
 
 /**
- * 取一次微信登录 code，优先复用缓存。
+ * 取一次微信登录 code。
  *
- * <p>mock 联调时后端把 code 当 openid，而 `wx.login` 每次返回的 code 都不同——
- * 每次都重新取会让 openid 变化，导致"首次预约绑定"失效、「我的预约」查不到自己的单。
- * 因此缓存复用；真实模式下 code 是一次性的，不能复用，
- * 所以只在后端返回 `mock=true` 时才写缓存（见 cacheWxCode 的调用方）。
+ * <p><b>mock 联调</b>：后端把 code 当 openid，而 `wx.login` 每次返回的 code 都不同，
+ * 每次都重新取会让 openid 变化，所以 mock 下复用缓存（见 cacheWxCode）。
+ *
+ * <p><b>真实模式</b>：code 一次性且 5 分钟过期，**绝不能复用**，否则后端会报
+ * `invalid code`（40029）。因此只有明确标记过 mock 时才读缓存，其余每次都重新 wx.login。
  */
 export function requestWxCode(): Promise<string> {
-  const cached = uni.getStorageSync(WX_CODE_KEY)
+  const isMock = uni.getStorageSync(WX_MOCK_KEY) === true
+  const cached = isMock ? uni.getStorageSync(WX_CODE_KEY) : ''
   if (cached) return Promise.resolve(cached as string)
   return new Promise<string>((resolve, reject) => {
     uni.login({
@@ -157,12 +160,41 @@ export function requestWxCode(): Promise<string> {
   })
 }
 
-/** 仅 mock 模式调用：记住 code，让后续登录拿到同一个 openid。 */
-export function cacheWxCode(code: string) {
-  uni.setStorageSync(WX_CODE_KEY, code)
+/** 后端返回 mock=true 时才记住 code（真实模式的 code 一次性，不能复用）。 */
+export function cacheWxCode(code: string, mock = false) {
+  if (mock) {
+    uni.setStorageSync(WX_CODE_KEY, code)
+    uni.setStorageSync(WX_MOCK_KEY, true)
+  } else {
+    clearWxCode()
+  }
 }
 
 /** 换真机/换微信时清掉，避免身份串号。 */
 export function clearWxCode() {
   uni.removeStorageSync(WX_CODE_KEY)
+  uni.removeStorageSync(WX_MOCK_KEY)
+}
+
+/**
+ * 用一次性 code 调后端；遇到 `invalid code`（40029/40163）自动换新 code 重试一次。
+ *
+ * <p>真机上 code 只能用一次，超时、重复提交、或旧版本残留的缓存 code 都会导致这个错误，
+ * 重试比让用户重进页面体验更好。
+ */
+export async function withFreshWxCode<T>(
+  call: (code: string) => Promise<T>
+): Promise<{ result: T; code: string }> {
+  let code = await requestWxCode()
+  try {
+    return { result: await call(code), code }
+  } catch (e: any) {
+    const message = String(e?.message || '')
+    if (!/invalid code|40029|40163/i.test(message)) {
+      throw e
+    }
+    clearWxCode()
+    code = await requestWxCode()
+    return { result: await call(code), code }
+  }
 }

@@ -35,7 +35,7 @@
 import { computed, reactive, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { bindPreview, bindRole } from '@/api'
-import { applyWxLogin, cacheWxCode, requestWxCode } from '@/store/auth'
+import { applyWxLogin, withFreshWxCode, cacheWxCode } from '@/store/auth'
 import { showToast } from '@/utils/ui'
 
 const token = ref('')
@@ -70,16 +70,17 @@ async function submit() {
   if (!/^1\d{10}$/.test(form.phone.trim())) return showToast('请填写正确的手机号')
   submitting.value = true
   try {
-    const code = await requestWxCode()
-    const result = await bindRole({
-      token: token.value,
-      wxCode: code,
-      name: form.name.trim(),
-      phone: form.phone.trim()
-    })
+    const { result, code } = await withFreshWxCode((c) =>
+      bindRole({
+        token: token.value,
+        wxCode: c,
+        name: form.name.trim(),
+        phone: form.phone.trim()
+      })
+    )
     applyWxLogin(result.login)
-    // mock 模式 openid 由 code 派生，缓存后保持身份稳定
-    cacheWxCode(code)
+    // mock 模式才缓存 code（真实模式 code 一次性，缓存会导致下次 invalid code）
+    cacheWxCode(code, !!result.login?.mock)
     bindRoles.value = result.roles
     done.value = true
   } finally {

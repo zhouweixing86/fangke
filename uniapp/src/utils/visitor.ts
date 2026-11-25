@@ -1,5 +1,5 @@
 import { wxLogin } from '@/api'
-import { applyWxLogin, auth, cacheWxCode, requestWxCode } from '@/store/auth'
+import { applyWxLogin, auth, cacheWxCode, withFreshWxCode } from '@/store/auth'
 
 /**
  * 确保拿到「可用的访客登录态」。
@@ -17,11 +17,10 @@ export async function ensureVisitorLogin(force = false): Promise<void> {
   if (!force && usable) {
     return
   }
-  const code = await requestWxCode()
-  const result = await wxLogin(code)
+  const { result, code } = await withFreshWxCode((c) => wxLogin(c))
   applyWxLogin(result)
   // mock 模式下 openid 由 code 派生，必须复用同一个 code 才能保持身份稳定
-  if (result.mock) cacheWxCode(code)
+  cacheWxCode(code, !!result.mock)
 }
 
 /**
