@@ -64,11 +64,11 @@ public class DeviceOpenApiController {
         if (!verify(body, rawText, "heartBeat")) {
             return fail("签名错误");
         }
-        Device device = service.resolveOrRegister(deviceNo, request.getRemoteAddr());
+        Device device = service.resolveOrRegister(deviceNo, clientIp(request));
         if (device == null) {
             return fail("缺少 deviceno");
         }
-        service.touchHeartbeat(device, request.getRemoteAddr());
+        service.touchHeartbeat(device, clientIp(request));
         service.bindMac(device, text(body, "mac"));
         result.put("code", 0);
         result.put("msg", "成功");
@@ -234,7 +234,7 @@ public class DeviceOpenApiController {
                                                   HttpServletRequest request) {
         JsonNode body = parse(rawText);
         String deviceNo = text(body, "deviceno");
-        Device device = service.resolveOrRegister(deviceNo, request.getRemoteAddr());
+        Device device = service.resolveOrRegister(deviceNo, clientIp(request));
         if (device == null) {
             return fail("缺少 deviceno");
         }
@@ -260,9 +260,9 @@ public class DeviceOpenApiController {
                                           HttpServletRequest request) {
         JsonNode body = parse(rawText);
         String deviceNo = firstNonBlank(text(body, "deviceno"), text(body, "sn"), text(body, "deviceSn"));
-        Device device = service.resolveOrRegister(deviceNo, request.getRemoteAddr());
+        Device device = service.resolveOrRegister(deviceNo, clientIp(request));
         String code = extractQrCode(rawText, body, request);
-        log.info("二维码推送 device={} code={} from={} raw={}", deviceNo, code, request.getRemoteAddr(),
+        log.info("二维码推送 device={} code={} from={} raw={}", deviceNo, code, clientIp(request),
                 rawText == null ? "null" : rawText.substring(0, Math.min(300, rawText.length())));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("actionName", "qrCodePush");
@@ -373,6 +373,23 @@ public class DeviceOpenApiController {
         }
     }
 
+
+    /** 真实客户端 IP：云端经 nginx 反代，getRemoteAddr() 会是 127.0.0.1，优先取 X-Forwarded-For / X-Real-IP。 */
+    static String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            int comma = forwarded.indexOf(',');
+            String first = (comma < 0 ? forwarded : forwarded.substring(0, comma)).trim();
+            if (!first.isEmpty()) {
+                return first;
+            }
+        }
+        String real = request.getHeader("X-Real-IP");
+        if (real != null && !real.isBlank()) {
+            return real.trim();
+        }
+        return request.getRemoteAddr();
+    }
     private String text(JsonNode node, String field) {
         if (node == null) {
             return null;
