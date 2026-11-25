@@ -147,6 +147,62 @@ export const deviceRemoteRestore = (id: number) =>
 export const deviceRemoteDeletePerson = (id: number, data: { idno: string; usertype?: string }) =>
   post<Record<string, unknown>>(`/admin/device/${id}/remote/person/delete`, data)
 
+/* ---------------- 设备心跳下发（云端可用，延迟一个心跳周期） ---------------- */
+
+export interface DeviceCommandRow {
+  id: number
+  cmdType: string
+  cmdText: string
+  status: number
+  statusText: string
+  retryCount: number
+  errorMsg: string
+  createdAt: string
+  finishedAt: string
+}
+
+export interface DeviceCommandStatus {
+  deviceId: number
+  deviceSn: string
+  online: boolean
+  lastHeartbeat: string
+  heartSeconds: number
+  pending: number
+  /** 平台期望的设备开关（0/1），不是从设备读回的实时值 */
+  overrides: Record<string, number>
+  allowedParams: string[]
+  /** 平台下发给设备的二维码核验地址（为空表示没配公网地址） */
+  qrPushUrl?: string
+  commands: DeviceCommandRow[]
+}
+
+export interface DeviceCommandResult {
+  deviceSn: string
+  cmdType: string
+  cmdText: string
+  queued: boolean
+  pending: number
+  queuedAt: string
+  hint: string
+  overrides?: Record<string, number>
+  qrPushUrl?: string
+  thirdOpenDoorLocal?: number
+}
+
+/** 心跳下发总览：在线、待执行数、平台期望参数、最近指令结果 */
+export const deviceCmdStatus = (id: number) => get<DeviceCommandStatus>(`/admin/device/${id}/cmd`)
+export const deviceCmdOpen = (id: number) => post<DeviceCommandResult>(`/admin/device/${id}/cmd/open`)
+export const deviceCmdSyncTime = (id: number) =>
+  post<DeviceCommandResult>(`/admin/device/${id}/cmd/sync-time`)
+export const deviceCmdSyncParams = (id: number) =>
+  post<DeviceCommandResult>(`/admin/device/${id}/cmd/sync-params`)
+/** 二维码核验接线：参数下发里带上 thirdQrUrl（云端也能用） */
+export const deviceCmdQrConfig = (id: number) =>
+  post<DeviceCommandResult>(`/admin/device/${id}/cmd/qr-config`)
+/** 改安全开关：存平台期望值 + 排队一次参数下发 */
+export const deviceCmdSetParams = (id: number, data: Record<string, boolean>) =>
+  post<DeviceCommandResult>(`/admin/device/${id}/cmd/params`, data)
+
 /* ---------------- 员工 ---------------- */
 
 export const listDepts = () => get<DeptView[]>('/admin/dept')

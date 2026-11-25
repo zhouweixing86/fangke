@@ -140,6 +140,14 @@ public class InMemoryDeviceRepository implements DeviceRepository {
     }
 
     @Override
+    public void updateParamOverrides(Long deviceId, String json) {
+        devices.values().stream()
+                .filter(d -> deviceId.equals(d.getId()))
+                .findFirst()
+                .ifPresent(d -> d.setParamOverrides(json));
+    }
+
+    @Override
     public int countByGate(Long gateId) {
         return (int) devices.values().stream()
                 .filter(d -> gateId.equals(d.getGateId()) && d.getStatus() == 1)

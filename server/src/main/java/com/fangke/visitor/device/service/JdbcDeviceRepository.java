@@ -48,6 +48,7 @@ public class JdbcDeviceRepository implements DeviceRepository {
             d.setStatus(rs.getInt("status"));
             d.setCapabilityJson(rs.getString("capability"));
             d.setRemark(rs.getString("remark"));
+            d.setParamOverrides(rs.getString("param_overrides"));
             return d;
         }
 
@@ -66,7 +67,7 @@ public class JdbcDeviceRepository implements DeviceRepository {
 
     private static final String SELECT = "SELECT id, device_sn, mac, device_name, model, firmware, gate_id, "
             + "direction, channel, ip, port, api_password, capability, online_state, last_heartbeat, "
-            + "person_count, capacity, status, remark "
+            + "person_count, capacity, status, remark, param_overrides "
             + "FROM device ";
 
     private final JdbcTemplate jdbc;
@@ -226,6 +227,11 @@ public class JdbcDeviceRepository implements DeviceRepository {
             return;
         }
         jdbc.update("UPDATE device SET channel = ? WHERE id = ?", channel.name(), deviceId);
+    }
+
+    @Override
+    public void updateParamOverrides(Long deviceId, String json) {
+        jdbc.update("UPDATE device SET param_overrides = ? WHERE id = ?", json, deviceId);
     }
 
     @Override

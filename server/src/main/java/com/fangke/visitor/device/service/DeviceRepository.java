@@ -82,6 +82,15 @@ public interface DeviceRepository {
     /** 改通道（人行终端 ↔ 车闸相机）：单独管理时用来纠正误登记的类型。 */
     void updateChannel(Long deviceId, Device.Channel channel);
 
+    /**
+     * 保存「平台期望的设备参数」（白名单键的 0/1 值，JSON）。
+     *
+     * <p>轮询式设备不能被直连，改参数只能靠心跳来拉 {@code syncDeviceParameter} 时下发，
+     * 所以这里必须持久化，否则队列里只有一条「去拉参数」的指令、内容却是空的。
+     */
+    default void updateParamOverrides(Long deviceId, String json) {
+    }
+
     /** 门点下的设备数量（门点停用前要先清空，避免设备无门可投递）。 */
     int countByGate(Long gateId);
 

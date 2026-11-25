@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fangke.visitor.config.AppProperties;
 import com.fangke.visitor.device.model.Device;
+import com.fangke.visitor.device.service.DeviceParamOverrides;
 import com.fangke.visitor.qr.service.QrTicketService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -181,6 +182,12 @@ public class DeviceOpenApiController {
         if (!verify(body, rawText, "syncDeviceTime")) {
             return fail("签名错误");
         }
+        // 设备按心跳 action=syncDeviceTime 回来取时间；收到就算这次校时指令完成，
+        // 否则队列里的 SYNC_TIME 会一直是「执行中」，超时后又重排（管理端看起来永远没做完）。
+        Device device = service.resolveOrRegister(text(body, "deviceno"), null);
+        if (device != null) {
+            service.completeSimpleCommand(device.getId(), PullCommandRepository.TYPE_SYNC_TIME, "设备已取走时间");
+        }
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("time", TIME.format(LocalDateTime.now()));
         Map<String, Object> result = ok("成功");
@@ -222,6 +229,10 @@ public class DeviceOpenApiController {
         data.put("thirdQrUrl", qrPushUrl());
         // 远程开门/校时都靠心跳下发，心跳间隔别太大，否则操作会明显延迟
         data.put("thirdHttpUrl", null);
+        // 平台期望的开关（device.param_overrides，白名单键）最后合并：管理端改了就一定盖掉默认值
+        if (device != null) {
+            DeviceParamOverrides.applyTo(device.getParamOverrides(), data);
+        }
         Map<String, Object> result = ok("成功");
         result.put("data", data);
         return result;

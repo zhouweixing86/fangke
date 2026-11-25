@@ -115,37 +115,94 @@
       </template>
     </el-dialog>
 
-    <!-- 远程管理：平台直连设备 9090 调下行接口 -->
-    <el-dialog v-model="remoteVisible" :title="`远程管理 · ${remoteRow?.deviceName || ''}`" width="760px">
-      <el-alert v-if="remoteInfo && !remoteInfo.reachable" type="warning" :closable="false" show-icon
-        style="margin-bottom: 12px" :title="`当前连不上设备：${remoteInfo.unreachableReason || '未知原因'}`">
-        <template #default>
-          <div class="text-muted" style="margin-top: 4px">
-            远程管理要求平台与设备在同一网络（云端部署时连不通是正常的）。
-            现场调试请用下面的「本地管理」直接打开设备自己的后台。
-          </div>
-        </template>
-      </el-alert>
-
-      <el-descriptions :column="2" border size="small" style="margin-bottom: 12px">
+    <!-- 远程管理：默认走「心跳下发」（云端可用）；直连 9090 只用于同网现场调试 -->
+    <el-dialog v-model="remoteVisible" :title="`远程管理 · ${remoteRow?.deviceName || ''}`" width="820px">
+      <el-descriptions :column="4" border size="small" style="margin-bottom: 12px">
         <el-descriptions-item label="设备 SN">{{ remoteRow?.deviceSn }}</el-descriptions-item>
-        <el-descriptions-item label="设备 IP">{{ remoteInfo?.ip || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="本地后台" :span="2">
-          <span class="mono">{{ remoteInfo?.localAdminUrl }}</span>
-          <el-button link type="primary" style="margin-left: 8px" @click="openLocal(remoteRow!)">
-            打开
-          </el-button>
-          <span class="text-muted" style="margin-left: 8px">账号 admin / 设备密码</span>
+        <el-descriptions-item label="内网 IP">{{ remoteRow?.ip || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="心跳">
+          <el-tag size="small" :type="cmdStatus?.online ? 'success' : 'danger'">
+            {{ cmdStatus?.online ? '在线' : '无心跳' }}
+          </el-tag>
+          <span class="text-muted" style="margin-left: 6px">{{ cmdStatus?.lastHeartbeat || '-' }}</span>
         </el-descriptions-item>
+        <el-descriptions-item label="待执行指令">{{ cmdStatus?.pending ?? 0 }}</el-descriptions-item>
       </el-descriptions>
 
+      <el-alert v-if="cmdStatus && !cmdStatus.online" type="warning" :closable="false" show-icon
+        style="margin-bottom: 12px"
+        title="设备当前没有心跳：心跳下发的指令会留在队列里，设备联网后自动取走执行。" />
+
       <el-tabs v-model="remoteTab">
-        <el-tab-pane label="常用操作" name="actions">
+        <el-tab-pane label="心跳下发" name="queue">
+          <div class="text-muted" style="margin-bottom: 8px">
+            指令入队 → 设备下一次心跳（≤{{ cmdStatus?.heartSeconds || 5 }} 秒）取走执行。
+            这条通道不要求平台能连到设备，云端部署、设备在客户内网都能用。
+          </div>
           <div class="remote-grid">
-            <el-button type="primary" :loading="remoteBusy === 'open'" @click="doRemoteOpen">
-              立即开闸
-            </el-button>
-            <el-button :loading="remoteBusy === 'time'" @click="doSyncTime">同步设备时间</el-button>
+            <el-button type="primary" :loading="cmdBusy === 'open'" @click="doCmdOpen">远程开门</el-button>
+            <el-button :loading="cmdBusy === 'time'" @click="doCmdSyncTime">同步设备时间</el-button>
+            <el-button :loading="cmdBusy === 'params'" @click="doCmdSyncParams">下发参数</el-button>
+            <el-button :loading="cmdBusy === 'qr'" @click="doCmdQrConfig">下发二维码核验地址</el-button>
+          </div>
+
+          <el-divider content-position="left">设备开关（平台期望值）</el-divider>
+          <div v-for="(label, key) in switchDefs" :key="key" class="switch-row">
+            <el-switch :model-value="Boolean(overrideOf(key))" :loading="cmdBusy === 'switch'"
+              @change="(v: any) => toggleSwitch(key, Boolean(v))" />
+            <span class="switch-label">{{ label }}</span>
+            <span class="text-muted mono">{{ key }}</span>
+            <span v-if="!hasOverride(key)" class="text-muted">（未设置，跟随平台默认）</span>
+          </div>
+          <div class="text-muted" style="margin-top: 4px">
+            期望值存在平台上，设备每次来拉参数都会套用；设备重启或恢复出厂后重新拉参数依然生效。
+            访客用二维码进闸需要「摄像头扫码」为开启状态。
+          </div>
+
+          <el-divider content-position="left">二维码核验接线</el-divider>
+          <div class="tip-row">
+            <el-button :loading="cmdBusy === 'qr'" @click="doCmdQrConfig">排队下发 thirdQrUrl</el-button>
+            <span class="text-muted mono">{{ cmdStatus?.qrPushUrl || '（未配置平台公网地址）' }}</span>
+          </div>
+          <div class="text-muted" style="margin-top: 4px">
+            未接线时设备扫到平台码只会在本地判定，一律提示「二维码未授权」。
+          </div>
+
+          <el-divider content-position="left">最近下发</el-divider>
+          <el-table :data="cmdStatus?.commands || []" size="small" border max-height="220">
+            <el-table-column prop="createdAt" label="入队时间" width="160" />
+            <el-table-column prop="cmdText" label="指令" width="110" />
+            <el-table-column label="状态" width="90">
+              <template #default="{ row }">
+                <el-tag size="small" :type="row.status === 2 ? 'success'
+                  : row.status === 3 || row.status === 4 ? 'danger' : 'info'">
+                  {{ row.statusText }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="retryCount" label="重试" width="70" />
+            <el-table-column prop="errorMsg" label="错误" show-overflow-tooltip />
+          </el-table>
+          <div class="toolbar" style="margin-top: 8px">
+            <el-button size="small" :icon="Refresh" @click="loadCmdStatus">刷新队列</el-button>
+            <span class="spacer" />
+            <span class="text-muted mono">本地后台 {{ remoteInfo?.localAdminUrl || '（先填设备内网 IP）' }}</span>
+            <el-button link type="primary" @click="openLocal(remoteRow!)">打开本地管理</el-button>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="直连调试（需同网）" name="direct">
+          <el-alert v-if="remoteInfo && !remoteInfo.reachable" type="warning" :closable="false" show-icon
+            style="margin-bottom: 12px" :title="`当前连不上设备：${remoteInfo.unreachableReason || '未知原因'}`">
+            <template #default>
+              <div class="text-muted" style="margin-top: 4px">
+                直连是「平台主动 POST 设备 9090」，要求平台与设备同网——云端部署必然不通，这是网络位置决定的。
+                云端可用的功能都在「心跳下发」页签。
+              </div>
+            </template>
+          </el-alert>
+          <div class="remote-grid">
+            <el-button :loading="remoteBusy === 'open'" @click="doRemoteOpen">立即开闸（直连）</el-button>
             <el-button :loading="remoteBusy === 'snapshot'" @click="doSnapshot">抓拍现场</el-button>
             <el-button :loading="remoteBusy === 'reboot'" type="warning" @click="doReboot">重启设备</el-button>
           </div>
@@ -169,26 +226,6 @@
             <el-button :loading="remoteBusy === 'hold'" @click="doGateHold(false)">关闭常开</el-button>
           </div>
 
-          <el-divider content-position="left">常用开关</el-divider>
-          <div v-for="(label, key) in switchDefs" :key="key" class="switch-row">
-            <el-switch :model-value="Boolean(switchStates[key])" :loading="remoteBusy === 'switch'"
-              @change="(v: any) => toggleSwitch(key, Boolean(v))" />
-            <span class="switch-label">{{ label }}</span>
-            <span class="text-muted mono">{{ key }}</span>
-          </div>
-          <div class="text-muted" style="margin-top: 4px">
-            访客用二维码进闸需要「摄像头扫码」为开启状态。其余参数请在「本地管理」里修改。
-          </div>
-
-          <el-divider content-position="left">二维码核验接线</el-divider>
-          <div class="tip-row">
-            <el-button :loading="remoteBusy === 'qr'" @click="doApplyQrConfig">应用二维码核验地址</el-button>
-            <span class="text-muted mono">thirdQrUrl = {{ qrPushUrlOfDevice || '（空）' }}</span>
-          </div>
-          <div class="text-muted" style="margin-top: 4px">
-            设备扫到码必须回来问平台才能放行；这里为空时设备只在本地判定，扫码一律提示「二维码未授权」。
-          </div>
-
           <el-divider content-position="left">名单清理</el-divider>
           <div class="tip-row">
             <el-input v-model="cleanIdno" placeholder="身份证号 / 人员编号" maxlength="18" style="width: 230px" />
@@ -209,9 +246,12 @@
           <span class="text-muted" style="margin-left: 8px">
             会清空设备侧全部参数（含平台地址），需要重新配置设备才能再接入
           </span>
+
+          <el-alert type="info" :closable="false" show-icon style="margin-top: 12px"
+            title="这一页的能力设备没有上行通道，只能直连 9090；云端部署请到现场用「本地管理」。开关、二维码接线、校时、开门都在「心跳下发」页签。" />
         </el-tab-pane>
 
-        <el-tab-pane label="设备状态" name="status">
+        <el-tab-pane label="设备状态（直连）" name="status">
           <div class="toolbar">
             <el-button size="small" :icon="Refresh" @click="loadRemoteStatus">重新读取</el-button>
           </div>
@@ -226,10 +266,10 @@
           <pre class="remote-pre">{{ prettyRunInfo }}</pre>
         </el-tab-pane>
 
-        <el-tab-pane label="设备参数" name="params">
+        <el-tab-pane label="设备参数（直连）" name="params">
           <div class="toolbar">
             <el-button size="small" :icon="Refresh" @click="loadRemoteParams">读取参数</el-button>
-            <span class="text-muted">只读展示；修改请在「本地管理」里操作，避免误改导致设备失联</span>
+            <span class="text-muted">只读展示；改开关请回「心跳下发」，其余参数请在「本地管理」里操作</span>
           </div>
           <pre class="remote-pre">{{ prettyParams }}</pre>
         </el-tab-pane>
@@ -298,6 +338,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import {
   deleteDevice,
+  deviceCmdOpen,
+  deviceCmdQrConfig,
+  deviceCmdSetParams,
+  deviceCmdStatus,
+  deviceCmdSyncParams,
+  deviceCmdSyncTime,
   deviceRemoteDeletePerson,
   deviceRemoteGateHold,
   deviceRemoteInfo,
@@ -307,9 +353,6 @@ import {
   deviceRemoteRestore,
   deviceRemoteSnapshot,
   deviceRemoteSwitches,
-  deviceRemoteSetSwitches,
-  deviceRemoteApplyQrConfig,
-  deviceRemoteSyncTime,
   deviceRemoteTip,
   getVehiclePlates,
   listDevices,
@@ -317,6 +360,7 @@ import {
   openDeviceDoor,
   syncVehiclePlates,
   updateDevice,
+  type DeviceCommandStatus,
   type DeviceRemoteInfo
 } from '@/api'
 import type {
@@ -469,8 +513,11 @@ async function openDoor(row: DeviceView) {
 const remoteVisible = ref(false)
 const remoteRow = ref<DeviceView | null>(null)
 const remoteInfo = ref<DeviceRemoteInfo | null>(null)
-const remoteTab = ref('actions')
+const remoteTab = ref('queue')
 const remoteBusy = ref('')
+/** 心跳下发（设备来取指令）：队列状态 + 平台期望参数 */
+const cmdStatus = ref<DeviceCommandStatus | null>(null)
+const cmdBusy = ref('')
 const snapshotSrc = ref('')
 const holdMinutes = ref(10)
 const tipForm = ref({ msg: '', color: 0 })
@@ -478,13 +525,14 @@ const remoteVersion = ref<Record<string, unknown>>({})
 const remoteParams = ref<Record<string, unknown>>({})
 /** 可远程切换的开关：key → 中文说明 */
 const switchDefs = ref<Record<string, string>>({})
-/** 开关当前值 */
-const switchStates = ref<Record<string, boolean>>({})
-/** 设备里已配置的二维码核验地址（空 = 没接线，扫码只会本地判定） */
-const qrPushUrlOfDevice = computed(() => String(remoteParams.value.thirdQrUrl || ''))
 /** 名单清理：证件号 + 类型 */
 const cleanIdno = ref('')
 const cleanType = ref('white')
+
+/** 平台期望的开关值（不是从设备读回的实时值） */
+const overrideOf = (key: string) => (cmdStatus.value?.overrides || {})[key] === 1
+const hasOverride = (key: string) =>
+  Object.prototype.hasOwnProperty.call(cmdStatus.value?.overrides || {}, key)
 
 const statusOf = (key: string) => {
   const value = remoteVersion.value[key]
@@ -503,66 +551,123 @@ const prettyParams = computed(() =>
 async function openRemote(row: DeviceView) {
   remoteRow.value = row
   remoteVisible.value = true
-  remoteTab.value = 'actions'
+  remoteTab.value = 'queue'
   remoteInfo.value = null
   remoteVersion.value = {}
   remoteParams.value = {}
   snapshotSrc.value = ''
-  await loadRemoteStatus()
-  await loadRemoteSwitches()
+  cmdStatus.value = null
+  if (cmdRefreshTimer) {
+    window.clearTimeout(cmdRefreshTimer)
+    cmdRefreshTimer = undefined
+  }
+  await Promise.all([loadCmdStatus(), loadSwitchDefs(), loadRemoteStatus()])
 }
 
-/** 读取可切换的开关清单与当前值（设备参数里取 0/1） */
-async function loadRemoteSwitches() {
+/** 心跳下发队列：在线状态、待执行指令、平台期望参数、最近下发结果 */
+async function loadCmdStatus() {
   if (!remoteRow.value) return
   try {
-    const [defs, params] = await Promise.all([
-      deviceRemoteSwitches(remoteRow.value.id),
-      deviceRemoteParameters(remoteRow.value.id)
-    ])
-    switchDefs.value = defs
-    remoteParams.value = params
-    const next: Record<string, boolean> = {}
-    for (const key of Object.keys(defs)) {
-      const raw = params[key]
-      next[key] = raw === 1 || raw === '1' || raw === true
-    }
-    switchStates.value = next
+    cmdStatus.value = await deviceCmdStatus(remoteRow.value.id)
+  } catch (error) {
+    showRemoteError(error)
+  }
+}
+
+/** 指令要等设备下一次心跳才执行；下发后自动再刷一次队列，避免界面停在「待执行」 */
+let cmdRefreshTimer: number | undefined
+function scheduleCmdRefresh() {
+  if (cmdRefreshTimer) window.clearTimeout(cmdRefreshTimer)
+  const delay = ((cmdStatus.value?.heartSeconds || 5) + 2) * 1000
+  cmdRefreshTimer = window.setTimeout(() => { void loadCmdStatus() }, delay)
+}
+
+/** 可切换开关清单（服务端常量，不碰设备） */
+async function loadSwitchDefs() {
+  if (!remoteRow.value) return
+  try {
+    switchDefs.value = await deviceRemoteSwitches(remoteRow.value.id)
   } catch (error) {
     switchDefs.value = {}
     showRemoteError(error)
   }
 }
 
-async function toggleSwitch(key: string, value: boolean) {  if (!remoteRow.value) return
-  remoteBusy.value = 'switch'
+/* ---------------- 心跳下发（云端可用） ---------------- */
+
+async function doCmdOpen() {
+  if (!remoteRow.value) return
+  cmdBusy.value = 'open'
   try {
-    await deviceRemoteSetSwitches(remoteRow.value.id, { [key]: value })
-    switchStates.value = { ...switchStates.value, [key]: value }
-    ElMessage.success(`${switchDefs.value[key] || key} 已${value ? '开启' : '关闭'}`)
+    const res = await deviceCmdOpen(remoteRow.value.id)
+    ElMessage.success(res.hint)
+    await loadCmdStatus()
+    scheduleCmdRefresh()
   } catch (error) {
     showRemoteError(error)
   } finally {
-    remoteBusy.value = ''
+    cmdBusy.value = ''
   }
 }
 
-/** 二维码核验接线：把设备 thirdQrUrl 指到平台（同网立即写，另排队一次参数下发） */
-async function doApplyQrConfig() {
+async function doCmdSyncTime() {
   if (!remoteRow.value) return
-  remoteBusy.value = 'qr'
+  cmdBusy.value = 'time'
   try {
-    const res = await deviceRemoteApplyQrConfig(remoteRow.value.id)
-    if (res.appliedNow) {
-      ElMessage.success('二维码核验地址已写入设备')
-    } else {
-      ElMessage.warning(`设备直连不通，已排队参数下发（${res.appliedNowError || '等待设备心跳'}）`)
-    }
-    await loadRemoteSwitches()
+    const res = await deviceCmdSyncTime(remoteRow.value.id)
+    ElMessage.success(res.hint)
+    await loadCmdStatus()
+    scheduleCmdRefresh()
   } catch (error) {
     showRemoteError(error)
   } finally {
-    remoteBusy.value = ''
+    cmdBusy.value = ''
+  }
+}
+
+async function doCmdSyncParams() {
+  if (!remoteRow.value) return
+  cmdBusy.value = 'params'
+  try {
+    const res = await deviceCmdSyncParams(remoteRow.value.id)
+    ElMessage.success(res.hint)
+    await loadCmdStatus()
+    scheduleCmdRefresh()
+  } catch (error) {
+    showRemoteError(error)
+  } finally {
+    cmdBusy.value = ''
+  }
+}
+
+async function doCmdQrConfig() {
+  if (!remoteRow.value) return
+  cmdBusy.value = 'qr'
+  try {
+    const res = await deviceCmdQrConfig(remoteRow.value.id)
+    ElMessage.success(res.hint)
+    await loadCmdStatus()
+    scheduleCmdRefresh()
+  } catch (error) {
+    showRemoteError(error)
+  } finally {
+    cmdBusy.value = ''
+  }
+}
+
+/** 开关：先存平台期望值，再排队一次参数下发（设备来拉时套用） */
+async function toggleSwitch(key: string, value: boolean) {
+  if (!remoteRow.value) return
+  cmdBusy.value = 'switch'
+  try {
+    const res = await deviceCmdSetParams(remoteRow.value.id, { [key]: value })
+    ElMessage.success(`${switchDefs.value[key] || key} 已${value ? '开启' : '关闭'}，${res.hint}`)
+    await loadCmdStatus()
+    scheduleCmdRefresh()
+  } catch (error) {
+    showRemoteError(error)
+  } finally {
+    cmdBusy.value = ''
   }
 }
 
@@ -601,20 +706,6 @@ async function doRemoteOpen() {
   try {
     await deviceRemoteOpen(remoteRow.value.id)
     ElMessage.success('开闸指令已下发（直连，秒级生效）')
-  } catch (error) {
-    showRemoteError(error)
-  } finally {
-    remoteBusy.value = ''
-  }
-}
-
-async function doSyncTime() {
-  if (!remoteRow.value) return
-  remoteBusy.value = 'time'
-  try {
-    await deviceRemoteSyncTime(remoteRow.value.id)
-    ElMessage.success('设备时间已同步')
-    await loadRemoteStatus()
   } catch (error) {
     showRemoteError(error)
   } finally {

@@ -11,6 +11,7 @@ import com.fangke.visitor.device.gateway.DeviceGateway;
 import com.fangke.visitor.device.model.Device;
 import com.fangke.visitor.device.model.DeviceCapability;
 import com.fangke.visitor.device.service.DeviceCapabilityService;
+import com.fangke.visitor.device.service.DeviceParamOverrides;
 import com.fangke.visitor.device.service.DeviceRepository;
 import com.fangke.visitor.gate.service.GateService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -212,6 +213,9 @@ public class DeviceAdminController {
         view.put("personCount", d.getPersonCount() == null ? 0 : d.getPersonCount());
         view.put("capacity", d.getCapacity() == null ? 0 : d.getCapacity());
         view.put("remark", nullSafe(d.getRemark()));
+        view.put("heartSeconds", Math.max(5, props.getDevice().getPullHeartSeconds()));
+        // 平台期望的设备开关（心跳下发用）；不是从设备读回来的实时值
+        view.put("paramOverrides", DeviceParamOverrides.parse(d.getParamOverrides()));
         return view;
     }
 

@@ -132,6 +132,15 @@ sign = MD5( 除 data/sign 外所有顶层字段按字段名ASCII升序拼 key=va
 | `thirdQrUrl` | `{pull-public-base-url}/openapi/v1/qrCodePush` | 不配这个，二维码就走不到平台 |
 | `recogModeDB/IC/ID` | `1` | 启用人脸/刷卡/人证 |
 
+**平台期望值覆盖（C-85）**：上述字段之外，响应体最后合并 `device.param_overrides`（JSON，白名单键）：
+`videoScanQRcode` / `QROpenEnable` / `PasswordOpenEnable` / `thirdOpenDoorLocal`。
+管理端「远程管理 → 心跳下发 → 设备开关」改的就是这份期望值（`POST /api/admin/device/{id}/cmd/params`），
+改完自动排一次 `PARAM_SYNC`；期望值持久化，设备重启、恢复出厂后重新拉参数依然套用。
+白名单外的键（`thirdHttpUrl`、IP、识别阈值…）一律拒绝，避免改错失联。
+
+> 校时同理：心跳 action `syncDeviceTime` 只是让设备回来取时间，设备随后 POST `/openapi/v1/syncDeviceTime`，
+> 平台在该请求里把队列的 `SYNC_TIME` 置成功（**不是**下发即完成），否则管理端会一直看到「执行中」。
+
 > `thirdHttpUrl`/`thirdHttpkey` 也可远程改，但**先手工在设备上配好指向本平台**，避免远程改错后失联。
 
 ---

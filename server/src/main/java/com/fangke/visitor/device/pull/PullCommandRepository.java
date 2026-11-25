@@ -23,6 +23,11 @@ public interface PullCommandRepository {
     record Row(Long id, String cmdType, Integer priority, String payload, int retryCount) {
     }
 
+    /** 指令台账（管理端观察「心跳下发」是否生效）；status 见 device_cmd 注释。 */
+    record HistoryRow(Long id, String cmdType, int status, int retryCount, String errorMsg,
+                      LocalDateTime createdAt, LocalDateTime startedAt, LocalDateTime finishedAt) {
+    }
+
     /** 入队；同设备同类型同 personNo 的未完成指令去重（避免重复刷名单）。 */
     long enqueue(Long deviceId, String cmdType, int priority, String payload, Long batchId);
 
@@ -54,6 +59,11 @@ public interface PullCommandRepository {
 
     /** 待执行指令数（看板/告警用）。 */
     long countPending(Long deviceId);
+
+    /** 某台设备最近下发的指令（新→旧），用于管理端展示心跳下发结果。 */
+    default List<HistoryRow> listRecent(Long deviceId, int limit) {
+        return List.of();
+    }
 
     Optional<Row> findById(Long id);
 }

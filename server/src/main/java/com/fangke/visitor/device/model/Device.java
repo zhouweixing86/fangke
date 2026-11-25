@@ -53,6 +53,11 @@ public class Device {
     private String capabilityJson;
     /** 备注：现场补的位置说明（如「A 栋东侧门内侧」）。 */
     private String remark;
+    /**
+     * 平台期望的设备参数覆盖（JSON，白名单键）。心跳来拉 {@code syncDeviceParameter} 时合并下发，
+     * 是「云端也能改设备参数」的唯一持久化位置（{@link com.fangke.visitor.device.service.DeviceParamOverrides}）。
+     */
+    private String paramOverrides;
 
     /**
      * 是否"真在线"：{@code online_state} 只会被心跳置 1、没有任务置回 0，
@@ -216,6 +221,14 @@ public class Device {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public String getParamOverrides() {
+        return paramOverrides;
+    }
+
+    public void setParamOverrides(String paramOverrides) {
+        this.paramOverrides = paramOverrides;
     }
 
     public String baseUrl() {

@@ -164,6 +164,24 @@ public class JdbcPullCommandRepository implements PullCommandRepository {
                 MAPPER_ROW, id).stream().findFirst();
     }
 
+    @Override
+    public List<HistoryRow> listRecent(Long deviceId, int limit) {
+        return jdbc.query("""
+                        SELECT id, cmd_type, status, retry_count, error_msg, created_at, started_at, finished_at
+                        FROM device_cmd WHERE device_id = ?
+                        ORDER BY id DESC LIMIT ?
+                        """,
+                (rs, rowNum) -> new HistoryRow(rs.getLong("id"), rs.getString("cmd_type"), rs.getInt("status"),
+                        rs.getInt("retry_count"), rs.getString("error_msg"),
+                        toLocal(rs.getTimestamp("created_at")), toLocal(rs.getTimestamp("started_at")),
+                        toLocal(rs.getTimestamp("finished_at"))),
+                deviceId, Math.max(1, limit));
+    }
+
+    private static LocalDateTime toLocal(Timestamp ts) {
+        return ts == null ? null : ts.toLocalDateTime();
+    }
+
     private String personNoOf(String payload) {
         if (payload == null || payload.isBlank()) {
             return null;
