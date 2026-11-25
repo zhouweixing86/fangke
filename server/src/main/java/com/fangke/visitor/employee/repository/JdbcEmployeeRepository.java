@@ -76,8 +76,15 @@ public class JdbcEmployeeRepository implements EmployeeRepository {
     }
 
     @Override
-    public long insert(Employee e) {
-        KeyHolder keyHolder = new GeneratedKeyHolder();
+    public long nextPersonSeq() {
+        Long max = jdbc.queryForObject(
+                "SELECT COALESCE(MAX(CAST(SUBSTRING(person_no, 2) AS UNSIGNED)), 0) FROM employee "
+                        + "WHERE person_no REGEXP '^E[0-9]+$'", Long.class);
+        return (max == null ? 0L : max) + 1L;
+    }
+
+    @Override
+    public long insert(Employee e) {        KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbc.update(connection -> {
             PreparedStatement ps = connection.prepareStatement("""
                     INSERT INTO employee (person_no, emp_no, name, dept_id, leader_id, title,

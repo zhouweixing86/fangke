@@ -50,6 +50,13 @@ public class Employee {
     private LocalDateTime updatedAt;
 
     /** 业务编号规则：E + 6 位工号（docs/01 §6.2）。 */
+    /**
+     * 按工号里的数字推人员编号。
+     *
+     * @deprecated 不同工号会算出同一个编号（`JS0001` 与 `FINAL001` 都是 `E000001`），
+     *             建档请用 {@code EmployeeRepository.nextPersonSeq()} 全局递增取号。
+     */
+    @Deprecated
     public static String personNoOf(String empNo) {
         String digits = empNo == null ? "" : empNo.replaceAll("\\D", "");
         if (digits.isEmpty()) {

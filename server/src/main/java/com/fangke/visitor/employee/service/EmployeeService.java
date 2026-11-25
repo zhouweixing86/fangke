@@ -78,7 +78,8 @@ public class EmployeeService {
 
         Employee employee = new Employee();
         employee.setEmpNo(empNo);
-        employee.setPersonNo(Employee.personNoOf(empNo));
+        // 人员编号全局递增（与工号里的数字无关），避免不同工号算出同一个编号撞唯一键
+        employee.setPersonNo(String.format("E%06d", repository.nextPersonSeq()));
         employee.setName(request.name().trim());
         requireDept(request.deptId());
         employee.setDeptId(request.deptId());
@@ -92,7 +93,19 @@ public class EmployeeService {
         employee.setFaceStatus(Employee.FACE_NONE);
         applySensitiveFields(employee, request.phone(), request.idCard(), null);
 
-        long id = repository.insert(employee);
+        long id;
+        for (int attempt = 0; ; attempt++) {
+            try {
+                id = repository.insert(employee);
+                break;
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                // 并发建档抢到同一个编号：重新取号再试（最多 3 次）
+                if (attempt >= 2) {
+                    throw e;
+                }
+                employee.setPersonNo(String.format("E%06d", repository.nextPersonSeq()));
+            }
+        }
         employee.setId(id);
         log.info("新增员工 empNo={} personNo={} operator={}", empNo, employee.getPersonNo(), operatorId);
         return employee;

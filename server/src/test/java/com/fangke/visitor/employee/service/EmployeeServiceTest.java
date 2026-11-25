@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -50,6 +51,11 @@ class EmployeeServiceTest {
     static class InMemoryEmployeeRepository implements EmployeeRepository {
         final Map<Long, Employee> store = new LinkedHashMap<>();
         final AtomicLong seq = new AtomicLong();
+
+        @Override
+        public long nextPersonSeq() {
+            return store.size() + 1L;
+        }
 
         @Override
         public long insert(Employee e) {
@@ -286,7 +292,7 @@ class EmployeeServiceTest {
     void createEmployee() {
         Employee e = service.create(request("000123", VALID_PHONE, VALID_ID_CARD), 1L);
 
-        assertEquals("E000123", e.getPersonNo());
+        assertEquals("E000001", e.getPersonNo());
         assertEquals("138****8000", e.getPhoneMask());
         assertEquals("110101********4477", e.getIdCardMask());
         assertNotNull(e.getPhoneEnc());
@@ -454,6 +460,17 @@ class EmployeeServiceTest {
         assertEquals(1, result.errors().size());
         assertEquals(3, result.errors().get(0).row());
         assertTrue(result.errors().get(0).message().contains("手机号"));
-        assertEquals("E000201", repo.findByEmpNo("000201").orElseThrow().getPersonNo());
+        assertEquals("E000001", repo.findByEmpNo("000201").orElseThrow().getPersonNo());
+    }
+
+    @Test
+    @DisplayName("工号里的数字相同也不会生成同一个人员编号（原来会撞唯一键，建档直接失败）")
+    void personNoIsUniqueForSimilarEmpNos() {
+        Employee a = service.create(request("JS0001", VALID_PHONE, VALID_ID_CARD), 1L);
+        Employee b = service.create(request("FINAL001", "13900000002", null), 1L);
+
+        assertNotEquals(a.getPersonNo(), b.getPersonNo(), "不同工号必须拿到不同人员编号");
+        assertTrue(a.getPersonNo().matches("E\\d{6}"));
+        assertTrue(b.getPersonNo().matches("E\\d{6}"));
     }
 }

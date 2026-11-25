@@ -77,6 +77,16 @@ public interface EmployeeRepository {
     }
 
     /**
+     * 下一个可用的人员编号序号：取 `person_no` 里 E 后面的最大数字 + 1。
+     *
+     * <p>原来按「工号里的数字」生成人员编号，`JS0001` 和 `FINAL001` 都会算出 `E000001`，
+     * 第二个建档直接撞唯一键失败（前端只看到「数据不符合要求」）。改成全局递增，与工号无关。
+     */
+    default long nextPersonSeq() {
+        return 1L;
+    }
+
+    /**
      * 全部填了车牌的在职员工（车闸车牌白名单来源之一，docs/18）。
      *
      * <p>默认返回空，方便测试替身只实现自己关心的方法；生产实现见 JdbcEmployeeRepository。
