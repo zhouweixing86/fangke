@@ -3,6 +3,7 @@ package com.fangke.visitor.employee.service;
 import com.fangke.visitor.common.BusinessException;
 import com.fangke.visitor.common.ErrorCode;
 import com.fangke.visitor.common.PageResult;
+import com.fangke.visitor.common.PlateNo;
 import com.fangke.visitor.employee.dto.EmployeeRequest;
 import com.fangke.visitor.employee.dto.EmployeeView;
 import com.fangke.visitor.employee.dto.ImportResult;
@@ -83,7 +84,7 @@ public class EmployeeService {
         employee.setDeptId(request.deptId());
         employee.setLeaderId(request.leaderId());
         employee.setTitle(trimToNull(request.title()));
-        employee.setPlateNo(request.plateNo());
+        employee.setPlateNo(normalizePlate(request.plateNo()));
         employee.setValidFrom(request.validFrom());
         employee.setValidTo(request.validTo());
         employee.setRemark(trimToNull(request.remark()));
@@ -106,7 +107,7 @@ public class EmployeeService {
         employee.setDeptId(request.deptId());
         employee.setLeaderId(request.leaderId());
         employee.setTitle(trimToNull(request.title()));
-        employee.setPlateNo(request.plateNo());
+        employee.setPlateNo(normalizePlate(request.plateNo()));
         employee.setValidFrom(request.validFrom());
         employee.setValidTo(request.validTo());
         employee.setRemark(trimToNull(request.remark()));
@@ -323,6 +324,19 @@ public class EmployeeService {
 
     private String trimToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /**
+     * 车牌统一成相机口径（大写、去空格）并校验长度。
+     *
+     * <p>否则员工存 {@code 苏a 12345}、相机读到 {@code 苏A12345}，按字符串比对永远匹配不上。
+     */
+    private static String normalizePlate(String plateNo) {
+        String value = PlateNo.normalizeToNull(plateNo);
+        if (value != null && value.length() > PlateNo.MAX_LENGTH) {
+            throw new BusinessException(ErrorCode.PARAM_TOO_LONG, "车牌号最多 " + PlateNo.MAX_LENGTH + " 个字符");
+        }
+        return value;
     }
 
     /** 部门必须存在，否则员工会挂到一个已删除/不存在的部门上。 */

@@ -27,7 +27,15 @@ public class VehicleMqttLogRepository {
             text = text.substring(0, MAX_PAYLOAD) + "...(截断)";
         }
         jdbc.update("INSERT INTO vehicle_mqtt_log (direction, device_sn, topic, payload, message) VALUES (?,?,?,?,?)",
-                direction, deviceSn, topic, text, message);
+                direction, cut(deviceSn, 64), cut(topic, 128), text, cut(message, 255));
+    }
+
+    /** 按列宽截断：日志表也不能因为一个超长 message 把整条记录写失败。 */
+    private static String cut(String value, int max) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() <= max ? value : value.substring(0, max - 3) + "...";
     }
 
     public List<Map<String, Object>> recent(int limit) {

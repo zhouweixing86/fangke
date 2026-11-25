@@ -45,6 +45,8 @@ public class VehicleMqttService {
     private static final Logger log = LoggerFactory.getLogger(VehicleMqttService.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final DateTimeFormatter DATETIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    /** 相机 `imgT` 的紧凑时间格式。 */
+    private static final DateTimeFormatter COMPACT_DATETIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     /** V1 固定车的到期日只有日期。 */
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     /** 宽松车牌识别：汉字 + 字母 + 5~6 位字母数字。 */
@@ -184,6 +186,18 @@ public class VehicleMqttService {
         String payload = fill(template, envelopeValues(deviceSn, Map.of("items", String.join(",", items))));
         gateway.publish(deviceSn, payload);
         logRepository.save("DOWN", deviceSn, topicOf(deviceSn), payload, "全量下发 " + plates.size() + " 条车牌");
+        // 同步更新对账状态：手动「全量对齐」之后，定时任务不应再把这批车牌重复推一遍；
+        // 清单里没有的车牌把状态清掉，下一轮定时任务会补一条 DeleteCarInfo。
+        Set<String> desired = new LinkedHashSet<>();
+        for (PlatePayload plate : plates) {
+            desired.add(plate.plateNo());
+            stateRepository.upsert(deviceSn, plate.plateNo(), fingerprint(plate));
+        }
+        for (String existing : stateRepository.fingerprints(deviceSn).keySet()) {
+            if (!desired.contains(existing)) {
+                stateRepository.remove(deviceSn, existing);
+            }
+        }
         Map<String, Object> view = result("IMPORT", deviceSn, "", payload);
         view.put("count", plates.size());
         return view;
@@ -245,7 +259,7 @@ public class VehicleMqttService {
      *
      * <p>这是「员工车牌 / 访客车牌自动下发、停用与到期自动删除」的落地点，由定时对账与相机上线触发。
      */
-    public Map<String, Object> syncDevicePlates(String deviceSn, Long gateId) {
+    public synchronized Map<String, Object> syncDevicePlates(String deviceSn, Long gateId) {
         List<PlatePayload> desired = plateService.snapshot(gateId);
         Map<String, String> existing = stateRepository.fingerprints(deviceSn);
         int added = 0;
@@ -340,21 +354,30 @@ public class VehicleMqttService {
             });
         } else if (plate == null) {
             message = describeWithoutPlate(command, payload);
+            if (message.startsWith("下行回执：失败")) {
+                // 相机拒绝了下行（如固件不支持该命令）：除了日志表，服务器日志也要留一条，便于巡检发现
+                log.warn("车闸下行被相机拒绝 device={} {} raw={}", deviceSn, message, payload);
+            }
         } else {
             try {
                 Device device = deviceSn == null ? null : deviceService.resolveOrRegister(deviceSn, null);
                 Long gateId = device == null ? null : device.getGateId();
                 int direction = device == null ? 1 : device.getDirection();
                 VehicleAccessService.Decision decision = accessService.judge(plate, gateId, LocalDateTime.now());
-                accessService.record("MQTT" + UUID.randomUUID().toString().replace("-", "").substring(0, 20),
-                        deviceSn, gateId, plate, direction, LocalDateTime.now(),
-                        extractInt(payload, "confid"), decision, null, extractPhotoUrl(payload), payload);
+                // 事件时间优先用相机上报的 triggT/imgT：离线补传时按“补传时刻”入库会把记录算到错误的日期
+                LocalDateTime eventTime = eventTimeOf(payload);
+                accessService.record(eventUuidOf(payload), deviceSn, gateId, plate, direction, eventTime,
+                        confidenceOf(payload), decision, null, extractPhotoUrl(payload), payload);
                 message = plate + " 判定=" + (decision.allowed() ? "放行" : "拒绝") + "：" + decision.reason();
             } catch (Exception e) {
                 message = "落库失败：" + e.getMessage();
             }
         }
-        logRepository.save("UP", deviceSn, topic, payload, message);
+        try {
+            logRepository.save("UP", deviceSn, topic, payload, message);
+        } catch (Exception e) {
+            log.warn("车闸上行日志写入失败 device={}：{}", deviceSn, e.getMessage());
+        }
         log.debug("车闸上行 topic={} device={} plate={} msg={}", topic, deviceSn, plate, message);
     }
 
@@ -410,7 +433,10 @@ public class VehicleMqttService {
     /** 相机上线后把车牌清单对齐一次（断网期间平台改过的也能追上）。 */
     private void syncQuietly(String deviceSn, Long gateId) {
         try {
-            log.info("设备 {} 上线对齐车牌：{}", deviceSn, syncDevicePlates(deviceSn, gateId));
+            // 相机重连可能是「恢复出厂 / 清过白名单」之后：先把对账状态清掉，强制全量重推，
+            // 否则指纹没变会被判成「已下发」，相机里其实是空的。
+            stateRepository.removeDevice(deviceSn);
+            log.info("设备 {} 上线对齐车牌（强制全量重推）：{}", deviceSn, syncDevicePlates(deviceSn, gateId));
         } catch (Exception e) {
             log.warn("设备 {} 上线对齐车牌失败：{}", deviceSn, e.getMessage());
         }
@@ -437,11 +463,84 @@ public class VehicleMqttService {
         }
     }
 
+    /**
+     * 相机给的置信度是 0-1000（`confid`），库里统一按 0-100 存（和行人侧的 score 口径一致）。
+     */
+    static Integer confidenceOf(String payload) {
+        Integer raw = extractInt(payload, "confid");
+        if (raw == null) {
+            return null;
+        }
+        int value = Math.round(raw / 10.0f);
+        return Math.max(0, Math.min(100, value));
+    }
+
+    /**
+     * 事件时间：优先相机上报的 `triggT`（yyyy-MM-dd HH:mm:ss），其次 `imgT`（yyyyMMddHHmmss）。
+     *
+     * <p>相机开启离线补传后，恢复网络时会补发几小时前的记录；如果按"补传时刻"入库，
+     * 跨零点/跨天的记录就会算错日期。相机时钟也不一定准，超前 5 分钟或早于 7 天的直接回落服务器时间。
+     */
+    static LocalDateTime eventTimeOf(String payload) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime parsed = parseDateTime(extractText(payload, "triggT"));
+        if (parsed == null) {
+            parsed = parseCompactDateTime(extractText(payload, "imgT"));
+        }
+        if (parsed == null) {
+            return now;
+        }
+        if (parsed.isAfter(now.plusMinutes(5)) || parsed.isBefore(now.minusDays(7))) {
+            return now;
+        }
+        return parsed;
+    }
+
+    /**
+     * 事件幂等键：相机 QoS1 重传同一条结果时 `guid` 不变，用它做唯一键就能去重；没有 guid 才用随机值。
+     */
+    static String eventUuidOf(String payload) {
+        String guid = extractText(payload, "guid");
+        if (guid != null && !guid.isBlank()) {
+            String value = "MQTT-" + guid.trim().toUpperCase();
+            return value.length() <= 80 ? value : value.substring(0, 80);
+        }
+        return "MQTT" + UUID.randomUUID().toString().replace("-", "").substring(0, 20);
+    }
+
+    private static LocalDateTime parseDateTime(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        String value = text.trim().replace('T', ' ').replace('/', '-');
+        try {
+            return LocalDateTime.parse(value, DATETIME);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static LocalDateTime parseCompactDateTime(String text) {
+        if (text == null) {
+            return null;
+        }
+        String value = text.trim();
+        if (value.length() != 14 || !value.chars().allMatch(Character::isDigit)) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(value, COMPACT_DATETIME);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     /** 心跳/图片/回执这类非识别报文，日志里给个人话，不要一律写「未解析出车牌」。 */
     private static String describeWithoutPlate(String command, String payload) {
         String errCode = extractText(payload, "errCode");
         if (errCode != null) {
-            return "0".equals(errCode.trim()) ? "下行回执：成功" : "下行回执：失败 errCode=" + errCode;
+            return "0".equals(errCode.trim()) ? "下行回执：成功" : "下行回执：失败 errCode=" + errCode
+                    + (extractText(payload, "errInfo") == null ? "" : " " + extractText(payload, "errInfo"));
         }
         if (command == null || command.isBlank()) {
             return "未解析出车牌（仅留痕）";

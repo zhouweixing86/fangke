@@ -38,5 +38,21 @@ public interface VisitorRepository {
 
     /** 绑定 openid（首次预约成功后写入，后续一键登录直接命中）。 */
     void bindWxOpenid(Long visitorId, String wxOpenid);
+
+    /**
+     * 批量取访客姓名（id → name）。车闸车牌对账每 20 秒一次，逐单 findById 会变成 N+1。
+     *
+     * <p>默认实现兜底，JDBC 实现走单条 IN 查询。
+     */
+    default java.util.Map<Long, String> findNamesByIds(java.util.Collection<Long> ids) {
+        java.util.Map<Long, String> view = new java.util.LinkedHashMap<>();
+        if (ids == null) {
+            return view;
+        }
+        for (Long id : ids) {
+            findById(id).ifPresent(v -> view.put(id, v.getName()));
+        }
+        return view;
+    }
 }
 

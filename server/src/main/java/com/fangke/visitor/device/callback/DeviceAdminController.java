@@ -46,6 +46,7 @@ public class DeviceAdminController {
     private final DeviceGateway gateway;
     private final DeviceCapabilityService capabilityService;
     private final GateService gateService;
+    private final com.fangke.visitor.vehicle.mqtt.VehicleMqttPlateStateRepository plateStateRepository;
     private final com.fangke.visitor.config.AppProperties props;
 
     public DeviceAdminController(DeviceRepository deviceRepository,
@@ -53,12 +54,14 @@ public class DeviceAdminController {
                                  DeviceGateway gateway,
                                  DeviceCapabilityService capabilityService,
                                  GateService gateService,
+                                 com.fangke.visitor.vehicle.mqtt.VehicleMqttPlateStateRepository plateStateRepository,
                                  com.fangke.visitor.config.AppProperties props) {
         this.deviceRepository = deviceRepository;
         this.adapterFactory = adapterFactory;
         this.gateway = gateway;
         this.capabilityService = capabilityService;
         this.gateService = gateService;
+        this.plateStateRepository = plateStateRepository;
         this.props = props;
     }
 
@@ -116,6 +119,10 @@ public class DeviceAdminController {
                     "设备最近 5 分钟还有心跳（" + device.getDeviceSn() + "），请先断电或断网再删除");
         }
         deviceRepository.deleteById(id);
+        // 车闸相机的车牌对账状态跟着档案一起清，避免以后重新登记同一台设备时"以为已下发"
+        if (device.getChannel() == Device.Channel.VEHICLE) {
+            plateStateRepository.removeDevice(device.getDeviceSn());
+        }
         return ApiResponse.ok(Map.of("deleted", true, "deviceSn", device.getDeviceSn()));
     }
 

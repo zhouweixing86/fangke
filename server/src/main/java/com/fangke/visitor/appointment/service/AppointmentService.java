@@ -282,6 +282,8 @@ public class AppointmentService {
         if (plateNo != null && plateNo.length() > 16) {
             throw new BusinessException(ErrorCode.PARAM_TOO_LONG, "车牌号最多 16 个字符");
         }
+        // 统一成相机口径：大写、去空格（否则判定按字符串比对匹配不上）
+        plateNo = com.fangke.visitor.common.PlateNo.normalizeToNull(plateNo);
 
         if (request.startDate() == null) {
             throw new BusinessException(ErrorCode.PARAM_MISSING, "预约日期不能为空");

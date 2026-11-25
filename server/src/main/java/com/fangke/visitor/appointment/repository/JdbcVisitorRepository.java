@@ -70,6 +70,20 @@ public class JdbcVisitorRepository implements VisitorRepository {
     }
 
     @Override
+    public java.util.Map<Long, String> findNamesByIds(java.util.Collection<Long> ids) {
+        java.util.Map<Long, String> view = new java.util.LinkedHashMap<>();
+        if (ids == null || ids.isEmpty()) {
+            return view;
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        jdbc.query("SELECT id, name FROM visitor WHERE id IN (" + placeholders + ")",
+                rs -> {
+                    view.put(rs.getLong(1), rs.getString(2));
+                }, ids.toArray());
+        return view;
+    }
+
+    @Override
     public Optional<Visitor> findByPersonNo(String personNo) {
         if (personNo == null || personNo.isBlank()) {
             return Optional.empty();

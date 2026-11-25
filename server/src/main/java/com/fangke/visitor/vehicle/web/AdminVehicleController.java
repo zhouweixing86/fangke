@@ -199,14 +199,22 @@ public class AdminVehicleController {
         return ApiResponse.ok(PageResult.of(total, safePage, safeSize, list));
     }
 
-    private Map<String, Object> toView(VehicleEvent e) {
-        Map<String, Object> view = new LinkedHashMap<>();
+    /** 方向文案：0 出场 / 1 进场 / 2 双向设备（协议不区分进出，只能标"双向"）。 */
+    static String directionText(int direction) {
+        return switch (direction) {
+            case 0 -> "出场";
+            case 1 -> "进场";
+            default -> "双向(未知)";
+        };
+    }
+
+    private Map<String, Object> toView(VehicleEvent e) {        Map<String, Object> view = new LinkedHashMap<>();
         view.put("id", e.id());
         view.put("plateNo", e.plateNo());
         view.put("gateId", e.gateId() == null ? 0L : e.gateId());
         view.put("gateName", gateService.nameOf(e.gateId()));
         view.put("direction", e.direction());
-        view.put("directionText", e.direction() == 0 ? "出场" : "进场");
+        view.put("directionText", directionText(e.direction()));
         view.put("eventTime", DATETIME.format(e.eventTime()));
         view.put("confidence", e.confidence() == null ? 0 : e.confidence());
         view.put("matchedType", e.matchedType());
@@ -216,6 +224,7 @@ public class AdminVehicleController {
         view.put("resultText", e.resultStatus() == VehicleEvent.RESULT_PASS ? "放行" : "拒绝");
         view.put("failReason", e.failReason() == null ? "" : e.failReason());
         view.put("photoKey", e.photoKey() == null ? "" : e.photoKey());
+        view.put("photoUrl", e.photoUrl() == null ? "" : e.photoUrl());
         view.put("deviceSn", e.deviceSn() == null ? "" : e.deviceSn());
         return view;
     }

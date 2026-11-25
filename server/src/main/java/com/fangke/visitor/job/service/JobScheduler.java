@@ -44,6 +44,9 @@ public class JobScheduler {
     @Value("${fangke.job.job-log-retention-days:30}")
     private int jobLogDays;
 
+    @Value("${fangke.job.vehicle-mqtt-log-retention-days:30}")
+    private int vehicleMqttLogDays;
+
     @Value("${fangke.job.batch-size:200}")
     private int batchSize;
 
@@ -116,6 +119,7 @@ public class JobScheduler {
         int heartbeats = maintenanceService.purgeHeartbeats(heartbeatRetentionDays);
         int notifications = maintenanceService.purgeNotifications(notificationReadDays, notificationAllDays);
         int jobLogs = maintenanceService.purgeJobLogs(jobLogDays);
-        return heartbeats + notifications + jobLogs;
+        int vehicleLogs = maintenanceService.purgeVehicleMqttLogs(vehicleMqttLogDays);
+        return heartbeats + notifications + jobLogs + vehicleLogs;
     }
 }

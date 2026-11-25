@@ -167,7 +167,8 @@ public class AdminTrafficController {
                             FROM access_event a
                             WHERE a.person_no = ? AND a.event_time >= ? AND a.event_time < ?
                             UNION ALL
-                            SELECT v.event_time, 'VEHICLE', v.direction, ?,
+                            SELECT v.event_time, 'VEHICLE', v.direction,
+                                   CASE WHEN v.fail_reason LIKE '人工远程开闸%' THEN 9 ELSE ? END,
                                    v.plate_no, v.device_sn, v.gate_id, v.matched_name, NULL,
                                    v.photo_url
                             FROM vehicle_event v
@@ -187,7 +188,11 @@ public class AdminTrafficController {
                     row.put("channel", channel);
                     row.put("channelText", "VEHICLE".equals(channel) ? "车辆" : "行人");
                     row.put("direction", direction);
-                    row.put("directionText", direction == 1 ? "进" : "出");
+                    row.put("directionText", switch (direction) {
+                        case 0 -> "出";
+                        case 1 -> "进";
+                        default -> "双向(未知)";
+                    });
                     row.put("methodCode", method);
                     row.put("methodText", methodText(method, channel));
                     row.put("plateNo", rs.getString("plate_no") == null ? "" : rs.getString("plate_no"));
@@ -433,10 +438,10 @@ public class AdminTrafficController {
         return vehicle ? "车辆" : "行人";
     }
 
-    /** 识别方式文案；车牌识别单独一类。 */
+    /** 识别方式文案；车牌识别单独一类，人工远程开闸单独标出来。 */
     private String methodText(int method, String channel) {
         if ("VEHICLE".equals(channel)) {
-            return "车牌识别";
+            return method == 9 ? "人工开门" : "车牌识别";
         }
         return switch (method) {
             case 0 -> "人脸";

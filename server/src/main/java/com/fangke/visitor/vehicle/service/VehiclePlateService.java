@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -60,6 +61,9 @@ public class VehiclePlateService {
     private final DeviceAdapterFactory adapterFactory;
     private final DeviceCapabilityService capabilityService;
     private final VehiclePlateCloudService cloudService;
+    /** 懒加载：MQTT 通道反过来依赖本服务（取车牌快照），直接注入会循环依赖。 */
+    private final org.springframework.beans.factory.ObjectProvider<com.fangke.visitor.vehicle.mqtt.VehicleMqttService>
+            mqttServiceProvider;
 
     public VehiclePlateService(EmployeeRepository employeeRepository,
                                AppointmentRepository appointmentRepository,
@@ -68,7 +72,9 @@ public class VehiclePlateService {
                                VehicleDeviceService vehicleDeviceService,
                                DeviceAdapterFactory adapterFactory,
                                DeviceCapabilityService capabilityService,
-                               VehiclePlateCloudService cloudService) {
+                               VehiclePlateCloudService cloudService,
+                               org.springframework.beans.factory.ObjectProvider<
+                                       com.fangke.visitor.vehicle.mqtt.VehicleMqttService> mqttServiceProvider) {
         this.employeeRepository = employeeRepository;
         this.appointmentRepository = appointmentRepository;
         this.appointmentGateRepository = appointmentGateRepository;
@@ -77,6 +83,7 @@ public class VehiclePlateService {
         this.adapterFactory = adapterFactory;
         this.capabilityService = capabilityService;
         this.cloudService = cloudService;
+        this.mqttServiceProvider = mqttServiceProvider;
     }
 
     /**
@@ -98,18 +105,23 @@ public class VehiclePlateService {
         }
 
         LocalDate today = LocalDate.now();
-        for (Appointment appointment : appointmentRepository.findPlateAppointmentsOnDate(today)) {
+        List<Appointment> appointments = appointmentRepository.findPlateAppointmentsOnDate(today);
+        // 批量取门点与访客姓名：这个快照每 20 秒跑一次，逐单查询会退化成 N+1
+        Map<Long, List<Long>> gatesByAppointment = appointmentGateRepository.findGateIds(
+                appointments.stream().map(Appointment::getId).filter(Objects::nonNull).toList(),
+                AppointmentGateRepository.STAGE_APPROVED);
+        Map<Long, String> visitorNames = visitorRepository.findNamesByIds(
+                appointments.stream().map(Appointment::getVisitorId).filter(Objects::nonNull).distinct().toList());
+        for (Appointment appointment : appointments) {
             String plate = VehicleAccessService.normalize(appointment.getPlateNo());
             if (plate.isEmpty() || byPlate.containsKey(plate)) {
                 continue;
             }
-            List<Long> gates = appointmentGateRepository.findGateIds(
-                    appointment.getId(), AppointmentGateRepository.STAGE_APPROVED);
+            List<Long> gates = gatesByAppointment.getOrDefault(appointment.getId(), List.of());
             if (gateId != null && !gates.contains(gateId)) {
                 continue;
             }
-            String name = visitorRepository.findById(appointment.getVisitorId())
-                    .map(v -> v.getName()).orElse("");
+            String name = visitorNames.getOrDefault(appointment.getVisitorId(), "");
             byPlate.put(plate, new PlatePayload(plate, PlatePayload.OWNER_VISITOR, appointment.getId(),
                     name, null, appointment.getStartTime(), appointment.getEndTime()));
         }
@@ -141,6 +153,23 @@ public class VehiclePlateService {
                 continue;
             }
             if (!capabilityService.supports(device, DeviceCapability.PLATE_UPSERT)) {
+                // 车闸相机走 MQTT 通道（协议无「读名单」能力，但增/删是支持的）
+                com.fangke.visitor.vehicle.mqtt.VehicleMqttService mqtt = mqttServiceProvider.getIfAvailable();
+                if (device.getChannel() == Device.Channel.VEHICLE && mqtt != null && mqtt.ready()) {
+                    try {
+                        Map<String, Object> outcome = mqtt.syncDevicePlates(device.getDeviceSn(), device.getGateId());
+                        results.add(new DeviceResult(device.getId(), device.getDeviceSn(), device.getDeviceName(),
+                                device.getGateId(), "PUSHED",
+                                "MQTT 已下发（新增 " + outcome.get("added") + " / 更新 " + outcome.get("updated")
+                                        + " / 删除 " + outcome.get("removed") + " / 未变 " + outcome.get("unchanged") + "）",
+                                plates.size()));
+                    } catch (Exception e) {
+                        results.add(new DeviceResult(device.getId(), device.getDeviceSn(), device.getDeviceName(),
+                                device.getGateId(), "FAILED", "MQTT 下发失败：" + e.getMessage(), plates.size()));
+                        log.warn("车牌 MQTT 下发失败 device={}：{}", device.getDeviceSn(), e.getMessage());
+                    }
+                    continue;
+                }
                 pending++;
                 results.add(new DeviceResult(device.getId(), device.getDeviceSn(), device.getDeviceName(),
                         device.getGateId(), "PENDING_VENDOR",

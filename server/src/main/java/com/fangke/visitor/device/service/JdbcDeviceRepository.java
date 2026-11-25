@@ -140,12 +140,17 @@ public class JdbcDeviceRepository implements DeviceRepository {
                 + "WHERE device_sn = ?", at, lanIp, deviceSn);
     }
 
-    /** 10.x / 172.16-31.x / 192.168.x / 127.x 视为局域网地址。 */    static boolean isPrivateAddress(String ip) {
+    /** 10.x / 172.16-31.x / 192.168.x 视为局域网地址；127.x（本机/反代后的回环）不算设备地址。 */
+    static boolean isPrivateAddress(String ip) {
         if (ip == null || ip.isBlank()) {
             return false;
         }
         String value = ip.trim();
-        if (value.startsWith("10.") || value.startsWith("192.168.") || value.startsWith("127.")) {
+        // 127.* / ::1 是 nginx 反代后的回环地址，写进设备档案会把「本地管理」指到本机，必须排除
+        if (value.startsWith("127.") || "::1".equals(value) || "0:0:0:0:0:0:0:1".equals(value)) {
+            return false;
+        }
+        if (value.startsWith("10.") || value.startsWith("192.168.")) {
             return true;
         }
         if (value.startsWith("172.")) {

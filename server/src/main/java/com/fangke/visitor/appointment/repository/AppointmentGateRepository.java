@@ -17,6 +17,22 @@ public interface AppointmentGateRepository {
 
     List<Long> findGateIds(Long appointmentId, int stage);
 
+    /**
+     * 批量取某 stage 的门点（appointmentId → gateIds）。
+     *
+     * <p>车闸车牌每 20 秒对账一次，逐单查会退化成 N+1；默认实现兜底，JDBC 实现走单条 IN 查询。
+     */
+    default java.util.Map<Long, List<Long>> findGateIds(java.util.Collection<Long> appointmentIds, int stage) {
+        java.util.Map<Long, List<Long>> view = new java.util.LinkedHashMap<>();
+        if (appointmentIds == null) {
+            return view;
+        }
+        for (Long id : appointmentIds) {
+            view.put(id, findGateIds(id, stage));
+        }
+        return view;
+    }
+
     /** 覆盖式写入：先清空该 stage 再写入，保证不会残留上一次的增删结果。 */
     void replaceStage(Long appointmentId, int stage, Collection<Long> gateIds);
 

@@ -4,6 +4,7 @@ import com.fangke.visitor.appointment.model.Appointment;
 import com.fangke.visitor.appointment.repository.AppointmentGateRepository;
 import com.fangke.visitor.appointment.repository.AppointmentRepository;
 import com.fangke.visitor.appointment.repository.VisitorRepository;
+import com.fangke.visitor.common.PlateNo;
 import com.fangke.visitor.employee.model.Employee;
 import com.fangke.visitor.employee.repository.EmployeeRepository;
 import com.fangke.visitor.storage.StorageService;
@@ -69,10 +70,7 @@ public class VehicleAccessService {
 
     /** 车牌统一去空格转大写（与员工车牌入库规则一致）。 */
     public static String normalize(String plateNo) {
-        if (plateNo == null) {
-            return "";
-        }
-        return plateNo.replace(" ", "").replace("\t", "").trim().toUpperCase();
+        return PlateNo.normalize(plateNo);
     }
 
     /**

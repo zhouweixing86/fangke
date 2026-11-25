@@ -100,6 +100,12 @@ public class MaintenanceService {
         return jobRunLogRepository.deleteBefore(LocalDateTime.now().minusDays(Math.max(1, days)));
     }
 
+    /** 车闸 MQTT 报文日志保留期清理（默认 30 天）：只记变更与回执，但长期不清理也会堆积。 */
+    public int purgeVehicleMqttLogs(int days) {
+        return jdbc.update("DELETE FROM vehicle_mqtt_log WHERE created_at < ?",
+                LocalDateTime.now().minusDays(Math.max(1, days)));
+    }
+
     private void notifyExpired(Appointment appointment) {
         if (appointment.getVisitorId() == null) {
             return;

@@ -132,6 +132,7 @@ public class AdminReportController {
             case "3" -> "IC 卡";
             case "5" -> "二维码";
             case "9" -> "人工开门";
+            case "20" -> "车牌识别";
             default -> "其他(" + code + ")";
         };
     }

@@ -17,6 +17,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -109,6 +110,47 @@ class VehicleMqttServiceTest {
         assertEquals(1, list.size());
         assertEquals("苏A12345", list.get(0).path("plate").asText());
         assertEquals("2026-12-31", list.get(0).path("time").asText());
+    }
+
+    @Test
+    @DisplayName("事件时间用相机 triggT/imgT（离线补传不串日期），异常值回落服务器时间")
+    void eventTimeUsesCameraTimestamp() {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        java.time.LocalDate yesterday = now.toLocalDate().minusDays(1);
+        String ymd = yesterday.toString();
+
+        String withTrigg = "{\"data\":\"{\\\"triggT\\\":\\\"" + ymd + " 23:55:00\\\"}\"}";
+        assertEquals(yesterday.atTime(23, 55), VehicleMqttService.eventTimeOf(withTrigg));
+
+        String future = "{\"data\":\"{\\\"triggT\\\":\\\"2099-01-01 00:00:00\\\"}\"}";
+        assertTrue(VehicleMqttService.eventTimeOf(future).isAfter(now.minusMinutes(1)), "未来时间应回落 now");
+
+        String compact = "{\"data\":\"{\\\"imgT\\\":\\\"" + ymd.replace("-", "") + "235500\\\"}\"}";
+        assertEquals(yesterday.atTime(23, 55), VehicleMqttService.eventTimeOf(compact));
+
+        String none = "{\"data\":\"{}\"}";
+        assertTrue(VehicleMqttService.eventTimeOf(none).isAfter(now.minusMinutes(1)));
+    }
+
+    @Test
+    @DisplayName("事件幂等键：有 guid 用 guid（重传去重），没有才随机")
+    void eventUuidUsesGuid() {
+        String guid = "e4263270-ab37-4108-b563-02195b0235a8";
+        assertEquals("MQTT-E4263270-AB37-4108-B563-02195B0235A8",
+                VehicleMqttService.eventUuidOf("{\"data\":\"{\\\"guid\\\":\\\"" + guid + "\\\"}\"}"));
+        String random = VehicleMqttService.eventUuidOf("{\"data\":\"{}\"}");
+        assertTrue(random.startsWith("MQTT"));
+        assertEquals(24, random.length());
+    }
+
+    @Test
+    @DisplayName("相机置信度 0-1000 折算成 0-100，并做边界收敛")
+    void confidenceIsNormalized() {
+        assertEquals(91, VehicleMqttService.confidenceOf("{\"data\":\"{\\\"confid\\\":912}\"}"));
+        assertEquals(100, VehicleMqttService.confidenceOf("{\"data\":\"{\\\"confid\\\":1000}\"}"));
+        assertEquals(100, VehicleMqttService.confidenceOf("{\"data\":\"{\\\"confid\\\":99999}\"}"));
+        assertNull(VehicleMqttService.confidenceOf("{\"data\":\"{}\"}"));
+        assertNull(VehicleMqttService.confidenceOf("{\"data\":\"{\\\"confid\\\":\\\"abc\\\"}\"}"));
     }
 
     @Test

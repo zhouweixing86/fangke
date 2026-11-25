@@ -66,14 +66,15 @@ public class JdbcVehicleEventRepository implements VehicleEventRepository {
                         result_status, fail_reason, photo_key, photo_url, raw_json)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """);
-            ps.setString(1, e.eventUuid());
-            ps.setString(2, e.deviceSn());
+            ps.setString(1, cut(e.eventUuid(), 80));
+            ps.setString(2, cut(e.deviceSn(), 64));
             if (e.gateId() == null) {
                 ps.setNull(3, Types.BIGINT);
             } else {
                 ps.setLong(3, e.gateId());
             }
-            ps.setString(4, e.plateNo());
+            // 车牌列 16 字符：脏数据（乱码/超长）宁可截断也不能让整条记录写失败
+            ps.setString(4, cut(e.plateNo(), 16));
             ps.setInt(5, e.direction());
             ps.setTimestamp(6, Timestamp.valueOf(e.eventTime()));
             if (e.confidence() == null) {
@@ -91,16 +92,24 @@ public class JdbcVehicleEventRepository implements VehicleEventRepository {
             } else {
                 ps.setLong(9, e.matchedId());
             }
-            ps.setString(10, e.matchedName());
-            ps.setString(11, e.personNo());
+            ps.setString(10, cut(e.matchedName(), 64));
+            ps.setString(11, cut(e.personNo(), 20));
             ps.setInt(12, e.resultStatus());
-            ps.setString(13, e.failReason());
-            ps.setString(14, e.photoKey());
-            ps.setString(15, e.photoUrl());
+            ps.setString(13, cut(e.failReason(), 255));
+            ps.setString(14, cut(e.photoKey(), 255));
+            ps.setString(15, cut(e.photoUrl(), 1024));
             ps.setString(16, e.rawJson());
             return ps;
         });
         return rows > 0;
+    }
+
+    /** 按列宽截断，避免 STRICT 模式下一条脏数据把整条通行记录顶掉。 */
+    static String cut(String value, int max) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() <= max ? value : value.substring(0, max);
     }
 
     @Override

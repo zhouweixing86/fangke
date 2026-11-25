@@ -26,6 +26,23 @@ public class JdbcAppointmentGateRepository implements AppointmentGateRepository 
     }
 
     @Override
+    public java.util.Map<Long, List<Long>> findGateIds(Collection<Long> appointmentIds, int stage) {
+        java.util.Map<Long, List<Long>> view = new java.util.LinkedHashMap<>();
+        if (appointmentIds == null || appointmentIds.isEmpty()) {
+            return view;
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(appointmentIds.size(), "?"));
+        java.util.List<Object> args = new java.util.ArrayList<>(appointmentIds);
+        args.add(stage);
+        jdbc.query("SELECT appointment_id, gate_id FROM appointment_gate "
+                        + "WHERE appointment_id IN (" + placeholders + ") AND stage = ? ORDER BY gate_id",
+                rs -> {
+                    view.computeIfAbsent(rs.getLong(1), k -> new java.util.ArrayList<>()).add(rs.getLong(2));
+                }, args.toArray());
+        return view;
+    }
+
+    @Override
     public void replaceStage(Long appointmentId, int stage, Collection<Long> gateIds) {
         if (appointmentId == null) {
             return;

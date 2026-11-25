@@ -57,7 +57,8 @@ class VehiclePlateServiceTest {
         when(cloudService.reconcile(any())).thenReturn(
                 new VehiclePlateCloudService.SyncResult(false, true, 0, 0, 0, 0, 0, "未启用", List.of()));
         service = new VehiclePlateService(employeeRepo, appointmentRepo, appointmentGateRepo, visitorRepo,
-                deviceService, mock(DeviceAdapterFactory.class), capabilityService, cloudService);
+                deviceService, mock(DeviceAdapterFactory.class), capabilityService, cloudService,
+                mock(org.springframework.beans.factory.ObjectProvider.class));
     }
 
     private Employee employee(String plate, String name) {
@@ -89,10 +90,14 @@ class VehiclePlateServiceTest {
                 appointment("京A12345", 9L, 100L),
                 appointment("京B67890", 9L, 101L)));
         when(appointmentGateRepo.findGateIds(eq(101L), anyInt())).thenReturn(List.of(3L));
+        when(appointmentGateRepo.findGateIds(org.mockito.ArgumentMatchers.<java.util.Collection<Long>>any(), anyInt()))
+                .thenReturn(java.util.Map.of(100L, List.of(3L), 101L, List.of(3L)));
         Visitor visitor = new Visitor();
         visitor.setId(9L);
         visitor.setName("李四");
         when(visitorRepo.findById(9L)).thenReturn(Optional.of(visitor));
+        when(visitorRepo.findNamesByIds(org.mockito.ArgumentMatchers.<java.util.Collection<Long>>any()))
+                .thenReturn(java.util.Map.of(9L, "李四"));
 
         List<PlatePayload> plates = service.snapshot(3L);
 
@@ -112,6 +117,10 @@ class VehiclePlateServiceTest {
         when(appointmentRepo.findPlateAppointmentsOnDate(any()))
                 .thenReturn(List.of(appointment("京B67890", 9L, 101L)));
         when(appointmentGateRepo.findGateIds(eq(101L), anyInt())).thenReturn(List.of(4L));
+        when(appointmentGateRepo.findGateIds(org.mockito.ArgumentMatchers.<java.util.Collection<Long>>any(), anyInt()))
+                .thenReturn(java.util.Map.of(101L, List.of(4L)));
+        when(visitorRepo.findNamesByIds(org.mockito.ArgumentMatchers.<java.util.Collection<Long>>any()))
+                .thenReturn(java.util.Map.of(9L, "李四"));
 
         assertTrue(service.snapshot(3L).isEmpty());
         assertEquals(1, service.snapshot(4L).size());

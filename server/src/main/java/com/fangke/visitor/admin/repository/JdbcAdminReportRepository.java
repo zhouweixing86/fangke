@@ -44,10 +44,22 @@ public class JdbcAdminReportRepository implements AdminReportRepository {
                 + "WHERE checkin_at >= ? AND checkin_at < ?", fromTs, toTs);
         long onsiteNow = count("SELECT COUNT(1) FROM visit_record WHERE status = 1");
 
-        long events = count("SELECT COUNT(1) FROM access_event "
-                + "WHERE event_time >= ? AND event_time < ?", fromTs, toTs);
-        long eventPass = count("SELECT COUNT(1) FROM access_event "
-                + "WHERE event_time >= ? AND event_time < ? AND result_status = 1", fromTs, toTs);
+        long events = count("""
+                SELECT COUNT(1) FROM (
+                    SELECT event_time FROM access_event WHERE event_time >= ? AND event_time < ?
+                    UNION ALL
+                    SELECT event_time FROM vehicle_event WHERE event_time >= ? AND event_time < ?
+                ) t
+                """, fromTs, toTs, fromTs, toTs);
+        long eventPass = count("""
+                SELECT COUNT(1) FROM (
+                    SELECT result_status FROM access_event
+                     WHERE event_time >= ? AND event_time < ? AND result_status = 1
+                    UNION ALL
+                    SELECT result_status FROM vehicle_event
+                     WHERE event_time >= ? AND event_time < ? AND result_status = 1
+                ) t
+                """, fromTs, toTs, fromTs, toTs);
         long eventFail = events - eventPass;
 
         Double avgMinutes = jdbc.queryForObject("SELECT AVG(TIMESTAMPDIFF(SECOND, created_at, finished_at)) / 60 "
@@ -69,8 +81,15 @@ public class JdbcAdminReportRepository implements AdminReportRepository {
                 + "WHERE checkin_at >= ? AND checkin_at < ? GROUP BY DATE(checkin_at)", fromTs, toTs);
 
         Map<LocalDate, long[]> events = new HashMap<>();
-        jdbc.query("SELECT DATE(event_time) d, result_status s, COUNT(1) c FROM access_event "
-                        + "WHERE event_time >= ? AND event_time < ? GROUP BY DATE(event_time), result_status",
+        jdbc.query("""
+                        SELECT DATE(event_time) d, result_status s, COUNT(1) c FROM (
+                            SELECT event_time, result_status FROM access_event
+                             WHERE event_time >= ? AND event_time < ?
+                            UNION ALL
+                            SELECT event_time, result_status FROM vehicle_event
+                             WHERE event_time >= ? AND event_time < ?
+                        ) t GROUP BY DATE(event_time), result_status
+                        """,
                 rs -> {
                     LocalDate day = rs.getDate("d").toLocalDate();
                     long[] pair = events.computeIfAbsent(day, k -> new long[2]);
@@ -79,7 +98,7 @@ public class JdbcAdminReportRepository implements AdminReportRepository {
                     } else {
                         pair[1] += rs.getLong("c");
                     }
-                }, fromTs, toTs);
+                }, fromTs, toTs, fromTs, toTs);
 
         List<Daily> list = new ArrayList<>();
         for (LocalDate day = from; !day.isAfter(to); day = day.plusDays(1)) {
@@ -138,15 +157,21 @@ public class JdbcAdminReportRepository implements AdminReportRepository {
         Timestamp fromTs = Timestamp.valueOf(from.atStartOfDay());
         Timestamp toTs = Timestamp.valueOf(to.plusDays(1).atStartOfDay());
         return accessStats("""
-                SELECT COALESCE(NULLIF(device_sn, ''), '未知设备') AS k,
+                SELECT COALESCE(NULLIF(MAX(d.device_name), ''), COALESCE(NULLIF(t.device_sn, ''), '未知设备')) AS k,
                        COUNT(1) AS total,
-                       SUM(CASE WHEN result_status = 1 THEN 1 ELSE 0 END) AS pass,
-                       SUM(CASE WHEN result_status = 1 THEN 0 ELSE 1 END) AS fail
-                FROM access_event
-                WHERE event_time >= ? AND event_time < ?
-                GROUP BY device_sn
+                       SUM(CASE WHEN t.result_status = 1 THEN 1 ELSE 0 END) AS pass,
+                       SUM(CASE WHEN t.result_status = 1 THEN 0 ELSE 1 END) AS fail
+                FROM (
+                    SELECT device_sn, result_status FROM access_event
+                     WHERE event_time >= ? AND event_time < ?
+                    UNION ALL
+                    SELECT device_sn, result_status FROM vehicle_event
+                     WHERE event_time >= ? AND event_time < ?
+                ) t
+                LEFT JOIN device d ON d.device_sn = t.device_sn
+                GROUP BY t.device_sn
                 ORDER BY total DESC
-                """, fromTs, toTs);
+                """, fromTs, toTs, fromTs, toTs);
     }
 
     @Override
@@ -154,15 +179,20 @@ public class JdbcAdminReportRepository implements AdminReportRepository {
         Timestamp fromTs = Timestamp.valueOf(from.atStartOfDay());
         Timestamp toTs = Timestamp.valueOf(to.plusDays(1).atStartOfDay());
         return accessStats("""
-                SELECT CAST(identify_type AS CHAR) AS k,
+                SELECT k,
                        COUNT(1) AS total,
                        SUM(CASE WHEN result_status = 1 THEN 1 ELSE 0 END) AS pass,
                        SUM(CASE WHEN result_status = 1 THEN 0 ELSE 1 END) AS fail
-                FROM access_event
-                WHERE event_time >= ? AND event_time < ?
-                GROUP BY identify_type
+                FROM (
+                    SELECT CAST(identify_type AS CHAR) AS k, result_status FROM access_event
+                     WHERE event_time >= ? AND event_time < ?
+                    UNION ALL
+                    SELECT '20' AS k, result_status FROM vehicle_event
+                     WHERE event_time >= ? AND event_time < ?
+                ) t
+                GROUP BY k
                 ORDER BY total DESC
-                """, fromTs, toTs);
+                """, fromTs, toTs, fromTs, toTs);
     }
 
     private List<VisitorStat> visitorStats(String sql, Object... args) {
