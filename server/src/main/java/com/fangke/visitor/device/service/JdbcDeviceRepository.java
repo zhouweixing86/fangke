@@ -108,6 +108,11 @@ public class JdbcDeviceRepository implements DeviceRepository {
         if (channel == null) {
             return findAllActive();
         }
+        if (channel == Device.Channel.PULL) {
+            // 兼容历史 channel='LAN' 的旧数据（V32 已迁移，这里再兜一层）
+            return jdbc.query(SELECT + "WHERE status = 1 AND (channel = 'PULL' OR channel = 'LAN') ORDER BY id",
+                    MAPPER);
+        }
         return jdbc.query(SELECT + "WHERE status = 1 AND channel = ? ORDER BY id", MAPPER, channel.name());
     }
 
