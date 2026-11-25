@@ -142,11 +142,12 @@ public class VehicleMqttController {
             throw new BusinessException(ErrorCode.PARAM_MISSING, "deviceSn 不能为空");
         }
         String sn = deviceSn.trim();
-        Long gateId = deviceService.list(null).stream()
+        Device device = deviceService.list(null).stream()
                 .filter(d -> sn.equals(d.getDeviceSn()))
-                .map(Device::getGateId)
-                .findFirst().orElse(null);
-        return ApiResponse.ok(service.syncDevicePlates(sn, gateId));
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_INVALID,
+                        "设备不存在：" + sn + "（先在「设备管理 → 车闸相机」登记）"));
+        return ApiResponse.ok(service.syncDevicePlates(sn, device.getGateId()));
     }
 
     /** 直接发一段原始报文（协议探测/联调）。 */
