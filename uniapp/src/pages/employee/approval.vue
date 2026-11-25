@@ -35,12 +35,15 @@
         </view>
       </view>
 
-      <view v-if="detail.canAct" class="actions">
-        <textarea v-model="comment" class="textarea" maxlength="100" placeholder="审批意见（驳回必填）" />
-        <view class="btns">
-          <button class="btn ghost" @click="reject">驳回</button>
-          <button class="btn" :loading="submitting" @click="pass">通过</button>
-        </view>
+      <view v-if="detail.canAct" class="card action-card">
+        <view class="card-title">审批意见</view>
+        <textarea v-model="comment" class="textarea" maxlength="100"
+          placeholder="选填；驳回时必须填写原因" />
+      </view>
+
+      <view v-if="detail.canAct" class="footer-bar">
+        <button class="foot-btn ghost" @click="reject">驳回</button>
+        <button class="foot-btn primary" :loading="submitting" @click="pass">通过</button>
       </view>
     </template>
   </view>
@@ -121,6 +124,8 @@ onLoad(async (options: Record<string, string>) => {
   min-height: 100vh;
   background: #f5f6f8;
   padding: 24rpx;
+  /* 给底部固定操作栏留出空间 */
+  padding-bottom: 220rpx;
 }
 
 .card {
@@ -161,8 +166,9 @@ onLoad(async (options: Record<string, string>) => {
 }
 
 .textarea {
+  display: block;
   width: 100%;
-  height: 140rpx;
+  height: 180rpx;
   border: 2rpx solid #e4e7ed;
   border-radius: 12rpx;
   padding: 16rpx;
@@ -170,26 +176,44 @@ onLoad(async (options: Record<string, string>) => {
   box-sizing: border-box;
 }
 
-.btns {
+/* 底部固定操作栏：驳回 / 通过 各占一半，避免误触 */
+.footer-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   gap: 24rpx;
-  margin-top: 24rpx;
+  padding: 20rpx 24rpx;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+  background: #ffffff;
+  box-shadow: 0 -2rpx 12rpx rgba(0, 0, 0, 0.06);
+  z-index: 10;
 }
 
-.btn {
+.foot-btn {
   flex: 1;
-  height: 88rpx;
-  line-height: 88rpx;
-  border-radius: 44rpx;
-  background: #1989fa;
-  color: #ffffff;
-  font-size: 30rpx;
+  margin: 0;
+  height: 96rpx;
+  line-height: 96rpx;
+  border-radius: 48rpx;
+  font-size: 32rpx;
+  font-weight: 500;
 }
 
-.btn.ghost {
+.foot-btn::after {
+  border: none;
+}
+
+.foot-btn.ghost {
   background: #ffffff;
   color: #e45656;
   border: 2rpx solid #e45656;
+}
+
+.foot-btn.primary {
+  background: #1989fa;
+  color: #ffffff;
 }
 
 .empty {
