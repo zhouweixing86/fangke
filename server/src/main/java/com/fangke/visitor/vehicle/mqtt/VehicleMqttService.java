@@ -549,8 +549,12 @@ public class VehicleMqttService {
     private static String describeWithoutPlate(String command, String payload) {
         String errCode = extractText(payload, "errCode");
         if (errCode != null) {
-            return "0".equals(errCode.trim()) ? "下行回执：成功" : "下行回执：失败 errCode=" + errCode
-                    + (extractText(payload, "errInfo") == null ? "" : " " + extractText(payload, "errInfo"));
+            if ("0".equals(errCode.trim())) {
+                return "下行回执：成功";
+            }
+            String errInfo = extractText(payload, "errInfo");
+            return "下行回执：失败 errCode=" + errCode
+                    + (errInfo == null || errInfo.isBlank() ? "" : " " + errInfo);
         }
         if (command == null || command.isBlank()) {
             return "未解析出车牌（仅留痕）";
