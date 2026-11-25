@@ -27,6 +27,12 @@ const router = createRouter({
           meta: { title: '设备管理', adminOnly: true }
         },
         {
+          path: 'vehicle-mqtt',
+          name: 'vehicle-mqtt',
+          component: () => import('@/views/VehicleMqttView.vue'),
+          meta: { title: '车闸对接', adminOnly: true }
+        },
+        {
           path: 'visit',
           name: 'visit',
           component: () => import('@/views/VisitView.vue'),
@@ -145,6 +151,7 @@ const ROUTE_PERMS: Record<string, string> = {
   guard: 'dashboard:read',
   visit: 'visit:read',
   devices: 'device:read',
+  'vehicle-mqtt': 'device:read',
   gates: 'gate:read',
   depts: 'dept:read',
   employees: 'employee:read',

@@ -687,6 +687,31 @@ export interface VehiclePlateSyncDevice {
   plateCount: number
 }
 
+/** 车闸 MQTT 通道状态（docs/22） */
+export interface VehicleMqttStatus {
+  enabled: boolean
+  brokerUrl: string
+  clientId: string
+  uploadTopic: string
+  downloadTopicPrefix: string
+  connected: boolean
+  lastError: string
+  addTemplate: string
+  deleteTemplate: string
+  importTemplate: string
+}
+
+/** 车闸 MQTT 上下行报文 */
+export interface VehicleMqttLogRow {
+  id: number
+  direction: 'UP' | 'DOWN'
+  device_sn: string
+  topic: string
+  payload: string
+  message: string
+  created_at: string
+}
+
 export interface VehiclePlateSyncResult {
   plateTotal: number
   pendingDevices: number

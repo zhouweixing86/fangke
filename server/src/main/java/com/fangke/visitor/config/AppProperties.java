@@ -526,11 +526,143 @@ public class AppProperties {
     public static class Vehicle {
 
         private final Cloud cloud = new Cloud();
+        private final Mqtt mqtt = new Mqtt();
 
         public Cloud getCloud() {
             return cloud;
         }
 
+        public Mqtt getMqtt() {
+            return mqtt;
+        }
+
+        /**
+         * 车闸相机的 MQTT 通道（docs/22）。
+         *
+         * <p>相机（信路通 PCM500 系列）作为 MQTT 客户端连我们云上的 broker：
+         * 它把识别结果发到 {@code upload/{SN}}，我们往 {@code download/{SN}} 发指令（含白名单增删）。
+         * 这样现场不需要电脑，也不需要相机有公网 IP。
+         */
+        public static class Mqtt {
+            /** 总开关。 */
+            private boolean enabled = false;
+            /** broker 地址，如 tcp://127.0.0.1:1883。 */
+            private String brokerUrl = "tcp://127.0.0.1:1883";
+            private String username = "";
+            private String password = "";
+            /** 我们的客户端 ID（与相机不同即可）。 */
+            private String clientId = "fangke-vehicle-gateway";
+            /** 上行主题（相机发布识别结果），支持通配符。 */
+            private String uploadTopic = "upload/+";
+            /** 下行主题前缀（我们发布指令），完整主题 = 前缀 + 设备SN。 */
+            private String downloadTopicPrefix = "download/";
+            private int qos = 0;
+            /** 保留消息：相机重连后能立即收到最新指令。 */
+            private boolean retained = false;
+
+            /** 新增/更新车牌的报文模板（${plate} ${begin} ${end} ${sn} 占位）。 */
+            private String addTemplate = "{\"CmdName\":\"AddNameList\",\"Data\":{\"plateNumber\":\"${plate}\",\"beginTime\":\"${begin}\",\"endTime\":\"${end}\"}}";
+            /** 删除车牌的报文模板（${plate} ${sn} 占位）。 */
+            private String deleteTemplate = "{\"CmdName\":\"DelNameList\",\"Data\":{\"plateNumber\":\"${plate}\"}}";
+            /** 全量覆盖车牌的报文模板（${items} 展开为 JSON 数组片段）。 */
+            private String importTemplate = "{\"CmdName\":\"ImportNameList\",\"Data\":{\"items\":[${items}]}}";
+
+            public boolean isEnabled() {
+                return enabled;
+            }
+
+            public void setEnabled(boolean enabled) {
+                this.enabled = enabled;
+            }
+
+            public String getBrokerUrl() {
+                return brokerUrl;
+            }
+
+            public void setBrokerUrl(String brokerUrl) {
+                this.brokerUrl = brokerUrl;
+            }
+
+            public String getUsername() {
+                return username;
+            }
+
+            public void setUsername(String username) {
+                this.username = username;
+            }
+
+            public String getPassword() {
+                return password;
+            }
+
+            public void setPassword(String password) {
+                this.password = password;
+            }
+
+            public String getClientId() {
+                return clientId;
+            }
+
+            public void setClientId(String clientId) {
+                this.clientId = clientId;
+            }
+
+            public String getUploadTopic() {
+                return uploadTopic;
+            }
+
+            public void setUploadTopic(String uploadTopic) {
+                this.uploadTopic = uploadTopic;
+            }
+
+            public String getDownloadTopicPrefix() {
+                return downloadTopicPrefix;
+            }
+
+            public void setDownloadTopicPrefix(String downloadTopicPrefix) {
+                this.downloadTopicPrefix = downloadTopicPrefix;
+            }
+
+            public int getQos() {
+                return qos;
+            }
+
+            public void setQos(int qos) {
+                this.qos = qos;
+            }
+
+            public boolean isRetained() {
+                return retained;
+            }
+
+            public void setRetained(boolean retained) {
+                this.retained = retained;
+            }
+
+            public String getAddTemplate() {
+                return addTemplate;
+            }
+
+            public void setAddTemplate(String addTemplate) {
+                this.addTemplate = addTemplate;
+            }
+
+            public String getDeleteTemplate() {
+                return deleteTemplate;
+            }
+
+            public void setDeleteTemplate(String deleteTemplate) {
+                this.deleteTemplate = deleteTemplate;
+            }
+
+            public String getImportTemplate() {
+                return importTemplate;
+            }
+
+            public void setImportTemplate(String importTemplate) {
+                this.importTemplate = importTemplate;
+            }
+        }
         /**
          * 云车场开放接口（`/thirdServer/v1/openApi`）。
          *

@@ -52,7 +52,9 @@ import type {
   WxBindingRow,
   ApprovalRecordRow,
   VehiclePlateSyncResult,
-  VehiclePlatePushState
+  VehiclePlatePushState,
+  VehicleMqttStatus,
+  VehicleMqttLogRow
 } from './types'
 
 /** 响应拦截器已解包 ApiResponse，这里只做类型断言。 */
@@ -203,6 +205,32 @@ export const deviceCmdQrConfig = (id: number) =>
 /** 改安全开关：存平台期望值 + 排队一次参数下发 */
 export const deviceCmdSetParams = (id: number, data: Record<string, boolean>) =>
   post<DeviceCommandResult>(`/admin/device/${id}/cmd/params`, data)
+
+/* ---------------- 车闸 MQTT 通道（docs/22） ---------------- */
+
+export const vehicleMqttStatus = () => get<VehicleMqttStatus>('/admin/vehicle/mqtt')
+export const vehicleMqttReconnect = () => post<VehicleMqttStatus>('/admin/vehicle/mqtt/reconnect')
+export const vehicleMqttLogs = (limit = 50) =>
+  get<VehicleMqttLogRow[]>('/admin/vehicle/mqtt/logs', { limit })
+export const vehicleMqttClearLogs = () => del<{ cleared: boolean }>('/admin/vehicle/mqtt/logs')
+/** 下发/更新车牌到相机（相机识别到就在白名单里 → 开门） */
+export const vehicleMqttAddPlate = (data: {
+  deviceSn: string
+  plateNo: string
+  beginTime?: string
+  endTime?: string
+}) => post<Record<string, unknown>>('/admin/vehicle/mqtt/plate', data)
+/** 从相机删除车牌 */
+export const vehicleMqttDeletePlate = (deviceSn: string, plateNo: string) =>
+  del<Record<string, unknown>>(
+    `/admin/vehicle/mqtt/plate?deviceSn=${encodeURIComponent(deviceSn)}&plateNo=${encodeURIComponent(plateNo)}`
+  )
+/** 发原始报文（协议探测/联调） */
+export const vehicleMqttRaw = (data: { deviceSn: string; payload: string }) =>
+  post<Record<string, unknown>>('/admin/vehicle/mqtt/raw', data)
+/** 全量对齐：把平台当前车牌推给所有车闸相机 */
+export const vehicleMqttImport = (gateId?: number) =>
+  post<{ plateTotal: number; devices: unknown[] }>('/admin/vehicle/mqtt/import', undefined, gateId ? { gateId } : undefined)
 
 /* ---------------- 员工 ---------------- */
 

@@ -128,6 +128,22 @@ fangke:
       employee-as-month-card: ${VEHICLE_CLOUD_EMPLOYEE_MONTH:false}
       auth-type: ${VEHICLE_CLOUD_AUTH_TYPE:0}
 
+    # 车闸相机 MQTT 通道（docs/22）：相机作为客户端连我们云上的 broker
+    mqtt:
+      enabled: ${VEHICLE_MQTT_ENABLED:true}
+      broker-url: ${VEHICLE_MQTT_BROKER_URL:tcp://127.0.0.1:1883}
+      username: ${VEHICLE_MQTT_USERNAME:fangke}
+      password: ${VEHICLE_MQTT_PASSWORD:}
+      client-id: ${VEHICLE_MQTT_CLIENT_ID:fangke-vehicle-gateway}
+      upload-topic: ${VEHICLE_MQTT_UPLOAD_TOPIC:upload/+}
+      download-topic-prefix: ${VEHICLE_MQTT_DOWNLOAD_PREFIX:download/}
+      qos: ${VEHICLE_MQTT_QOS:0}
+      retained: ${VEHICLE_MQTT_RETAINED:false}
+      # 报文模板：默认按相机「标准协议」的命令风格（CmdName + Data），可在 .env 覆盖
+      add-template: ${VEHICLE_MQTT_ADD_TEMPLATE:}
+      delete-template: ${VEHICLE_MQTT_DELETE_TEMPLATE:}
+      import-template: ${VEHICLE_MQTT_IMPORT_TEMPLATE:}
+
   storage:
     # 照片存对象存储（S3 兼容）。默认指向内网 MinIO —— 照片不出园区。
     # 换云 OSS/COS 只改这四项，业务代码不动。

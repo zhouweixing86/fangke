@@ -153,7 +153,8 @@ const menuTree: MenuNode[] = [
       { path: '/employees', title: '员工管理', icon: 'User', perm: 'employee:read' },
       { path: '/depts', title: '部门管理', icon: 'OfficeBuilding', perm: 'dept:read' },
       { path: '/gates', title: '门点管理', icon: 'Place', perm: 'gate:read' },
-      { path: '/devices', title: '设备管理', icon: 'Cpu', perm: 'device:read' }
+      { path: '/devices', title: '设备管理', icon: 'Cpu', perm: 'device:read' },
+      { path: '/vehicle-mqtt', title: '车闸对接', icon: 'Connection', perm: 'device:read' }
     ]
   },
   {
