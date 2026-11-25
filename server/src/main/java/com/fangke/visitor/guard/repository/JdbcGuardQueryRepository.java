@@ -1,5 +1,6 @@
 package com.fangke.visitor.guard.repository;
 
+import com.fangke.visitor.config.AppProperties;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -8,10 +9,15 @@ import java.util.List;
 @Repository
 public class JdbcGuardQueryRepository implements GuardQueryRepository {
 
-    private final JdbcTemplate jdbc;
+    /** 车闸相机的心跳（Rtd）间隔比人行终端宽松，给 3 分钟宽限，避免列表一闪一闪地变离线。 */
+    private static final int VEHICLE_HEART_GRACE_SECONDS = 180;
 
-    public JdbcGuardQueryRepository(JdbcTemplate jdbc) {
+    private final JdbcTemplate jdbc;
+    private final AppProperties props;
+
+    public JdbcGuardQueryRepository(JdbcTemplate jdbc, AppProperties props) {
         this.jdbc = jdbc;
+        this.props = props;
     }
 
     @Override
@@ -21,8 +27,14 @@ public class JdbcGuardQueryRepository implements GuardQueryRepository {
         Long today = jdbc.queryForObject("SELECT COUNT(1) FROM visit_record WHERE visit_date = CURDATE()",
                 Long.class);
         Integer total = jdbc.queryForObject("SELECT COUNT(1) FROM device WHERE status = 1", Integer.class);
-        Integer online = jdbc.queryForObject(
-                "SELECT COALESCE(SUM(online_state = 1), 0) FROM device WHERE status = 1", Integer.class);
+        // 设备断电后 online_state 可能还留着 1，按心跳新鲜度算在线才准（和列表口径一致）
+        int heartSeconds = Math.max(5, props.getDevice().getPullHeartSeconds());
+        Integer online = jdbc.queryForObject("""
+                SELECT COALESCE(SUM(CASE WHEN channel = 'VEHICLE'
+                        THEN last_heartbeat >= DATE_SUB(NOW(), INTERVAL ? SECOND)
+                        ELSE last_heartbeat >= DATE_SUB(NOW(), INTERVAL ? SECOND) END), 0)
+                FROM device WHERE status = 1
+                """, Integer.class, VEHICLE_HEART_GRACE_SECONDS, heartSeconds);
         return new Counts(
                 onsite == null ? 0 : onsite.intValue(),
                 pending == null ? 0 : pending.intValue(),

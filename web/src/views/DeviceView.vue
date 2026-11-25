@@ -407,8 +407,8 @@ import type {
 
 const route = useRoute()
 
-/** 人行终端 / 车闸相机分开管理（docs/18）；空字符串=全部 */
-const deviceKind = ref<string>('PULL')
+/** 人行终端 / 车闸相机分开管理（docs/18）；空字符串=全部（默认全看，避免“装了车闸却看不到”） */
+const deviceKind = ref<string>('')
 
 const loading = ref(false)
 const devices = ref<DeviceView[]>([])
