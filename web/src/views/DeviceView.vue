@@ -457,20 +457,21 @@ const syncAlertText = computed(() => {
   const result = syncResult.value
   if (!result) return ''
   const cloud = result.cloud
-  if (!cloud) {
-    const devices = result.devices || []
-    const pushed = devices.filter((d) => d.status === 'PUSHED').length
-    const failed = devices.filter((d) => d.status === 'FAILED').length
-    const pending = devices.filter((d) => d.status === 'PENDING_VENDOR').length
-    const detail = devices.filter((d) => d.status === 'PUSHED').map((d) => d.message).join('；')
-    return `车牌 ${result.plateTotal} 条：已下发 ${pushed} 台`
-      + (failed ? ` / 失败 ${failed} 台` : '')
-      + (pending ? ` / 待接入 ${pending} 台` : '')
-      + (detail ? `（${detail}）` : '')
-  }
-  const detail = `车牌 ${result.plateTotal} 条：新增 ${cloud.added} / 修改 ${cloud.modified} / ` +
+  const devices = result.devices || []
+  const pushed = devices.filter((d) => d.status === 'PUSHED').length
+  const failed = devices.filter((d) => d.status === 'FAILED').length
+  const pending = devices.filter((d) => d.status === 'PENDING_VENDOR').length
+  const detail = devices.filter((d) => d.status === 'PUSHED').map((d) => d.message).join('；')
+  const deviceText = `车牌 ${result.plateTotal} 条：已下发 ${pushed} 台`
+    + (failed ? ` / 失败 ${failed} 台` : '')
+    + (pending ? ` / 待接入 ${pending} 台` : '')
+    + (detail ? `（${detail}）` : '')
+  if (!cloud) return deviceText
+  const cloudDetail = `车牌 ${result.plateTotal} 条：新增 ${cloud.added} / 修改 ${cloud.modified} / ` +
     `删除 ${cloud.removed} / 无变化 ${cloud.unchanged} / 失败 ${cloud.failed}`
-  return cloud.dryRun ? `${cloud.message}（${detail}）` : detail
+  if (!cloud.dryRun) return cloudDetail
+  // 车场接口没启用时车闸走的是 MQTT：有相机结果就报相机，别让「未发送」盖住实际已下发
+  return (pushed || failed || pending) ? deviceText : `${cloud.message}（${cloudDetail}）`
 })
 
 async function load() {
@@ -566,16 +567,23 @@ async function doSyncPlates() {
   try {
     syncResult.value = await syncVehiclePlates(platesRow.value?.gateId || undefined)
     const cloud = syncResult.value.cloud
+    const devices = syncResult.value.devices || []
+    const pushed = devices.filter((d) => d.status === 'PUSHED').length
+    const failed = devices.filter((d) => d.status === 'FAILED')
     if (cloud && !cloud.dryRun) {
       if (cloud.failed > 0) {
         ElMessage.warning(`已下发，但有 ${cloud.failed} 条失败，详见下方错误`)
       } else {
         ElMessage.success(`已同步到车场：新增 ${cloud.added} / 修改 ${cloud.modified} / 删除 ${cloud.removed}`)
       }
-    } else if (cloud && cloud.dryRun) {
-      ElMessage.warning(cloud.message)
+    } else if (failed.length > 0) {
+      ElMessage.warning(`MQTT 下发失败：${failed[0].message}`)
+    } else if (pushed > 0) {
+      ElMessage.success(`已通过 MQTT 下发 ${syncResult.value.plateTotal} 条车牌到 ${pushed} 台车闸相机`)
     } else if (syncResult.value.pendingDevices > 0) {
       ElMessage.warning('车牌清单已备好，但车闸相机厂商协议还没接入，暂时投不到相机本地')
+    } else if (cloud && cloud.dryRun) {
+      ElMessage.warning(cloud.message)
     } else {
       ElMessage.success(`已下发 ${syncResult.value.plateTotal} 条车牌`)
     }
