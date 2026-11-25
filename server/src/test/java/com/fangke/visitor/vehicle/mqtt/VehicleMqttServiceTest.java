@@ -227,4 +227,18 @@ class VehicleMqttServiceTest {
         service.onUpload("upload/" + SN, ack);
         verify(logRepository).save(eq("UP"), eq(SN), eq("upload/" + SN), eq(ack), eq("下行回执：成功"));
     }
+
+    @Test
+    @DisplayName("相机拒绝下行（errCode=1）时清空对账状态，下一轮会整体重推")
+    void failedAckDropsPlateState() {
+        String nack = "{\"command\":\"DeleteCarInfo\",\"data\":\"{\\\"errCode\\\":1,\\\"errInfo\\\":\\\"White name list process busy.\\\"}\","
+                + "\"requestId\":\"9\",\"sn\":\"" + SN + "\",\"time\":\"2026-11-26 02:01:37\",\"version\":\"1.0.1\"}";
+        service.onUpload("upload/" + SN, nack);
+
+        verify(stateRepository, timeout(3000)).removeDevice(SN);
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(logRepository).save(eq("UP"), eq(SN), eq("upload/" + SN), eq(nack), message.capture());
+        assertTrue(message.getValue().contains("失败"), message.getValue());
+        assertTrue(message.getValue().contains("White name list process busy"), message.getValue());
+    }
 }

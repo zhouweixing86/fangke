@@ -355,8 +355,18 @@ public class VehicleMqttService {
         } else if (plate == null) {
             message = describeWithoutPlate(command, payload);
             if (message.startsWith("下行回执：失败")) {
-                // 相机拒绝了下行（如固件不支持该命令）：除了日志表，服务器日志也要留一条，便于巡检发现
+                // 相机拒绝了下行（如固件不支持该命令 / "White name list process busy."）：
+                // 除了日志表与服务器日志，还要把该设备的对账状态清掉，下一轮定时任务整体重推，
+                // 否则会「以为已下发」，现场名单少一条就打不开门。
                 log.warn("车闸下行被相机拒绝 device={} {} raw={}", deviceSn, message, payload);
+                sideChannel.submit(() -> {
+                    try {
+                        stateRepository.removeDevice(deviceSn);
+                        log.warn("设备 {} 下行被拒，已清空对账状态，下一轮自动重推", deviceSn);
+                    } catch (Exception e) {
+                        log.warn("清理对账状态失败 device={}：{}", deviceSn, e.getMessage());
+                    }
+                });
             }
         } else {
             try {
