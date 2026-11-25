@@ -13,6 +13,7 @@ import com.fangke.visitor.vehicle.repository.VehicleEventRepository;
 import com.fangke.visitor.vehicle.service.VehicleDeviceService;
 import com.fangke.visitor.vehicle.service.VehiclePlateService;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -40,11 +41,13 @@ public class AdminVehicleController {
     private final VehiclePlateService plateService;
     private final VehiclePlateCloudService plateCloudService;
     private final CloudParkingClient cloudClient;
+    private final com.fangke.visitor.device.pull.ProbeCapture probeCapture;
     private final com.fangke.visitor.config.AppProperties props;
 
     public AdminVehicleController(VehicleEventRepository eventRepository, GateService gateService,
                                   VehicleDeviceService deviceService, VehiclePlateService plateService,
                                   VehiclePlateCloudService plateCloudService, CloudParkingClient cloudClient,
+                                  com.fangke.visitor.device.pull.ProbeCapture probeCapture,
                                   com.fangke.visitor.config.AppProperties props) {
         this.eventRepository = eventRepository;
         this.gateService = gateService;
@@ -52,6 +55,7 @@ public class AdminVehicleController {
         this.plateService = plateService;
         this.plateCloudService = plateCloudService;
         this.cloudClient = cloudClient;
+        this.probeCapture = probeCapture;
         this.props = props;
     }
 
@@ -153,6 +157,28 @@ public class AdminVehicleController {
                     "车场接口未启用或缺少凭据（fangke.vehicle.cloud.*，见 docs/19 §3.1）");
         }
         return ApiResponse.ok(cloudClient.queryChannels());
+    }
+
+    /**
+     * 车闸/相机协议抓包（docs/19 §7）：最近的原始报文。
+     *
+     * <p>用法：相机「标准协议(HTTP)」的云平台地址临时指向本服务 → 打开 {@code DEVICE_OPENAPI_PROBE=true}
+     * → 车过一辆 → 这里就能看到它到底发了什么，按真实报文适配，不用等厂商文档。
+     */
+    @GetMapping("/probe")
+    public ApiResponse<Map<String, Object>> probe() {
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("enabled", props.getDevice().isOpenapiProbe());
+        view.put("rows", probeCapture.recent());
+        return ApiResponse.ok(view);
+    }
+
+    /** 清空抓包缓冲（重测前用）。 */
+    @DeleteMapping("/probe")
+    @AuditLog(module = "VEHICLE", action = "PROBE_CLEAR")
+    public ApiResponse<Map<String, Object>> clearProbe() {
+        probeCapture.clear();
+        return ApiResponse.ok(Map.of("cleared", true));
     }
 
     @GetMapping("/event")

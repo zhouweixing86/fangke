@@ -110,6 +110,8 @@ fangke:
     remote-port: ${DEVICE_REMOTE_PORT:9090}
     remote-password: ${DEVICE_REMOTE_PASSWORD:888888}
     remote-timeout-seconds: ${DEVICE_REMOTE_TIMEOUT:5}
+    # 车闸/相机协议抓包（临时排障）：开着时 /openapi/** 未匹配路径也回 200 并留报文，用完必须关
+    openapi-probe: ${DEVICE_OPENAPI_PROBE:false}
 
   # 车闸：云车场开放接口（docs/19）。接口需车场方付费开通；凭据未配置时只算差异不发送
   vehicle:

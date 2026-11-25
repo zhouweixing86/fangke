@@ -253,6 +253,9 @@ public class AppProperties {
         /** 远程调用超时（秒）：设备可能离线，不能把平台线程拖死。 */
         private int remoteTimeoutSeconds = 5;
 
+        /** 车闸/相机协议抓包：兜底 /openapi/** 未知路径并留报文（临时排障，默认关）。 */
+        private boolean openapiProbe = false;
+
         public int getRemotePort() {
             return remotePort;
         }
@@ -275,6 +278,14 @@ public class AppProperties {
 
         public void setRemoteTimeoutSeconds(int remoteTimeoutSeconds) {
             this.remoteTimeoutSeconds = remoteTimeoutSeconds;
+        }
+
+        public boolean isOpenapiProbe() {
+            return openapiProbe;
+        }
+
+        public void setOpenapiProbe(boolean openapiProbe) {
+            this.openapiProbe = openapiProbe;
         }
 
         public String getPullSignKey() {
