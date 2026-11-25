@@ -360,7 +360,7 @@ Invoke-WebRequest -Uri 'http://<ip>/Signalway.fcgi?命令' -Method Post -Body ([
 | 报表并车 | 查 `/api/admin/report/access` | 按设备出现「出口道闸相机 1」、按方式出现「人工开门 1」 |
 | 手动开闸 | `POST /mqtt/open`（不带车牌） | `Open` → 回执 0；记录一条「人工远程开闸（admin）」 |
 | broker 重启韧性 | `systemctl restart mosquitto` | 网关 **2 秒**内重连；相机立即重连（公网 117.89.73.58）并重新 `Conn`；心跳 8 秒内恢复；全程 0 WARN/ERROR |
-| 长稳采样 | 02:46–03:52 每分钟采样（RSS / 心跳年龄 / 对账状态 / 告警数） | RSS 294→315MB 平稳（无持续爬升），心跳年龄始终 ≤ 60 秒，对账状态与平台数据一致 |
+| 长稳采样 | 02:46–03:52 与 03:24–04:11 两轮每分钟采样（RSS / 心跳年龄 / 对账状态 / 告警数） | 第一轮 RSS 294→315MB（期间多次重启部署）；第二轮 03:23 重启后 298→306MB，47 分钟仅 +8MB 且已收敛（≈0.17MB/min），心跳年龄始终 15–17 秒，对账状态与平台数据一致，`journalctl` 近 1 小时 0 条 WARN/ERROR |
 
 ### 12.3 现场上线检查清单
 
