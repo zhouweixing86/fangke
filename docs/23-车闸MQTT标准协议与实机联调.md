@@ -537,3 +537,55 @@ Invoke-WebRequest -Uri 'http://<ip>/Signalway.fcgi?命令' -Method Post -Body ([
 | 刚改完想立刻生效 | 「立即对齐」/「下发到车闸相机」（差量，快） |
 | **怀疑相机名单被人工改过** | **强制同步（清空重推）** |
 | 相机恢复出厂/换了新相机 | 相机 `Conn` 时自动全量重推，无需人工 |
+
+## 16. 抓拍图：不走云 OSS，相机 BASE64 回传 + 平台自存
+
+### 16.1 问题
+
+相机上报的 `picN_full` 是**它自己传阿里云 OSS 后生成的链接**，而现场相机的 OSS 仍是厂商的测试桶/密钥：
+
+```
+picN_full = http://weiboyun-oss.oss-cn-hangzhou.aliyuncs.com/picture/684511/COPCM-.../20261126112000.jpg
+→ 实测 HTTP 404（图根本没传上去）
+```
+
+结果：通行记录里「照片」列是裂图，等于没有抓拍。
+
+### 16.2 做法
+
+协议 §4.4.1 的 `Image` 命令可以指定图片上传方式：
+
+```json
+{"command":"Image","data":"{\"type\":0}", ...}   // 0 = BASE64 走 MQTT；1 = 相机传阿里云 OSS
+```
+
+平台改造：
+
+1. 相机 `Conn` 时自动下发 `Image{type:0}`（配置项 `fangke.vehicle.mqtt.image-base64`，默认开）；
+2. 识别结果里的 `picNFile`（大图，兜底 `picMinFile`）取出 → 存 MinIO；
+3. **`raw_json` 里把 BASE64 抠掉**再入库（一张图几百 KB，整段存进去会把库撑爆，实测从 300KB 降到 243 字节）；
+4. 通行明细里 `photo_url` 为空时，用 `photo_key` 生成预签名链接回填。
+
+MinIO 只监听 `127.0.0.1:9000`，浏览器够不到，所以 nginx 反代：
+
+```nginx
+location /media/ {
+    proxy_pass http://127.0.0.1:9000/;
+    proxy_set_header Host 127.0.0.1:9000;   # 必须改回内网 host，预签名才验得过
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+}
+```
+
+预签名 URL 里的内网 endpoint 由 `S3_PUBLIC_BASE=http://58.87.99.249/media` 重写。
+
+### 16.3 实测
+
+| 步骤 | 结果 |
+|---|---|
+| 下发 `Image{type:0}` | 两台相机均回 `errCode=0` |
+| 模拟一条带 BASE64 的 `Result` | `vehicle_event.photo_key = vehicle-event/20261126/...jpg`，`raw_json` 243 字节 |
+| 通行明细 `photoUrl` | `http://58.87.99.249/media/fangke/vehicle-event/...jpg?X-Amz-...` |
+| 直接访问该链接 | **HTTP 200，`image/jpeg`，内容正确** |
+
+> 预签名有效期 5 分钟（`fangke.storage.presign-ttl`），每次打开页面重新生成；桶仍是私有的，不暴露直链。
