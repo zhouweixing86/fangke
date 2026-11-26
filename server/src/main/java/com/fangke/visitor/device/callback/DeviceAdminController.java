@@ -48,6 +48,7 @@ public class DeviceAdminController {
     private final GateService gateService;
     private final com.fangke.visitor.vehicle.mqtt.VehicleMqttPlateStateRepository plateStateRepository;
     private final com.fangke.visitor.device.service.ExpectedPersonPort expectedPersonPort;
+    private final com.fangke.visitor.device.service.PersonStateStore stateStore;
     private final com.fangke.visitor.config.AppProperties props;
 
     public DeviceAdminController(DeviceRepository deviceRepository,
@@ -57,6 +58,7 @@ public class DeviceAdminController {
                                  GateService gateService,
                                  com.fangke.visitor.vehicle.mqtt.VehicleMqttPlateStateRepository plateStateRepository,
                                  com.fangke.visitor.device.service.ExpectedPersonPort expectedPersonPort,
+                                 com.fangke.visitor.device.service.PersonStateStore stateStore,
                                  com.fangke.visitor.config.AppProperties props) {
         this.deviceRepository = deviceRepository;
         this.adapterFactory = adapterFactory;
@@ -65,6 +67,7 @@ public class DeviceAdminController {
         this.gateService = gateService;
         this.plateStateRepository = plateStateRepository;
         this.expectedPersonPort = expectedPersonPort;
+        this.stateStore = stateStore;
         this.props = props;
     }
 
@@ -196,6 +199,60 @@ public class DeviceAdminController {
     @GetMapping("/{id}/capabilities")
     public ApiResponse<List<Map<String, Object>>> capabilities(@PathVariable Long id) {
         return ApiResponse.ok(capabilityService.describe(load(id)));
+    }
+
+    /**
+     * 行人终端「残留名单清理」（补偿）。
+     *
+     * <p>PULL 协议既没有「清空名单」指令，也不能读设备名单，所以只能做差集：
+     * 平台下发记录（{@code person_device_state}）− 当前应有名单（有效授权）。
+     * 现场有人在设备上手工登记过、或者我们绕过停职直接改过数据时，用这个把设备拉回平台的账；
+     * 差集里「应该有但平台没下发记录」的人会单独列出来，提示重新下发。
+     */
+    @PostMapping("/{id}/person-cleanup")
+    @AuditLog(module = "DEVICE", action = "PERSON_CLEANUP")
+    public ApiResponse<Map<String, Object>> personCleanup(@PathVariable Long id) {
+        Device device = load(id);
+        if (device.getGateId() == null) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "该设备还没分配门点，无法计算应有名单");
+        }
+        DeviceAdapter adapter = adapterFactory.resolve(device);
+        java.util.Set<String> expected = expectedPersonPort
+                .expectedOn(device.getGateId(), java.time.Instant.now()).stream()
+                .map(com.fangke.visitor.device.service.ExpectedPersonPort.ExpectedPerson::personNo)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        List<String> tracked = stateStore.expectedIn(id);
+        List<String> removed = new java.util.ArrayList<>();
+        List<String> failed = new java.util.ArrayList<>();
+        for (String personNo : tracked) {
+            if (expected.contains(personNo)) {
+                continue;
+            }
+            try {
+                gateway.execute(device, "removePerson:" + personNo, d -> {
+                    capabilityService.require(d, DeviceCapability.PERSON_REMOVE, "清理残留名单");
+                    adapter.removePerson(d, personNo, props.getDevice().getVisitorUserType());
+                    return null;
+                });
+                stateStore.save(id, personNo,
+                        com.fangke.visitor.device.service.PersonStateStore.EXPECT_OUT,
+                        com.fangke.visitor.device.service.PersonStateStore.ACTUAL_OUT, false);
+                removed.add(personNo);
+            } catch (Exception e) {
+                failed.add(personNo + "：" + e.getMessage());
+            }
+        }
+        List<String> missing = expected.stream()
+                .filter(personNo -> !tracked.contains(personNo))
+                .toList();
+        Map<String, Object> view = new java.util.LinkedHashMap<>();
+        view.put("deviceSn", device.getDeviceSn());
+        view.put("expected", expected.size());
+        view.put("tracked", tracked.size());
+        view.put("removed", removed);
+        view.put("failed", failed);
+        view.put("missing", missing);
+        return ApiResponse.ok(view);
     }
 
     private Device load(Long id) {

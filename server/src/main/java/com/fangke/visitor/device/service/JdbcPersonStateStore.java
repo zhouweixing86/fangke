@@ -27,4 +27,11 @@ public class JdbcPersonStateStore implements PersonStateStore {
     public void save(Long deviceId, String personNo, int expectState, int actualState, boolean diff) {
         jdbc.update(UPSERT, deviceId, personNo, expectState, actualState, diff ? 1 : 0);
     }
+
+    @Override
+    public java.util.List<String> expectedIn(Long deviceId) {
+        return jdbc.queryForList(
+                "SELECT person_no FROM person_device_state WHERE device_id = ? AND expect_state = ?",
+                String.class, deviceId, PersonStateStore.EXPECT_IN);
+    }
 }

@@ -589,3 +589,114 @@ location /media/ {
 | 直接访问该链接 | **HTTP 200，`image/jpeg`，内容正确** |
 
 > 预签名有效期 5 分钟（`fangke.storage.presign-ttl`），每次打开页面重新生成；桶仍是私有的，不暴露直链。
+
+## 17. 上线前收尾：同行人按人记、回执可见、残留清理、日志轮转（2026-11-26 11:20–12:10）
+
+现场三台设备（大门入口行人终端 `2608252243655`、入口相机 `COPCM-E10-LS26050979`、出口相机 `COPCM-E10-LS26050994`）全部在线，本轮把「上线前必须补齐的体验与事故预防」一次做完。
+
+### 17.1 团队预约：一辆车按人各记一条通行记录
+
+**问题**：`appointment.mate_count` 只是同行人数量，`VehicleAccessService.judge()` 只返回一个匹配人 —— 一辆车带 8 个人进门，平台只有 1 条记录，通行汇总的人次会少算。
+
+**实现**：
+
+| 位置 | 改动 |
+|---|---|
+| `VehicleAccessService.judgeGroup()` | 返回该车牌此刻可通行的**所有人**：员工 1 人；访客 = 主访客 + `appointment_mate` 里 `is_main=0` 的同行人 |
+| `VehicleAccessService.recordGroup()` | 按人逐条落库；事件号 `抓拍事件号`、`抓拍事件号-1`、`...-2`，相机重复补传仍然幂等 |
+| 抓拍图 | 只上传一次，其余记录引用同一个 `photo_key`；`raw_json` 只在第一条存一份（避免一条车事件写 N 份大报文） |
+| 同行人编号 | `appointment_mate.person_no` 目前为空（M6 未分配）时用 `预约号-序号` 兜底，例如 `V202611260099-1` |
+| 其它入口 | `VehicleOpenApiController`（第三方推送识别结果）同样改走 `judgeGroup/recordGroup`，返回里多给一个 `personCount` |
+
+**实测**（种子数据：访客 `V202611260099` + 同行人甲/乙，车牌 `京B99999`，门点 1）：
+
+1. `POST /admin/dispatch/V202611260099` → `success=1`，预约状态 30 → 35（GRANTED），`access_grant` 1 条、车牌推到两台相机
+2. 用 `mosquitto_pub` 往 `upload/COPCM-E10-LS26050979` 发一条 `Result{carNO:京B99999}`（模拟相机识别）
+3. `vehicle_event` 得到 3 条：
+
+| event_uuid | person_no | matched_name |
+|---|---|---|
+| `MQTT94ab...87ee` | `V202611260099` | 团队测试主访客 |
+| `MQTT94ab...87ee-1` | `V202611260099-1` | 同行人甲 |
+| `MQTT94ab...87ee-2` | `V202611260099-2` | 同行人乙 |
+
+4. 通行汇总按人分 3 行（各 1 进 0 出），`/{personNo}/detail` 也能按同行人编号查到明细
+
+> 撤销授权后 25 秒内对账把车牌从两台相机删掉（`下行：删除车牌 京B99999` + 回执成功），`vehicle_mqtt_plate_state` 只剩 `京A12345`。
+
+### 17.2 车牌名单加「下发时间 / 回执状态」
+
+`GET /api/admin/vehicle/plate?deviceSn=<SN>` 现在额外返回：
+
+- 每条车牌：`pushedAt`（对账状态表里的最近下发时间）、`mqttStatus`、`mqttStatusText`
+- 整表：`lastReply`（这台相机最近一次下行回执）
+
+| `mqttStatus` | 文案 | 判定 |
+|---|---|---|
+| `NOT_PUSHED` | 未下发 | 对账状态表里没有这条车牌 |
+| `PUSHED` | 已下发（暂无回执） | 有下发记录、但这条设备还没有任何回执 |
+| `WAITING` | 等待回执 | 最近回执时间**早于**这条车牌的下发时间 |
+| `CONFIRMED` | 相机已确认 | 最近一次回执成功，且晚于下发时间 |
+| `REJECTED` | 回执失败 | 最近一次回执（errCode≠0）晚于下发时间 |
+
+> 协议回执**不带车牌**，所以「确认」只能按时间先后推断，页面上也写明了这一点 —— 宁可承认是推断，也不要给个假的「已下发成功」。
+
+实测（入口相机）：`京A12345` `pushedAt=2026-11-26 12:02:40`、`CONFIRMED`，最近回执 12:02:40 成功。
+
+### 17.3 「最近一次失败回执」提示
+
+`GET /api/admin/vehicle/mqtt/last-failure[?deviceSn=]` → `{failure, reply}`：
+
+- `failure`：最近一条 `下行回执：失败 errCode=… errInfo=…`（没有则 `null`）
+- `reply`：最近一条回执（成功/失败都算）
+
+车闸对接页顶部直接显示，并说明「平台已清掉该设备的对账状态、20 秒内自动整体重推」，不用再去日志表里翻。
+
+### 17.4 强制同步支持「全部车闸」
+
+`POST /api/admin/vehicle/mqtt/force-resync-all`：逐台在线相机执行「ClearData → 全量重推 → 补发 DlPassRule」，返回 `{deviceTotal, succeeded, devices[{deviceSn,status,error}]}`。
+
+- 离线的相机跳过并给原因（指令发出去它也收不到，不如让人到现场）
+- 一台失败不影响其它台
+
+实测：两台相机 `CLEARED`，`vehicle_mqtt_plate_state` 各 1 条、回执成功、`OverUpdate{passruler:1}` 正常。
+
+### 17.5 行人终端「残留名单清理」（补偿）
+
+**背景**：PULL 协议既没有「清空名单」指令，也读不到设备名单。绕过停职直接改库、或现场在设备上登记过人之后，终端会留平台不认的人（此前出现过终端残留 8 人）。
+
+**做法**：只能做差集 —— `person_device_state(EXPECT_IN)` − `access_grant(status=1 且在有效期内)`：
+
+```
+POST /api/admin/device/{id}/person-cleanup
+→ {deviceSn, expected, tracked, removed[], failed[], missing[]}
+```
+
+- `removed`：差集里（平台下发过、现在不该在）逐个 `removePerson` 成功的人
+- `failed`：设备拒绝/离线
+- `missing`：平台认为该在、但没有下发记录的人 —— 提示用「员工 → 同步全部」重推
+
+**配套修复**：员工派发原先不写 `person_device_state`，导致员工残留永远查不出来。`EmployeeDispatchService.push/remove` 现在也写对账记录。
+
+**实测**：
+
+| 轮次 | 结果 |
+|---|---|
+| 第一次（清理前 `tracked=2`, `expected=1`） | `removed=[V202611240001, V202611250001]`（历史测试残留），`failed=[]` |
+| 员工 `sync-all` 后 | `person_device_state` 出现 `E000001(EXPECT_IN)`，`E000002(EXPECT_OUT)` |
+| 第二次 | `removed=[] missing=[]`（幂等） |
+
+### 17.6 日志轮转：只保留 15 天
+
+| 对象 | 配置 |
+|---|---|
+| `/opt/fangke/logs/*.log` | `/etc/logrotate.d/fangke`：`daily`、`rotate 15`、`compress`、`delaycompress`、`copytruncate`、`dateext`、`su root root` |
+| nginx 自带日志 | `/etc/logrotate.d/nginx` 的 `rotate 14 → 15` |
+| journald | `MaxRetentionSec=15day`、`SystemMaxUse=500M` |
+| DB `vehicle_mqtt_log` | `fangke.job.vehicle-mqtt-log-retention-days` 30 → **15** |
+| DB `job_run_log` | `fangke.job.job-log-retention-days` 30 → **15** |
+| docker（mysql/minio） | 已是 `max-size=10m, max-file=3`，不会无限增长 |
+
+> **为什么必须用 `copytruncate`**：java（systemd `StandardOutput=append:`）和 nginx 都**持着文件 fd**，`mv` 走的老写法会让它们继续往已改名的归档文件里写，`stdout.log` 永远是空的。
+
+实测：`logrotate -f /etc/logrotate.d/fangke` 后生成 `stdout.log-20261126`、`stderr.log-20261126`、`mqtt-capture.log-20261126`、`access.log-20261126`，新 `*.log` 归零，`systemctl is-active fangke-visitor` = active、nginx `http://127.0.0.1/` = 200。

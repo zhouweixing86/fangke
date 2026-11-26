@@ -20,6 +20,7 @@ import com.fangke.visitor.security.CryptoService;
 import com.fangke.visitor.storage.StorageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.fangke.visitor.device.service.PersonStateStore;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,6 +59,7 @@ public class EmployeeDispatchService {
     private final DeviceCapabilityService capabilityService;
     private final GateService gateService;
     private final CryptoService crypto;
+    private final PersonStateStore stateStore;
 
     public EmployeeDispatchService(EmployeeRepository employeeRepository,
                                    EmployeeFaceRepository faceRepository,
@@ -68,7 +70,8 @@ public class EmployeeDispatchService {
                                    DeviceGateway gateway,
                                    DeviceCapabilityService capabilityService,
                                    GateService gateService,
-                                   CryptoService crypto) {
+                                   CryptoService crypto,
+                                   PersonStateStore stateStore) {
         this.employeeRepository = employeeRepository;
         this.faceRepository = faceRepository;
         this.storageService = storageService;
@@ -79,6 +82,7 @@ public class EmployeeDispatchService {
         this.capabilityService = capabilityService;
         this.gateService = gateService;
         this.crypto = crypto;
+        this.stateStore = stateStore;
     }
 
     /* ---------------- 对外 ---------------- */
@@ -232,6 +236,9 @@ public class EmployeeDispatchService {
             adapter.upsertPerson(d, payload);
             return null;
         });
+        // 记一笔对账状态：设备上「该有这个人」，残留名单清理据此算差集
+        stateStore.save(device.getId(), payload.getPersonNo(), PersonStateStore.EXPECT_IN,
+                PersonStateStore.ACTUAL_IN, false);
     }
 
     private void remove(Device device, String personNo) {
@@ -241,6 +248,8 @@ public class EmployeeDispatchService {
             adapter.removePerson(d, personNo, PersonPayload.USER_TYPE_WHITE);
             return null;
         });
+        stateStore.save(device.getId(), personNo, PersonStateStore.EXPECT_OUT,
+                PersonStateStore.ACTUAL_OUT, false);
     }
 
     private PersonPayload payload(Employee employee) {

@@ -401,6 +401,11 @@ class DispatchServiceTest {
         public void save(Long deviceId, String personNo, int expectState, int actualState, boolean diff) {
             rows.add(deviceId + ":" + personNo + ":" + expectState + "/" + actualState + ":" + diff);
         }
+
+        @Override
+        public java.util.List<String> expectedIn(Long deviceId) {
+            return new ArrayList<>();
+        }
     }
 
     /* ---------------- 固定数据 ---------------- */

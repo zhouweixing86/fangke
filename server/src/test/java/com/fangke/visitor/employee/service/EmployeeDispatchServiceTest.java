@@ -98,7 +98,8 @@ class EmployeeDispatchServiceTest {
 
         service = new EmployeeDispatchService(employeeRepository, faceRepository, storageService,
                 deviceRepository, grantRepository, adapterFactory, gateway,
-                mock(DeviceCapabilityService.class), gateService, new CryptoService(props));
+                mock(DeviceCapabilityService.class), gateService, new CryptoService(props),
+                mock(com.fangke.visitor.device.service.PersonStateStore.class));
     }
 
     private static Device device(Long id, String sn, Long gateId) {

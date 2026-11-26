@@ -103,6 +103,17 @@ export const openDeviceDoor = (id: number) => post<{ opened: boolean }>(`/admin/
 export const getDeviceCapabilities = (id: number) =>
   get<DeviceCapabilityRow[]>(`/admin/device/${id}/capabilities`)
 
+/** 行人终端残留名单清理：把「平台下发过、现在不该在」的人逐个删掉（PULL 协议没有清空指令） */
+export const cleanupDevicePersons = (id: number) =>
+  post<{
+    deviceSn: string
+    expected: number
+    tracked: number
+    removed: string[]
+    failed: string[]
+    missing: string[]
+  }>(`/admin/device/${id}/person-cleanup`)
+
 /* ---------------- 设备远程管理（平台直连设备 9090） ---------------- */
 
 export interface DeviceRemoteInfo {
@@ -245,6 +256,19 @@ export const vehicleMqttSync = (deviceSn: string) =>
 export const vehicleMqttForceResync = (deviceSn: string) =>
   post<Record<string, unknown>>(
     `/admin/vehicle/mqtt/force-resync?deviceSn=${encodeURIComponent(deviceSn)}`
+  )
+/** 强制同步全部车闸：逐台清空重推，离线的跳过并说明原因 */
+export const vehicleMqttForceResyncAll = () =>
+  post<{
+    deviceTotal: number
+    succeeded: number
+    devices: Array<{ deviceSn: string; deviceName?: string; status: string; error?: string }>
+  }>('/admin/vehicle/mqtt/force-resync-all')
+/** 最近一次失败回执（相机 errCode≠0），page 上直接提示 */
+export const vehicleMqttLastFailure = (deviceSn?: string) =>
+  get<{ failure: VehicleMqttLogRow | null; reply: VehicleMqttLogRow | null }>(
+    '/admin/vehicle/mqtt/last-failure',
+    deviceSn ? { deviceSn } : undefined
   )
 /** 全量对齐：把平台当前车牌推给所有车闸相机 */
 export const vehicleMqttImport = (gateId?: number) =>
@@ -561,8 +585,12 @@ export const listVehicleEvents = (params: Record<string, unknown>) =>
 /* ---------------- 车闸相机车牌名单（docs/18，厂商协议待接入） ---------------- */
 
 /** 车牌清单快照：员工白名单 + 当天已授权访客（平台侧"应该下发什么"） */
-export const getVehiclePlates = (gateId?: number) =>
-  get<VehiclePlateSnapshot>('/admin/vehicle/plate', gateId ? { gateId } : undefined)
+/** 车牌名单快照；带 deviceSn 时附带这台相机的下发时间与回执状态 */
+export const getVehiclePlates = (gateId?: number, deviceSn?: string) =>
+  get<VehiclePlateSnapshot>('/admin/vehicle/plate', {
+    ...(gateId ? { gateId } : {}),
+    ...(deviceSn ? { deviceSn } : {})
+  })
 
 /** 下发车牌名单到车闸相机；云车场启用时走 visitor_sync 差分下发 */
 export const syncVehiclePlates = (gateId?: number) =>

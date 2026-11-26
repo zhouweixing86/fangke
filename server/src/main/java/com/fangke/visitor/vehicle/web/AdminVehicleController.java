@@ -10,6 +10,8 @@ import com.fangke.visitor.vehicle.model.VehicleEvent;
 import com.fangke.visitor.vehicle.cloud.CloudParkingClient;
 import com.fangke.visitor.vehicle.cloud.VehiclePlateCloudService;
 import com.fangke.visitor.vehicle.repository.VehicleEventRepository;
+import com.fangke.visitor.vehicle.mqtt.VehicleMqttPlateStateRepository;
+import com.fangke.visitor.vehicle.mqtt.VehicleMqttService;
 import com.fangke.visitor.vehicle.service.VehicleDeviceService;
 import com.fangke.visitor.vehicle.service.VehiclePlateService;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,12 +46,16 @@ public class AdminVehicleController {
     private final CloudParkingClient cloudClient;
     private final com.fangke.visitor.device.pull.ProbeCapture probeCapture;
     private final com.fangke.visitor.config.AppProperties props;
+    private final VehicleMqttPlateStateRepository stateRepository;
+    private final VehicleMqttService mqttService;
 
     public AdminVehicleController(VehicleEventRepository eventRepository, GateService gateService,
                                   VehicleDeviceService deviceService, VehiclePlateService plateService,
                                   VehiclePlateCloudService plateCloudService, CloudParkingClient cloudClient,
                                   com.fangke.visitor.device.pull.ProbeCapture probeCapture,
-                                  com.fangke.visitor.config.AppProperties props) {
+                                  com.fangke.visitor.config.AppProperties props,
+                                  VehicleMqttPlateStateRepository stateRepository,
+                                  VehicleMqttService mqttService) {
         this.eventRepository = eventRepository;
         this.gateService = gateService;
         this.deviceService = deviceService;
@@ -57,6 +64,8 @@ public class AdminVehicleController {
         this.cloudClient = cloudClient;
         this.probeCapture = probeCapture;
         this.props = props;
+        this.stateRepository = stateRepository;
+        this.mqttService = mqttService;
     }
 
     /**
@@ -75,11 +84,20 @@ public class AdminVehicleController {
     /**
      * 车牌名单快照：员工白名单 + 当天已授权访客（平台侧"应该下发什么"）。
      *
-     * <p>厂商协议未接入前，现场就用这个接口核对车牌是否填对。
+     * <p>带上 {@code deviceSn} 时，额外返回这台相机上的「下发时间 / 回执状态」——
+     * 协议没有读名单指令，只能按对账状态表 + 回执日志推断，所以这两个字段是「平台推过什么 + 相机怎么答的」，
+     * 不是「相机里到底有什么」。
      */
     @GetMapping("/plate")
-    public ApiResponse<Map<String, Object>> plates(@RequestParam(required = false) Long gateId) {
+    public ApiResponse<Map<String, Object>> plates(@RequestParam(required = false) Long gateId,
+                                                   @RequestParam(required = false) String deviceSn) {
         List<PlatePayload> plates = plateService.snapshot(gateId);
+        String sn = deviceSn == null || deviceSn.isBlank() ? "" : deviceSn.trim();
+        Map<String, LocalDateTime> pushed = sn.isEmpty() ? Map.of() : stateRepository.pushedAt(sn);
+        Map<String, Object> lastReply = sn.isEmpty() ? null : mqttService.lastReply(sn);
+        LocalDateTime replyAt = lastReply == null ? null : timeOf(lastReply.get("created_at"));
+        boolean replyOk = lastReply != null
+                && String.valueOf(lastReply.get("message")).startsWith("下行回执：成功");
         List<Map<String, Object>> rows = plates.stream().map(p -> {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("plateNo", p.plateNo());
@@ -90,14 +108,59 @@ public class AdminVehicleController {
             row.put("validFrom", p.validFrom() == null ? "" : DATETIME.format(p.validFrom()));
             row.put("validTo", p.validTo() == null ? "" : DATETIME.format(p.validTo()));
             row.put("validToText", plateService.validToText(p.validTo()));
+            LocalDateTime pushedAt = pushed.get(p.plateNo());
+            row.put("pushedAt", pushedAt == null ? "" : DATETIME.format(pushedAt));
+            String[] state = mqttState(sn, pushedAt, lastReply, replyAt, replyOk);
+            row.put("mqttStatus", state[0]);
+            row.put("mqttStatusText", state[1]);
             return row;
         }).toList();
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("summary", plateService.countByOwner(plates));
         view.put("gateId", gateId == null ? 0L : gateId);
         view.put("gateName", gateId == null ? "" : gateService.nameOf(gateId));
+        view.put("deviceSn", sn);
+        view.put("lastReply", lastReply);
         view.put("plates", rows);
         return ApiResponse.ok(view);
+    }
+
+    /**
+     * 单条车牌的 MQTT 下发状态：{未下发 / 已下发待回执 / 相机已确认 / 回执失败}。
+     *
+     * <p>回执报文里不带车牌，所以「确认」只能按「这条车牌的下发时间早于最近一次成功回执」来推断。
+     */
+    private static String[] mqttState(String deviceSn, LocalDateTime pushedAt,
+                                      Map<String, Object> lastReply, LocalDateTime replyAt, boolean replyOk) {
+        if (deviceSn.isEmpty()) {
+            return new String[]{"", ""};
+        }
+        if (pushedAt == null) {
+            return new String[]{"NOT_PUSHED", "未下发"};
+        }
+        if (lastReply == null) {
+            return new String[]{"PUSHED", "已下发（暂无回执）"};
+        }
+        if (replyAt != null && replyAt.isBefore(pushedAt)) {
+            return new String[]{"WAITING", "等待回执"};
+        }
+        return replyOk
+                ? new String[]{"CONFIRMED", "相机已确认"}
+                : new String[]{"REJECTED", "回执失败"};
+    }
+
+    /** JDBC 取出来的时间列可能是 Timestamp / LocalDateTime，统一成 LocalDateTime。 */
+    private static LocalDateTime timeOf(Object value) {
+        if (value instanceof LocalDateTime time) {
+            return time;
+        }
+        if (value instanceof java.sql.Timestamp ts) {
+            return ts.toLocalDateTime();
+        }
+        if (value instanceof java.time.OffsetDateTime odt) {
+            return odt.toLocalDateTime();
+        }
+        return null;
     }
 
     /** 把车牌名单推给车闸相机（预留：厂商协议未接入时返回 PENDING_VENDOR）。 */

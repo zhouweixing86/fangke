@@ -112,6 +112,23 @@ public class VehicleMqttController {
         return ApiResponse.ok(service.forceResync(deviceSn.trim()));
     }
 
+    /** 强制同步全部车闸：逐台清空重推，离线的跳过并说明原因。 */
+    @PostMapping("/force-resync-all")
+    @AuditLog(module = "VEHICLE", action = "MQTT_FORCE_RESYNC_ALL")
+    public ApiResponse<Map<String, Object>> forceResyncAll() {
+        return ApiResponse.ok(service.forceResyncAll());
+    }
+
+    /** 最近一次失败回执：相机拒绝下行时页面上直接提示，不用去翻日志表。 */
+    @GetMapping("/last-failure")
+    public ApiResponse<Map<String, Object>> lastFailure(
+            @RequestParam(required = false) String deviceSn) {
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("failure", service.lastFailure(deviceSn));
+        view.put("reply", service.lastReply(deviceSn));
+        return ApiResponse.ok(view);
+    }
+
     /** 使能下行回执（相机回复 errCode，便于确认下发是否被接受）。 */
     @PostMapping("/enable-reply")
     @AuditLog(module = "VEHICLE", action = "MQTT_ENABLE_REPLY")

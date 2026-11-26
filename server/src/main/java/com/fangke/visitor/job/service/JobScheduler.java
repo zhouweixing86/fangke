@@ -41,10 +41,10 @@ public class JobScheduler {
     @Value("${fangke.job.notification-retention-days:180}")
     private int notificationAllDays;
 
-    @Value("${fangke.job.job-log-retention-days:30}")
+    @Value("${fangke.job.job-log-retention-days:15}")
     private int jobLogDays;
 
-    @Value("${fangke.job.vehicle-mqtt-log-retention-days:30}")
+    @Value("${fangke.job.vehicle-mqtt-log-retention-days:15}")
     private int vehicleMqttLogDays;
 
     @Value("${fangke.job.batch-size:200}")

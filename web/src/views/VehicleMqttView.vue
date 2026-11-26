@@ -20,6 +20,14 @@
     <el-alert v-else-if="status?.lastError" type="error" :closable="false" show-icon style="margin-bottom: 12px"
       :title="`最近错误：${status.lastError}`" />
 
+    <el-alert v-if="lastFailure" type="error" :closable="true" show-icon style="margin-bottom: 12px"
+      :title="`最近一次失败回执：${lastFailure.created_at} ${lastFailure.device_sn || ''} ${lastFailure.message}`">
+      <template #default>
+        相机拒绝了下行，平台已清掉该设备的对账状态并在下一轮（20 秒内）自动整体重推；
+        反复失败通常是固件不支持该命令或名单繁忙（White name list process busy），可稍后点「强制同步」。
+      </template>
+    </el-alert>
+
     <el-row :gutter="16">
       <el-col :span="12">
         <el-card shadow="never" header="下发 / 删除车牌">
@@ -46,6 +54,9 @@
               <el-button type="danger" plain :loading="busy === 'del'" @click="doDelete">删除车牌</el-button>
               <el-button :loading="busy === 'import'" @click="doImport">全量对齐</el-button>
               <el-button type="warning" plain :loading="busy === 'force'" @click="doForceResync">强制同步</el-button>
+              <el-button type="danger" plain :loading="busy === 'force-all'" @click="doForceResyncAll">
+                全部车闸强制同步
+              </el-button>
             </el-form-item>
           </el-form>
           <div class="text-muted">
@@ -105,6 +116,8 @@ import {
   vehicleMqttEnableReply,
   vehicleMqttImport,
   vehicleMqttForceResync,
+  vehicleMqttForceResyncAll,
+  vehicleMqttLastFailure,
   vehicleMqttLogs,
   vehicleMqttRaw,
   vehicleMqttReconnect,
@@ -119,6 +132,7 @@ const loading = ref(false)
 const logsLoading = ref(false)
 const reconnecting = ref(false)
 const busy = ref('')
+const lastFailure = ref<VehicleMqttLogRow | null>(null)
 
 const form = ref({ deviceSn: '', plateNo: '', beginTime: '', endTime: '' })
 const raw = ref({ payload: '' })
@@ -135,11 +149,21 @@ async function loadAll() {
     if (!form.value.deviceSn && devices.value.length) {
       form.value.deviceSn = devices.value[0].deviceSn
     }
-    await loadLogs()
+    await Promise.all([loadLogs(), loadLastFailure()])
   } catch (error) {
     ElMessage.error(errorText(error))
   } finally {
     loading.value = false
+  }
+}
+
+/** 最近一次失败回执：相机拒绝下行时直接提示，不用去日志里翻 */
+async function loadLastFailure() {
+  try {
+    const result = await vehicleMqttLastFailure()
+    lastFailure.value = result.failure
+  } catch {
+    lastFailure.value = null
   }
 }
 
@@ -264,6 +288,42 @@ async function doForceResync() {
       `已清空并重推：新增 ${repushed.added ?? 0} / 更新 ${repushed.updated ?? 0} / 删除 ${repushed.removed ?? 0}`
     )
     await loadLogs()
+  } catch (error) {
+    ElMessage.error(errorText(error))
+  } finally {
+    busy.value = ''
+  }
+}
+
+/** 全部车闸强制同步：逐台清空重推，离线的跳过（一台失败不影响其它台） */
+async function doForceResyncAll() {
+  if (!devices.value.length) {
+    ElMessage.warning('还没有登记任何车闸相机')
+    return
+  }
+  await ElMessageBox.confirm(
+    `⚠️ 慎用：会对全部 ${devices.value.length} 台车闸相机执行「清空重建」\n\n`
+    + `1. 每台相机先清空本地名单 + 放行规则，再按平台数据全量重推；\n`
+    + `2. 清空后相机会有几秒钟没有名单（期间车到闸口不会开闸）；\n`
+    + `3. 离线的相机会跳过并报原因，不影响在线的那几台；\n`
+    + `4. 只在「怀疑多台相机名单都被现场改过」时用，日常新增/删除车牌不用点。\n\n`
+    + `确定现在执行吗？`,
+    '全部车闸强制同步 · 慎用',
+    { type: 'warning', confirmButtonText: '我确认，立即执行', cancelButtonText: '取消' }
+  )
+  busy.value = 'force-all'
+  try {
+    const result = await vehicleMqttForceResyncAll()
+    const skipped = result.devices.filter((d) => d.status !== 'CLEARED')
+    ElMessage.success(`已处理 ${result.deviceTotal} 台：成功 ${result.succeeded} 台，跳过 ${skipped.length} 台`)
+    if (skipped.length) {
+      ElMessageBox.alert(
+        skipped.map((d) => `${d.deviceSn}：${d.error || '已跳过'}`).join('；'),
+        '被跳过的相机',
+        { confirmButtonText: '知道了' }
+      )
+    }
+    await Promise.all([loadLogs(), loadLastFailure()])
   } catch (error) {
     ElMessage.error(errorText(error))
   } finally {

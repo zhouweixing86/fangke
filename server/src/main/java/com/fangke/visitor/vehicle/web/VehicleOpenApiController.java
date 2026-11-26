@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -102,9 +103,10 @@ public class VehicleOpenApiController {
             eventUuid = "V" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 8);
         }
 
-        VehicleAccessService.Decision decision = accessService.judge(plateNo, gateId, eventTime);
-        VehicleEvent saved = accessService.record(eventUuid, deviceSn, gateId, plateNo, direction,
-                eventTime, confidence, decision, photo, rawText);
+        List<VehicleAccessService.Decision> group = accessService.judgeGroup(plateNo, gateId, eventTime);
+        VehicleAccessService.Decision decision = group.get(0);
+        List<VehicleEvent> saved = accessService.recordGroup(eventUuid, deviceSn, gateId, plateNo, direction,
+                eventTime, confidence, group, photo, null, rawText);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("openGate", decision.allowed() ? 1 : 0);
@@ -113,7 +115,8 @@ public class VehicleOpenApiController {
         result.put("matchedType", decision.matchedType());
         result.put("matchedName", decision.matchedName());
         result.put("eventTime", DATETIME.format(eventTime));
-        result.put("duplicate", saved == null);
+        result.put("personCount", group.size());
+        result.put("duplicate", saved.isEmpty());
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("code", 0);

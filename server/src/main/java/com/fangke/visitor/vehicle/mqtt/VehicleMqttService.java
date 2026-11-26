@@ -375,6 +375,46 @@ public class VehicleMqttService {
         return view;
     }
 
+    /**
+     * 强制同步全部车闸：逐台在线相机执行「清空 → 全量重推 → 补发放行规则」。
+     *
+     * <p>离线的相机直接跳过并说明原因——指令发出去它也收不到，不如让人到现场处理；
+     * 一台失败不影响其它台，返回里逐台给结果。
+     */
+    public Map<String, Object> forceResyncAll() {
+        List<Map<String, Object>> results = new ArrayList<>();
+        int succeeded = 0;
+        for (Device device : deviceService.list(null)) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("deviceSn", device.getDeviceSn());
+            row.put("deviceName", device.getDeviceName());
+            try {
+                row.put("result", forceResync(device.getDeviceSn()));
+                row.put("status", "CLEARED");
+                succeeded++;
+            } catch (Exception e) {
+                row.put("status", "SKIPPED");
+                row.put("error", e.getMessage());
+            }
+            results.add(row);
+        }
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("deviceTotal", results.size());
+        view.put("succeeded", succeeded);
+        view.put("devices", results);
+        return view;
+    }
+
+    /** 最近一次下行被相机拒绝的回执（errCode≠0）；没有则返回 null。 */
+    public Map<String, Object> lastFailure(String deviceSn) {
+        return logRepository.lastFailure(deviceSn);
+    }
+
+    /** 最近一次下行回执（成功/失败都算），用于判断对账状态是否已被相机确认。 */
+    public Map<String, Object> lastReply(String deviceSn) {
+        return logRepository.lastReply(deviceSn);
+    }
+
     /** 找设备并确认在线（心跳新鲜）；离线时给可读原因——相机是 MQTT 客户端，离线发的指令会丢。 */
     private Device requireOnlineDevice(String deviceSn, String offlineHint) {
         Device device = deviceService.list(null).stream()
@@ -517,13 +557,17 @@ public class VehicleMqttService {
                 Device device = deviceSn == null ? null : deviceService.resolveOrRegister(deviceSn, null);
                 Long gateId = device == null ? null : device.getGateId();
                 int direction = device == null ? 1 : device.getDirection();
-                VehicleAccessService.Decision decision = accessService.judge(plate, gateId, LocalDateTime.now());
+                // 一辆车可能带来多个人（团队预约），按人各落一条记录
+                List<VehicleAccessService.Decision> group =
+                        accessService.judgeGroup(plate, gateId, LocalDateTime.now());
+                VehicleAccessService.Decision decision = group.get(0);
                 // 事件时间优先用相机上报的 triggT/imgT：离线补传时按“补传时刻”入库会把记录算到错误的日期
                 LocalDateTime eventTime = eventTimeOf(payload);
-                accessService.record(eventUuidOf(payload), deviceSn, gateId, plate, direction, eventTime,
-                        confidenceOf(payload), decision, photoBase64Of(payload), extractPhotoUrl(payload),
+                accessService.recordGroup(eventUuidOf(payload), deviceSn, gateId, plate, direction, eventTime,
+                        confidenceOf(payload), group, photoBase64Of(payload), extractPhotoUrl(payload),
                         stripPhotoBase64(payload, photoBase64Of(payload)));
-                message = plate + " 判定=" + (decision.allowed() ? "放行" : "拒绝") + "：" + decision.reason();
+                message = plate + " 判定=" + (decision.allowed() ? "放行" : "拒绝") + "：" + decision.reason()
+                        + (group.size() > 1 ? "（同行 " + (group.size() - 1) + " 人，按人各记一条）" : "");
             } catch (Exception e) {
                 message = "落库失败：" + e.getMessage();
             }

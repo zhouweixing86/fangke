@@ -1,6 +1,8 @@
 package com.fangke.visitor.vehicle.service;
 
 import com.fangke.visitor.appointment.model.Appointment;
+import com.fangke.visitor.appointment.model.AppointmentMate;
+import com.fangke.visitor.appointment.model.Visitor;
 import com.fangke.visitor.appointment.repository.AppointmentGateRepository;
 import com.fangke.visitor.appointment.repository.AppointmentRepository;
 import com.fangke.visitor.appointment.repository.VisitorRepository;
@@ -18,7 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -74,17 +78,30 @@ public class VehicleAccessService {
     }
 
     /**
-     * 判定该车牌此刻能否在指定门点通行。
+     * 判定该车牌此刻能否在指定门点通行（单人口径：只取第一个匹配人）。
      *
      * @param gateId 门点；为空表示无法确定门点（拒绝，避免跨门误放）
      */
     public Decision judge(String plateNo, Long gateId, LocalDateTime at) {
+        return judgeGroup(plateNo, gateId, at).get(0);
+    }
+
+    /**
+     * 判定该车牌此刻能在指定门点通行的**所有人**。
+     *
+     * <p>员工 = 1 人；访客 = 主访客 + 预约同行人：团队预约一辆车进门，车上每个人各记一条通行记录，
+     * 否则「一辆车 8 个人」只有 1 条记录，统计会失真。同行人没有独立人员编号时用「预约号-序号」兜底，
+     * 保证记录仍能按人分开统计。
+     *
+     * @param gateId 门点；为空表示无法确定门点（拒绝，避免跨门误放）
+     */
+    public List<Decision> judgeGroup(String plateNo, Long gateId, LocalDateTime at) {
         String plate = normalize(plateNo);
         if (plate.isEmpty()) {
-            return Decision.deny("车牌为空");
+            return List.of(Decision.deny("车牌为空"));
         }
         if (gateId == null) {
-            return Decision.deny("未配置门点，无法判定");
+            return List.of(Decision.deny("未配置门点，无法判定"));
         }
         LocalDate today = at.toLocalDate();
 
@@ -93,11 +110,11 @@ public class VehicleAccessService {
         if (employee.isPresent()) {
             Employee e = employee.get();
             if (!inValidRange(e.getValidFrom(), e.getValidTo(), today)) {
-                return new Decision(false, "员工通行证已过期", VehicleEvent.TYPE_EMPLOYEE,
-                        e.getId(), e.getName(), e.getPersonNo());
+                return List.of(new Decision(false, "员工通行证已过期", VehicleEvent.TYPE_EMPLOYEE,
+                        e.getId(), e.getName(), e.getPersonNo()));
             }
-            return new Decision(true, "员工车辆", VehicleEvent.TYPE_EMPLOYEE, e.getId(), e.getName(),
-                    e.getPersonNo());
+            return List.of(new Decision(true, "员工车辆", VehicleEvent.TYPE_EMPLOYEE, e.getId(), e.getName(),
+                    e.getPersonNo()));
         }
 
         // 2) 访客：当天已授权 + 批准门点命中
@@ -108,16 +125,33 @@ public class VehicleAccessService {
             if (gates.isEmpty() || !gates.contains(gateId)) {
                 continue;
             }
+            Optional<Visitor> visitor = visitorRepository.findById(appointment.getVisitorId());
+            if (visitor.isEmpty()) {
+                return List.of(Decision.deny("访客档案不存在"));
+            }
+            Visitor v = visitor.get();
             // matched_id 记访客 ID（不是预约单 ID），与行人记录的人员口径一致
-            return visitorRepository.findById(appointment.getVisitorId())
-                    .map(v -> new Decision(true, "访客车辆", VehicleEvent.TYPE_VISITOR,
-                            v.getId(), v.getName(), v.getPersonNo()))
-                    .orElseGet(() -> Decision.deny("访客档案不存在"));
+            List<Decision> group = new ArrayList<>();
+            group.add(new Decision(true, "访客车辆", VehicleEvent.TYPE_VISITOR,
+                    v.getId(), v.getName(), v.getPersonNo()));
+            int seq = 0;
+            for (AppointmentMate mate : appointmentRepository.findMates(appointment.getId())) {
+                if (mate.main()) {
+                    continue;
+                }
+                seq++;
+                String personNo = mate.personNo() == null || mate.personNo().isBlank()
+                        ? matePersonNo(appointment.getAppointmentNo(), seq)
+                        : mate.personNo();
+                group.add(new Decision(true, "访客同行人", VehicleEvent.TYPE_VISITOR,
+                        v.getId(), mate.name(), personNo));
+            }
+            return group;
         }
         if (!appointments.isEmpty()) {
-            return Decision.deny("该车牌今日已授权，但不包含当前门点");
+            return List.of(Decision.deny("该车牌今日已授权，但不包含当前门点"));
         }
-        return Decision.deny("未登记车辆（车牌未绑定员工，也没有今日访客预约）");
+        return List.of(Decision.deny("未登记车辆（车牌未绑定员工，也没有今日访客预约）"));
     }
 
     /**
@@ -145,30 +179,69 @@ public class VehicleAccessService {
     public VehicleEvent record(String eventUuid, String deviceSn, Long gateId, String plateNo,
                                int direction, LocalDateTime eventTime, Integer confidence,
                                Decision decision, String photoBase64, String photoUrl, String rawJson) {
+        List<VehicleEvent> saved = recordGroup(eventUuid, deviceSn, gateId, plateNo, direction, eventTime,
+                confidence, Collections.singletonList(decision), photoBase64, photoUrl, rawJson);
+        return saved.isEmpty() ? null : saved.get(0);
+    }
+
+    /**
+     * 一辆车带来的所有人各落一条记录（主访客 + 同行人）。
+     *
+     * <p>共用同一张抓拍图（只上传一次，其余记录引用同一个 key 与原始报文），
+     * 事件号按 {@code 抓拍事件号-序号} 派生，相机重复补传时仍然幂等。
+     *
+     * @return 实际新增的记录（重复事件会被跳过）
+     */
+    @Transactional
+    public List<VehicleEvent> recordGroup(String eventUuid, String deviceSn, Long gateId, String plateNo,
+                                          int direction, LocalDateTime eventTime, Integer confidence,
+                                          List<Decision> decisions, String photoBase64, String photoUrl,
+                                          String rawJson) {
         String plate = normalize(plateNo);
+        List<Decision> group = decisions == null || decisions.isEmpty()
+                ? Collections.singletonList(null) : decisions;
         String photoKey = savePhoto(plate, eventUuid, photoBase64);
-        VehicleEvent event = new VehicleEvent(null, eventUuid, deviceSn, gateId, plate, direction,
-                eventTime, confidence,
-                decision == null ? null : decision.matchedType(),
-                decision == null ? null : decision.matchedId(),
-                decision == null ? null : decision.matchedName(),
-                decision == null ? null : decision.personNo(),
-                decision != null && decision.allowed()
-                        ? VehicleEvent.RESULT_PASS : VehicleEvent.RESULT_DENY,
-                decision == null ? null : decision.reason(),
-                photoKey, photoUrl, rawJson);
-        boolean inserted = eventRepository.insertIfAbsent(event);
-        if (!inserted) {
-            log.debug("车辆事件重复，已忽略 uuid={}", eventUuid);
-            return null;
+        List<VehicleEvent> saved = new ArrayList<>(group.size());
+        for (int i = 0; i < group.size(); i++) {
+            Decision decision = group.get(i);
+            boolean first = i == 0;
+            VehicleEvent event = new VehicleEvent(null, first ? eventUuid : eventUuid + "-" + i,
+                    deviceSn, gateId, plate, direction, eventTime, confidence,
+                    decision == null ? null : decision.matchedType(),
+                    decision == null ? null : decision.matchedId(),
+                    decision == null ? null : decision.matchedName(),
+                    decision == null ? null : decision.personNo(),
+                    decision != null && decision.allowed()
+                            ? VehicleEvent.RESULT_PASS : VehicleEvent.RESULT_DENY,
+                    decision == null ? null : decision.reason(),
+                    photoKey, first ? photoUrl : null, first ? rawJson : null);
+            if (!eventRepository.insertIfAbsent(event)) {
+                log.debug("车辆事件重复，已忽略 uuid={}", event.eventUuid());
+                continue;
+            }
+            saved.add(event);
+            log.info("车辆通行 plate={} gate={} dir={} result={} 匹配={} 原因={}",
+                    plate, gateId, direction, event.resultStatus(),
+                    VehicleEvent.typeText(event.matchedType()), event.failReason());
         }
-        log.info("车辆通行 plate={} gate={} dir={} result={} 匹配={} 原因={}",
-                plate, gateId, direction, event.resultStatus(),
-                VehicleEvent.typeText(event.matchedType()), event.failReason());
-        return event;
+        return saved;
     }
 
     /* ---------------- 内部 ---------------- */
+
+    /**
+     * 同行人兜底人员编号：{@code 预约号-序号}（如 V202611250001-1），
+     * 保证团队预约里每个人都有自己的通行记录，而不是全挂在主访客名下。
+     */
+    static String matePersonNo(String appointmentNo, int seq) {
+        String suffix = "-" + seq;
+        String base = appointmentNo == null || appointmentNo.isBlank() ? "MATE" : appointmentNo.trim();
+        int max = 20 - suffix.length();
+        if (base.length() > max) {
+            base = base.substring(0, max);
+        }
+        return base + suffix;
+    }
 
     private boolean inValidRange(LocalDate from, LocalDate to, LocalDate today) {
         if (from != null && today.isBefore(from)) {

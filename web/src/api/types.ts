@@ -671,10 +671,17 @@ export interface VehiclePlateRow {
   validFrom: string
   validTo: string
   validToText: string
+  /** 这台相机上的最近下发时间（只在按设备查询时返回） */
+  pushedAt?: string
+  /** NOT_PUSHED / PUSHED / WAITING / CONFIRMED / REJECTED */
+  mqttStatus?: string
+  mqttStatusText?: string
 }
 
 export interface VehiclePlateSnapshot {
   summary: { employee: number; visitor: number; total: number }
+  deviceSn?: string
+  lastReply?: VehicleMqttLogRow | null
   gateId: number
   gateName: string
   plates: VehiclePlateRow[]

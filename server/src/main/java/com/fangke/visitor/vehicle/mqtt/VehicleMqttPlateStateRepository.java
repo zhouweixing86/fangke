@@ -27,6 +27,20 @@ public class VehicleMqttPlateStateRepository {
         return view;
     }
 
+    /**
+     * 某台相机已下发的车牌 → 最近一次下发时间。
+     *
+     * <p>车牌名单里显示「什么时候推的」，用来判断是不是刚改完还没推下去。
+     */
+    public Map<String, LocalDateTime> pushedAt(String deviceSn) {
+        Map<String, LocalDateTime> view = new LinkedHashMap<>();
+        jdbc.query("SELECT plate_no, pushed_at FROM vehicle_mqtt_plate_state WHERE device_sn = ?",
+                rs -> {
+                    view.put(rs.getString("plate_no"), rs.getObject("pushed_at", LocalDateTime.class));
+                }, deviceSn);
+        return view;
+    }
+
     public void upsert(String deviceSn, String plateNo, String fingerprint) {
         jdbc.update("""
                         INSERT INTO vehicle_mqtt_plate_state (device_sn, plate_no, fingerprint, pushed_at)

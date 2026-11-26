@@ -59,7 +59,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="lastHeartbeat" label="最近心跳" width="160"  sortable />
-      <el-table-column label="操作" width="320" fixed="right">
+      <el-table-column label="操作" width="360" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">档案</el-button>
           <template v-if="row.channel === 'VEHICLE'">
@@ -70,6 +70,7 @@
             <el-button link type="primary" @click="openDoor(row)">开门</el-button>
             <el-button link type="primary" @click="openRemote(row)">远程管理</el-button>
             <el-button link type="primary" @click="openLocal(row)">本地管理</el-button>
+            <el-button link type="warning" @click="doPersonCleanup(row)">清理残留</el-button>
           </template>
           <el-popconfirm title="删除这台设备的档案？历史通行记录会保留" confirm-button-text="删除"
             @confirm="doDelete(row)">
@@ -299,7 +300,7 @@
     </el-dialog>
 
     <!-- 车闸相机：车牌名单（来源=员工档案 + 访客预约，docs/18） -->
-    <el-dialog v-model="platesVisible" :title="`车牌名单 · ${platesRow?.deviceName || '全部车闸'}`" width="720px">
+    <el-dialog v-model="platesVisible" :title="`车牌名单 · ${platesRow?.deviceName || '全部车闸'}`" width="900px">
       <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
         title="车牌不用单独维护：员工档案/访客预约填的车牌会汇总到这里，平台每 20 秒自动对账并通过 MQTT 下发到车闸相机（新增/更新/删除）。下面的按钮只是立即触发一次。" />
       <div class="toolbar">
@@ -327,10 +328,28 @@
           </template>
         </el-table-column>
         <el-table-column prop="ownerName" label="姓名" width="100"  sortable />
-        <el-table-column prop="personNo" label="人员编号" width="120"  sortable />
+        <el-table-column prop="personNo" label="人员编号" width="130"  sortable />
         <el-table-column prop="validFrom" label="生效时间" width="160"  sortable />
         <el-table-column prop="validToText" label="有效期至" width="110"  sortable />
+        <el-table-column v-if="platesRow" prop="pushedAt" label="下发时间" width="160"  sortable>
+          <template #default="{ row }">{{ row.pushedAt || '-' }}</template>
+        </el-table-column>
+        <el-table-column v-if="platesRow" label="回执" width="110">
+          <template #default="{ row }">
+            <el-tag v-if="row.mqttStatusText" size="small" :type="replyTagType(row.mqttStatus)">
+              {{ row.mqttStatusText }}
+            </el-tag>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
       </el-table>
+      <div v-if="platesRow" class="text-muted" style="margin-top: 6px">
+        下发时间/回执取自这台相机的对账状态与回执日志：相机回执不带车牌，只能按「下发时间早于最近一次成功回执」推定已确认。
+        <span v-if="plates?.lastReply">
+          最近回执：{{ plates.lastReply.created_at }} {{ plates.lastReply.message }}
+        </span>
+        <span v-else>尚未收到这台相机的任何回执。</span>
+      </div>
       <div v-if="syncResult?.devices.length" style="margin-top: 10px">
         <div class="text-muted" style="margin-bottom: 4px">下发结果</div>
         <div v-for="d in syncResult.devices" :key="d.deviceId" class="tip-row">
@@ -379,6 +398,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import {
+  cleanupDevicePersons,
   deleteDevice,
   deviceCmdOpen,
   deviceCmdQrConfig,
@@ -570,11 +590,55 @@ async function loadPushState() {
 async function loadPlates() {
   platesLoading.value = true
   try {
-    plates.value = await getVehiclePlates(platesRow.value?.gateId || undefined)
+    plates.value = await getVehiclePlates(
+      platesRow.value?.gateId || undefined,
+      platesRow.value?.deviceSn || undefined
+    )
   } catch (error) {
     showRemoteError(error)
   } finally {
     platesLoading.value = false
+  }
+}
+
+/** 回执状态 → 标签颜色：已确认绿、等待黄、失败红、未下发灰 */
+function replyTagType(status?: string) {
+  if (status === 'CONFIRMED') return 'success'
+  if (status === 'WAITING' || status === 'PUSHED') return 'warning'
+  if (status === 'REJECTED') return 'danger'
+  return 'info'
+}
+
+/** 行人终端残留名单清理：PULL 协议没有清空指令，只能按「平台下发过 − 现在该在」的差集逐人删 */
+async function doPersonCleanup(row: DeviceView) {
+  try {
+    await ElMessageBox.confirm(
+      `将把「平台下发过、但现在不该在这台设备上」的人员逐个删除（设备：${row.deviceName || row.deviceSn}）。\n`
+      + '设备里当前应有的名单不受影响；如果有平台没下发记录的人（现场手工登记），协议层面删不掉，需要到设备上处理。\n'
+      + '确定执行吗？',
+      '清理残留名单',
+      { type: 'warning', confirmButtonText: '执行', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+  cmdBusy.value = 'cleanup'
+  try {
+    const result = await cleanupDevicePersons(row.id)
+    const detail = [
+      result.removed.length ? `已删除：${result.removed.join('、')}` : '',
+      result.failed.length ? `删除失败：${result.failed.join('；')}` : '',
+      result.missing.length ? `平台无下发记录（可用「员工 → 同步全部」重推）：${result.missing.join('、')}` : ''
+    ].filter(Boolean).join('；')
+    ElMessage.success(`清理完成：应有 ${result.expected} 人，本次删除 ${result.removed.length} 人`)
+    if (detail) {
+      ElMessageBox.alert(detail, '清理明细', { confirmButtonText: '知道了' })
+    }
+    await load()
+  } catch (error) {
+    showRemoteError(error)
+  } finally {
+    cmdBusy.value = ''
   }
 }
 
