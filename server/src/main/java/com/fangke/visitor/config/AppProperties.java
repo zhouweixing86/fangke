@@ -368,7 +368,12 @@ public class AppProperties {
         private boolean autoCreateBucket = true;
         /** 预签名有效期（docs/10 §13.2：5 分钟）。 */
         private Duration presignTtl = Duration.ofMinutes(5);
-
+        /**
+         * 预签名 URL 的对外地址（nginx 反代到 MinIO），如 {@code http://58.87.99.249/media}。
+         *
+         * <p>不配就用内网 endpoint（浏览器打不开），所以线上必须配。
+         */
+        private String publicBase = "";
         public String getEndpoint() {
             return endpoint;
         }
@@ -431,6 +436,14 @@ public class AppProperties {
 
         public void setPresignTtl(Duration presignTtl) {
             this.presignTtl = presignTtl;
+        }
+
+        public String getPublicBase() {
+            return publicBase;
+        }
+
+        public void setPublicBase(String publicBase) {
+            this.publicBase = publicBase;
         }
     }
 
@@ -599,6 +612,20 @@ public class AppProperties {
             private int tcarTiming = 2;
             /** 黑名单：2 = 不启用，即永不放行。 */
             private int bcarTiming = 2;
+
+            /**
+             * 图片上传方式：true = 让相机把抓拍图以 BASE64 走 MQTT 回传（平台自己存，不依赖云 OSS）；
+             * false = 由相机传阿里云 OSS（出厂行为，桶多半不可用）。
+             */
+            private boolean imageBase64 = true;
+
+            public boolean isImageBase64() {
+                return imageBase64;
+            }
+
+            public void setImageBase64(boolean imageBase64) {
+                this.imageBase64 = imageBase64;
+            }
 
             public boolean isPushPassRule() {
                 return pushPassRule;

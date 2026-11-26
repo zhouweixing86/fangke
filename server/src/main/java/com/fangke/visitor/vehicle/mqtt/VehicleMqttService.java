@@ -93,6 +93,15 @@ public class VehicleMqttService {
     private static final String CLEAR_DATA =
             "{\"command\":\"ClearData\",\"data\":\"{\\\"clearCarInfo\\\":1}\"," + PROTOCOL_SUFFIX;
     /**
+     * 图片上传方式，见协议 §4.4.1：{@code type=0} 表示图片以 BASE64 走 MQTT 回传（不需要任何云 OSS），
+     * {@code type=1} 表示由相机自己传阿里云 OSS。
+     *
+     * <p>现场相机出厂配的是厂商的 OSS 桶（早就失效，实测上报的图片链接 404），所以默认改成 0：
+     * 图片随识别结果回传，平台自己存到 MinIO，链接由我们的服务提供，不依赖第三方账号。
+     */
+    private static final String IMAGE_BASE64 = "{\"command\":\"Image\",\"data\":\"{\\\"type\\\":0}\","
+            + PROTOCOL_SUFFIX;
+    /**
      * 协议配置开关，见协议 §4.4.22：设备 Conn 后下发。
      *
      * <p>`enableReply=1` 让相机每条下行都回执；`enableOffline=1` 让它在断网期间缓存识别结果、
@@ -512,7 +521,8 @@ public class VehicleMqttService {
                 // 事件时间优先用相机上报的 triggT/imgT：离线补传时按“补传时刻”入库会把记录算到错误的日期
                 LocalDateTime eventTime = eventTimeOf(payload);
                 accessService.record(eventUuidOf(payload), deviceSn, gateId, plate, direction, eventTime,
-                        confidenceOf(payload), decision, null, extractPhotoUrl(payload), payload);
+                        confidenceOf(payload), decision, photoBase64Of(payload), extractPhotoUrl(payload),
+                        stripPhotoBase64(payload, photoBase64Of(payload)));
                 message = plate + " 判定=" + (decision.allowed() ? "放行" : "拒绝") + "：" + decision.reason();
             } catch (Exception e) {
                 message = "落库失败：" + e.getMessage();
@@ -526,7 +536,7 @@ public class VehicleMqttService {
         log.debug("车闸上行 topic={} device={} plate={} msg={}", topic, deviceSn, plate, message);
     }
 
-    /** 设备上线时下发配置（回执 + 离线补传 + 放行规则）；失败只记日志，不影响上行处理。 */
+    /** 设备上线时下发配置（回执 + 离线补传 + 放行规则 + 图片上传方式）；失败只记日志，不影响上行处理。 */
     private void configQuietly(String deviceSn) {
         try {
             applyConfig(deviceSn);
@@ -535,10 +545,27 @@ public class VehicleMqttService {
                 applyPassRule(deviceSn);
                 extra = " + 放行规则";
             }
+            if (props.getVehicle().getMqtt().isImageBase64()) {
+                applyImageBase64(deviceSn);
+                extra += " + 图片BASE64";
+            }
             log.info("设备 {} 上线，已下发配置（回执 + 离线结果补传{}）", deviceSn, extra);
         } catch (Exception e) {
             log.warn("设备 {} 配置下发失败：{}", deviceSn, e.getMessage());
         }
+    }
+
+    /**
+     * 让相机把抓拍图以 BASE64 随识别结果回传（不再依赖云 OSS），见协议 §4.4.1。
+     *
+     * <p>现场相机的 OSS 是厂商的测试桶，实测上报的图片链接 404；改成 BASE64 后由平台自己存 MinIO，
+     * 图片链接由我们的服务提供，换机器/换现场都不用再配第三方存储。
+     */
+    public Map<String, Object> applyImageBase64(String deviceSn) {
+        String payload = fill(IMAGE_BASE64, envelopeValues(deviceSn, Map.of()));
+        gateway.publish(deviceSn, payload);
+        logRepository.save("DOWN", deviceSn, topicOf(deviceSn), payload, "配置：抓拍图走 MQTT BASE64 回传");
+        return result("IMAGE_CONFIG", deviceSn, "", payload);
     }
 
     /** 相机上线时登记/刷新设备档案（「设备管理 → 车闸相机」才看得到它和心跳）。 */
@@ -590,6 +617,24 @@ public class VehicleMqttService {
         } catch (Exception e) {
             log.warn("设备 {} 上线对齐车牌失败：{}", deviceSn, e.getMessage());
         }
+    }
+
+    /** 相机以 BASE64 回传的抓拍图（大图优先，其次小图）；走阿里云 OSS 模式时这两个字段是空的。 */
+    static String photoBase64Of(String payload) {
+        String big = extractText(payload, "picNFile");
+        if (big != null && !big.isBlank()) {
+            return big;
+        }
+        String small = extractText(payload, "picMinFile");
+        return small == null || small.isBlank() ? null : small;
+    }
+
+    /** 原始报文入库前把 BASE64 抠掉：一张图几百 KB，整段塞进 raw_json 会把库撑爆。 */
+    static String stripPhotoBase64(String payload, String base64) {
+        if (payload == null || base64 == null || base64.isBlank()) {
+            return payload;
+        }
+        return payload.replace(base64, "");
     }
 
     /** 相机上报的抓拍图外链（大图优先，其次小图）。 */

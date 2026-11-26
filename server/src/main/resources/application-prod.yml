@@ -46,6 +46,8 @@ fangke:
     bucket: ${S3_BUCKET:fangke}
     access-key: ${S3_ACCESS_KEY:}
     secret-key: ${S3_SECRET_KEY:}
+    # 预签名 URL 的对外地址（nginx /media 反代到 MinIO），浏览器够不到 127.0.0.1
+    public-base: ${S3_PUBLIC_BASE:}
 
   jwt:
     # 生产必须换成随机长串，否则 token 可被伪造

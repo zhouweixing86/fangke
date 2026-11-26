@@ -167,10 +167,29 @@ public class S3StorageService implements StorageService {
                 .bucket(cfg.getBucket())
                 .key(key)
                 .build();
-        return presigner.presignGetObject(GetObjectPresignRequest.builder()
+        String url = presigner.presignGetObject(GetObjectPresignRequest.builder()
                 .signatureDuration(ttl == null ? cfg.getPresignTtl() : ttl)
                 .getObjectRequest(request)
                 .build()).url().toString();
+        return toPublic(url);
+    }
+
+    /**
+     * 预签名 URL 里的内网 endpoint 换成对外地址。
+     *
+     * <p>MinIO 只监听 127.0.0.1，浏览器够不到；nginx 用 /media/ 反代到 MinIO，并把 Host 改回
+     * 内网 endpoint，签名（含 host + path）才对得上。没配 public-base 就原样返回。
+     */
+    private String toPublic(String url) {
+        String base = cfg.getPublicBase();
+        String endpoint = cfg.getEndpoint();
+        if (base == null || base.isBlank() || endpoint == null || endpoint.isBlank()) {
+            return url;
+        }
+        if (!url.startsWith(endpoint)) {
+            return url;
+        }
+        return base.replaceAll("/+$", "") + url.substring(endpoint.length());
     }
 
     @Override

@@ -70,9 +70,11 @@ public class AdminTrafficController {
             """;
 
     private final JdbcTemplate jdbc;
+    private final com.fangke.visitor.storage.StorageService storage;
 
-    public AdminTrafficController(JdbcTemplate jdbc) {
+    public AdminTrafficController(JdbcTemplate jdbc, com.fangke.visitor.storage.StorageService storage) {
         this.jdbc = jdbc;
+        this.storage = storage;
     }
 
     /**
@@ -158,19 +160,19 @@ public class AdminTrafficController {
         List<Map<String, Object>> records = jdbc.query("""
                         SELECT t.event_time, t.channel, t.direction, t.method_code, t.plate_no,
                                t.device_sn, d.device_name, t.gate_id, g.gate_name, t.person_name,
-                               t.event_id, t.photo_url
+                               t.event_id, t.photo_url, t.photo_key
                         FROM (
                             SELECT a.event_time, 'PEDESTRIAN' AS channel, a.direction,
                                    a.identify_type AS method_code, NULL AS plate_no,
                                    a.device_sn, a.gate_id, a.person_name, a.id AS event_id,
-                                   NULL AS photo_url
+                                   NULL AS photo_url, NULL AS photo_key
                             FROM access_event a
                             WHERE a.person_no = ? AND a.event_time >= ? AND a.event_time < ?
                             UNION ALL
                             SELECT v.event_time, 'VEHICLE', v.direction,
                                    CASE WHEN v.fail_reason LIKE '人工远程开闸%' THEN 9 ELSE ? END,
                                    v.plate_no, v.device_sn, v.gate_id, v.matched_name, NULL,
-                                   v.photo_url
+                                   v.photo_url, v.photo_key
                             FROM vehicle_event v
                             WHERE v.person_no = ? AND v.event_time >= ? AND v.event_time < ?
                         ) t
@@ -201,7 +203,7 @@ public class AdminTrafficController {
                     row.put("gateName", rs.getString("gate_name") == null ? "" : rs.getString("gate_name"));
                     long eventId = rs.getLong("event_id");
                     row.put("eventId", rs.wasNull() ? null : eventId);
-                    row.put("photoUrl", rs.getString("photo_url") == null ? "" : rs.getString("photo_url"));
+                    row.put("photoUrl", photoUrlOf(rs.getString("photo_url"), rs.getString("photo_key")));
                     return row;
                 },
                 personNo, Timestamp.valueOf(date.atStartOfDay()), Timestamp.valueOf(date.plusDays(1).atStartOfDay()),
@@ -436,6 +438,21 @@ public class AdminTrafficController {
             return "车辆+行人";
         }
         return vehicle ? "车辆" : "行人";
+    }
+
+    /** 抓拍图地址：优先相机给的外链（OSS，可能已失效），没有再拿平台自己存的图生成临时链接。 */
+    private String photoUrlOf(String photoUrl, String photoKey) {
+        if (photoUrl != null && !photoUrl.isBlank()) {
+            return photoUrl;
+        }
+        if (photoKey == null || photoKey.isBlank() || !storage.configured()) {
+            return "";
+        }
+        try {
+            return storage.presignGet(photoKey, null);
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     /** 识别方式文案；车牌识别单独一类，人工远程开闸单独标出来。 */
