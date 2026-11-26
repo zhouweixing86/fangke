@@ -246,10 +246,15 @@ async function doForceResync() {
     return
   }
   await ElMessageBox.confirm(
-    `会先让相机「清空本地名单 + 放行规则」，再按平台数据全量重推。\n`
-    + `用在相机上可能被人工导入过名单、平台对不上的情况；执行后相机会短暂无名单（几秒）。\n\n设备：${form.value.deviceSn}`,
-    '强制同步（清空重推）',
-    { type: 'warning', confirmButtonText: '开始强制同步' }
+    `⚠️ 慎用：这是「清空重建」，不是普通同步\n\n`
+    + `1. 会先让相机清空本地名单 + 放行规则，再按平台数据全量重推；\n`
+    + `2. 清空后相机会有几秒钟没有名单（期间车到闸口不会开闸）；\n`
+    + `3. 相机离线时下发不出去，会直接报错；\n`
+    + `4. 只有「怀疑相机名单被现场人工改过 / 和平台对不上」时才需要用它，\n`
+    + `   日常新增/删除车牌不用点（20 秒定时对账自动处理）。\n\n`
+    + `设备：${form.value.deviceSn}\n确定现在执行吗？`,
+    '强制同步（清空重推）· 慎用',
+    { type: 'warning', confirmButtonText: '我确认，立即执行', cancelButtonText: '取消' }
   )
   busy.value = 'force'
   try {
