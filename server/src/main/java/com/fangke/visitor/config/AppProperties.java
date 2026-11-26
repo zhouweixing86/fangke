@@ -586,6 +586,52 @@ public class AppProperties {
              */
             private int plateType = 1;
 
+            /**
+             * 相机上线时是否下发「放行规则」（协议 §4.4.6 DlPassRule）。
+             *
+             * <p>出厂默认白名单是「脱机后自动开闸」= 在线时相机只上报结果、等平台开闸。我们的平台只维护名单、
+             * 不参与实时开闸，所以必须把规则推成「全启用」，让到闸口的名单车由相机自己开闸（断网也能进）。
+             */
+            private boolean pushPassRule = true;
+            /** 白名单启用机制：0 离线 / 1 在线 / 2 不启用 / 3 全启用。 */
+            private int wcarTiming = 3;
+            /** 临时车（不在名单的车）：2 = 不启用，即不自动放行。 */
+            private int tcarTiming = 2;
+            /** 黑名单：2 = 不启用，即永不放行。 */
+            private int bcarTiming = 2;
+
+            public boolean isPushPassRule() {
+                return pushPassRule;
+            }
+
+            public void setPushPassRule(boolean pushPassRule) {
+                this.pushPassRule = pushPassRule;
+            }
+
+            public int getWcarTiming() {
+                return wcarTiming;
+            }
+
+            public void setWcarTiming(int wcarTiming) {
+                this.wcarTiming = wcarTiming;
+            }
+
+            public int getTcarTiming() {
+                return tcarTiming;
+            }
+
+            public void setTcarTiming(int tcarTiming) {
+                this.tcarTiming = tcarTiming;
+            }
+
+            public int getBcarTiming() {
+                return bcarTiming;
+            }
+
+            public void setBcarTiming(int bcarTiming) {
+                this.bcarTiming = bcarTiming;
+            }
+
             public boolean isEnabled() {
                 return enabled;
             }

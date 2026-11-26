@@ -269,15 +269,36 @@ class VehicleMqttServiceTest {
                 + "\"requestId\":\"3\",\"sn\":\"" + SN + "\",\"time\":\"2026-11-25 23:40:00\",\"version\":\"1.0.1\"}";
         service.onUpload("upload/" + SN, conn);
         ArgumentCaptor<String> down = ArgumentCaptor.forClass(String.class);
-        // 配置开关走独立线程发（不能在回调线程里 publish），所以用 timeout 等它
-        verify(gateway, timeout(3000)).publish(eq(SN), down.capture());
-        assertTrue(down.getValue().contains("Config"), down.getValue());
-        assertTrue(down.getValue().contains("enableOffline"), down.getValue());
+        // 配置开关 + 放行规则都走独立线程发（不能在回调线程里 publish），所以用 timeout 等它
+        verify(gateway, timeout(3000).atLeast(2)).publish(eq(SN), down.capture());
+        assertTrue(down.getAllValues().stream().anyMatch(v -> v.contains("\"Config\"") && v.contains("enableOffline")),
+                down.getAllValues().toString());
+        assertTrue(down.getAllValues().stream().anyMatch(v -> v.contains("DlPassRule")),
+                down.getAllValues().toString());
 
         String ack = "{\"command\":\"AddCarInfo\",\"data\":\"{\\\"errCode\\\":0,\\\"errInfo\\\":\\\"\\\"}\","
                 + "\"requestId\":\"4\",\"sn\":\"" + SN + "\",\"time\":\"2026-11-25 23:41:00\",\"version\":\"1.0.1\"}";
         service.onUpload("upload/" + SN, ack);
         verify(logRepository).save(eq("UP"), eq(SN), eq("upload/" + SN), eq(ack), eq("下行回执：成功"));
+    }
+
+    @Test
+    @DisplayName("放行规则：白名单全启用（相机自己开闸），临时车/黑名单不自动放行")
+    void passRuleMakesWhitelistAutoOpen() throws Exception {
+        service.applyPassRule(SN);
+
+        ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+        verify(gateway).publish(eq(SN), payload.capture());
+
+        JsonNode node = envelope(payload.getValue());
+        assertEquals("DlPassRule", node.path("command").asText());
+        JsonNode rule = MAPPER.readTree(node.path("data").asText());
+        assertEquals(3, rule.path("wcarTiming").asInt());
+        assertEquals(2, rule.path("tcarTiming").asInt());
+        assertEquals(2, rule.path("bcarTiming").asInt());
+        assertEquals(1, MAPPER.readTree(rule.path("wcarAct").asText()).path("action").asInt());
+        assertEquals(0, MAPPER.readTree(rule.path("tcarAct").asText()).path("action").asInt());
+        assertEquals(0, MAPPER.readTree(rule.path("bcarAct").asText()).path("action").asInt());
     }
 
     @Test

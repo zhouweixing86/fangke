@@ -244,6 +244,55 @@ public class VehicleMqttService {
     }
 
     /**
+     * 下发「放行规则」，见协议 §4.4.6（DlPassRule）。
+     *
+     * <p>相机出厂的白名单机制是 <b>脱机后自动开闸</b>：在线时它只把识别结果报给平台、自己不开闸，
+     * 要等平台下 {@code Open}。我们这套是「平台维护名单、相机本地放行」，所以把白名单改成
+     * {@code wcarTiming=3}（全启用）——名单车到闸口由相机直接开闸，不依赖平台实时回指令，
+     * 网络抖一下也不影响进场；临时车/黑名单保持不自动放行。
+     */
+    public Map<String, Object> applyPassRule(String deviceSn) {
+        AppProperties.Vehicle.Mqtt cfg = props.getVehicle().getMqtt();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("tcarTiming", cfg.getTcarTiming());
+        data.put("wcarTiming", cfg.getWcarTiming());
+        data.put("bcarTiming", cfg.getBcarTiming());
+        data.put("tcarAct", act("1,欢迎光临,车类,车牌,通行时间", "26:欢迎光临", 0));
+        data.put("wcarAct", act("1,欢迎光临,车类,车牌,通行时间", "26:欢迎光临", 1));
+        data.put("bcarAct", act("1,禁止通行,车类,车牌", "26:禁止通行", 0));
+        String payload;
+        try {
+            Map<String, Object> envelope = new LinkedHashMap<>();
+            envelope.put("command", "DlPassRule");
+            envelope.put("data", MAPPER.writeValueAsString(data));
+            envelope.putAll(envelopeValues(deviceSn, Map.of()));
+            envelope.put("version", PROTOCOL_VERSION);
+            payload = MAPPER.writeValueAsString(envelope);
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "放行规则报文生成失败：" + e.getMessage());
+        }
+        gateway.publish(deviceSn, payload);
+        logRepository.save("DOWN", deviceSn, topicOf(deviceSn), payload, "放行规则：白名单自动开闸");
+        return result("PASS_RULE", deviceSn, "", payload);
+    }
+
+    /** 一条屏显/语音/开闸动作（协议 §4.4.6 的 show 结构）。 */
+    private static String act(String items, String voice, int action) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("cmdName", "SetLCDItems");
+        map.put("template", 1);
+        map.put("adID", 0);
+        map.put("items", items);
+        map.put("voice", voice);
+        map.put("action", action);
+        try {
+            return MAPPER.writeValueAsString(map);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
      * 人工远程开闸（协议 §4.4.2）。
      *
      * <p>传了车牌就按车牌判定一次，把匹配到的人写进通行记录（能和该员工的通行记录合并）；
@@ -434,11 +483,16 @@ public class VehicleMqttService {
         log.debug("车闸上行 topic={} device={} plate={} msg={}", topic, deviceSn, plate, message);
     }
 
-    /** 设备上线时下发配置（回执 + 离线补传）；失败只记日志，不影响上行处理。 */
+    /** 设备上线时下发配置（回执 + 离线补传 + 放行规则）；失败只记日志，不影响上行处理。 */
     private void configQuietly(String deviceSn) {
         try {
             applyConfig(deviceSn);
-            log.info("设备 {} 上线，已下发配置（回执 + 离线结果补传）", deviceSn);
+            String extra = "";
+            if (props.getVehicle().getMqtt().isPushPassRule()) {
+                applyPassRule(deviceSn);
+                extra = " + 放行规则";
+            }
+            log.info("设备 {} 上线，已下发配置（回执 + 离线结果补传{}）", deviceSn, extra);
         } catch (Exception e) {
             log.warn("设备 {} 配置下发失败：{}", deviceSn, e.getMessage());
         }
