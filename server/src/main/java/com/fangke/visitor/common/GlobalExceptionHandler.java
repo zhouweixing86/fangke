@@ -56,6 +56,25 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 缺少必填查询参数 / 参数类型不对（如 `date=abc`）。
+     *
+     * <p>这类是调用方写错，不该落成 500：5xx 会让人以为平台故障，现场排查方向直接跑偏。
+     */
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingParam(
+            org.springframework.web.bind.MissingServletRequestParameterException ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.fail(ErrorCode.PARAM_MISSING.code(), "缺少参数：" + ex.getParameterName()));
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.fail(ErrorCode.PARAM_INVALID.code(), "参数格式不对：" + ex.getName()));
+    }
+
+    /**
      * 未匹配到任何路由（含设备把地址配错导致的重复前缀，如 /openapi/v1/openapi/v1/heartBeat）。
      * 这类请求本质是 404，却会被兜底分支变成 500 —— 设备侧看到 5xx 会判定平台故障并停发心跳，
      * 现场极难定位，这里显式返回 404 并记录原始路径。
