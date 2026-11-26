@@ -700,3 +700,58 @@ POST /api/admin/device/{id}/person-cleanup
 > **为什么必须用 `copytruncate`**：java（systemd `StandardOutput=append:`）和 nginx 都**持着文件 fd**，`mv` 走的老写法会让它们继续往已改名的归档文件里写，`stdout.log` 永远是空的。
 
 实测：`logrotate -f /etc/logrotate.d/fangke` 后生成 `stdout.log-20261126`、`stderr.log-20261126`、`mqtt-capture.log-20261126`、`access.log-20261126`，新 `*.log` 归零，`systemctl is-active fangke-visitor` = active、nginx `http://127.0.0.1/` = 200。
+
+## 18. 备份（P0）：每日 MySQL + MinIO，本机保留 14 天
+
+上线前最大的空白是「服务器没有任何备份」——误删一条员工/一次清库、或 MinIO 里照片丢了，都只能重来。本轮补上（客户确认：**先只放本机**）。
+
+### 18.1 组成
+
+| 部件 | 说明 |
+|---|---|
+| `/opt/fangke/bin/backup.sh` | 备份脚本，root:root 700 |
+| `fangke-backup.service` | `Type=oneshot`，跑脚本；`Nice=10` + `IOSchedulingClass=idle`，白天绝不会抢业务 IO |
+| `fangke-backup.timer` | `OnCalendar=*-*-* 03:10:00`、`Persistent=true`（关机错过会在开机后补跑）、`RandomizedDelaySec=300` |
+| `/opt/fangke/backup/` | 产物目录，root 700 —— 应用账户 `ubuntu` **改不到**备份，删库也删不掉备份 |
+| `/opt/fangke/logs/backup.log` | 每天一份记录，已被 §17 的 logrotate 覆盖（15 天） |
+
+### 18.2 备份内容
+
+1. **MySQL 全库**：`mysqldump --single-transaction --quick --default-character-set=utf8mb4 --databases fangke`，密码走容器内的 `MYSQL_ROOT_PASSWORD` 环境变量（脚本里不落明文）；`--single-transaction` 是一致性快照，不锁业务表
+2. **MinIO 照片**：`tar -czf ... -C /opt/fangke minio-data`（容器 `/data` 就是 `/opt/fangke/minio-data` 这个 bind mount）
+3. 两个产物都做完整性校验（`gzip -t` / `tar -tzf`），任何一步失败脚本直接 `exit 1`，systemd 把服务标成 `failed`
+
+### 18.3 首次实测（2026-11-26 12:10）
+
+| 项 | 结果 |
+|---|---|
+| `systemctl start fangke-backup.service` | `status=0/SUCCESS` |
+| db 产物 | `fangke-20261126-1210.sql.gz` 1.5M（46 张表） |
+| media 产物 | `media-20261126-1210.tar.gz` 608K |
+| **恢复演练** | 解压导入临时库 `fangke_restore_test` → 46 张表、`employee` 2 行、`device` 3 行，与原库一致；演练库已删 |
+| 定时器 | `NEXT Fri 2026-11-27 03:11:36 CST` |
+| 磁盘 | 备份目录所在根分区 69G / 已用 8.1G，14 份备份远不到 1%（照片增长到 GB 级再考虑增量方案） |
+
+### 18.4 怎么查 / 怎么恢复
+
+```bash
+# 看今天有没有备份、有没有失败
+systemctl list-timers fangke-backup.timer --no-pager
+systemctl status fangke-backup.service --no-pager
+sudo tail -n 30 /opt/fangke/logs/backup.log
+
+# 恢复数据库（覆盖现有库，会先被镜像里的 mysql 覆盖写入）
+gunzip -c /opt/fangke/backup/db/fangke-YYYYmmdd-HHMM.sql.gz | \
+  docker exec -i fangke-mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD"'
+
+# 恢复照片
+sudo tar -xzf /opt/fangke/backup/media/media-YYYYmmdd-HHMM.tar.gz -C /opt/fangke
+
+# 重启应用
+sudo systemctl restart fangke-visitor
+
+# 手工立即备份一次（改完重要数据/大版本上线前）
+sudo systemctl start fangke-backup.service
+```
+
+> **边界**：备份与业务在同一台服务器上。它能救「误删、误改、单表写坏、照片被覆盖」，救不了「整台机器/云盘挂掉」。需要异地副本时，把 `/opt/fangke/backup/` 的产物同步到对象存储或另一台机器即可，脚本不用改。
