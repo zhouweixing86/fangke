@@ -19,15 +19,15 @@
     </div>
 
     <el-table v-loading="loading" :data="rows" border stripe>
-      <el-table-column prop="empNo" label="工号" width="100" />
-      <el-table-column prop="name" label="姓名" width="110" />
-      <el-table-column prop="deptName" label="部门" width="110" />
-      <el-table-column label="车牌" width="110">
+      <el-table-column prop="empNo" label="工号" width="100"  sortable />
+      <el-table-column prop="name" label="姓名" width="110"  sortable />
+      <el-table-column prop="deptName" label="部门" width="110"  sortable />
+      <el-table-column prop="plateNo" label="车牌" width="110" sortable>
         <template #default="{ row }">{{ row.plateNo || '-' }}</template>
       </el-table-column>
-      <el-table-column prop="title" label="岗位" width="110" />
-      <el-table-column prop="phoneMask" label="手机号" width="130" />
-      <el-table-column prop="idCardMask" label="身份证" width="180" />
+      <el-table-column prop="title" label="岗位" width="110"  sortable />
+      <el-table-column prop="phoneMask" label="手机号" width="130"  sortable />
+      <el-table-column prop="idCardMask" label="身份证" width="180"  sortable />
       <el-table-column label="有效期" width="200">
         <template #default="{ row }">
           <span class="text-muted">{{ row.validFrom || '-' }} ~ {{ row.validTo || '-' }}</span>
@@ -84,7 +84,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="车牌号">
-          <el-input v-model="form.plateNo" maxlength="16" placeholder="如 京A12345（二期车辆识别用）" />
+          <el-input v-model="form.plateNo" maxlength="16" placeholder="如 京A12345" />
         </el-form-item>
         <el-form-item label="手机号" prop="phone">
           <el-input v-model="form.phone" placeholder="11 位手机号，留空表示不修改" />

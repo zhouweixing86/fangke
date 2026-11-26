@@ -24,14 +24,14 @@
     </div>
 
     <el-table v-loading="loading" :data="rows" border stripe>
-      <el-table-column prop="areaName" label="区域" width="130" />
-      <el-table-column prop="causeName" label="事由" width="110" />
-      <el-table-column prop="phoneMask" label="手机号" width="130" />
-      <el-table-column prop="visitorName" label="姓名" width="110" />
-      <el-table-column prop="plateNo" label="车牌号" width="110" />
-      <el-table-column prop="company" label="来访单位" min-width="150" />
-      <el-table-column prop="personCount" label="人数" width="70" />
-      <el-table-column prop="arrivalTime" label="到达时间" width="160" />
+      <el-table-column prop="areaName" label="区域" width="130"  sortable />
+      <el-table-column prop="causeName" label="事由" width="110"  sortable />
+      <el-table-column prop="phoneMask" label="手机号" width="130"  sortable />
+      <el-table-column prop="visitorName" label="姓名" width="110"  sortable />
+      <el-table-column prop="plateNo" label="车牌号" width="110"  sortable />
+      <el-table-column prop="company" label="来访单位" min-width="150"  sortable />
+      <el-table-column prop="personCount" label="人数" width="70"  sortable />
+      <el-table-column prop="arrivalTime" label="到达时间" width="160"  sortable />
       <el-table-column label="是否离开" width="90">
         <template #default="{ row }">
           <el-tag :type="row.status === 2 ? 'info' : 'success'" size="small">
@@ -39,7 +39,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="leaveTime" label="离开时间" width="160" />
+      <el-table-column prop="leaveTime" label="离开时间" width="160"  sortable />
       <el-table-column label="操作" width="110" fixed="right">
         <template #default="{ row }">
           <el-button v-if="row.status === 1" link type="primary" @click="doLeave(row)">离开</el-button>
@@ -108,8 +108,8 @@
         <span class="text-muted">停用后不会再出现在登记下拉里，历史记录不受影响</span>
       </div>
       <el-table :data="dictRows" border size="small" max-height="320">
-        <el-table-column prop="name" label="名称" min-width="160" />
-        <el-table-column prop="sort" label="排序" width="80" />
+        <el-table-column prop="name" label="名称" min-width="160"  sortable />
+        <el-table-column prop="sort" label="排序" width="80"  sortable />
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
@@ -117,7 +117,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="remark" label="备注" min-width="140" />
+        <el-table-column prop="remark" label="备注" min-width="140"  sortable />
         <el-table-column label="操作" width="130">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDictEdit(row)">修改</el-button>

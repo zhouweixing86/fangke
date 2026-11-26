@@ -8,12 +8,12 @@
     </div>
 
     <el-table v-loading="loading" :data="depts" border stripe>
-      <el-table-column prop="code" label="部门编码" width="140" />
-      <el-table-column prop="name" label="部门名称" width="180" />
+      <el-table-column prop="code" label="部门编码" width="140"  sortable />
+      <el-table-column prop="name" label="部门名称" width="180"  sortable />
       <el-table-column label="上级部门" width="160">
         <template #default="{ row }">{{ parentName(row.parentId) }}</template>
       </el-table-column>
-      <el-table-column prop="sortNo" label="排序" width="80" />
+      <el-table-column prop="sortNo" label="排序" width="80"  sortable />
       <el-table-column label="员工数" width="100">
         <template #default="{ row }">
           <span v-if="row.employeeCount > 0">{{ row.employeeCount }} 人</span>

@@ -7,21 +7,21 @@
     </div>
 
     <el-table v-loading="loading" :data="rows" border stripe @row-click="showItems">
-      <el-table-column prop="batchNo" label="批次号" width="230" />
+      <el-table-column prop="batchNo" label="批次号" width="230"  sortable />
       <el-table-column label="触发" width="120">
         <template #default="{ row }">{{ triggerText(row.triggerType) }}</template>
       </el-table-column>
-      <el-table-column prop="gateName" label="通道" min-width="120" />
-      <el-table-column prop="totalCount" label="总条数" width="90" />
-      <el-table-column prop="successCount" label="成功" width="80" />
-      <el-table-column prop="failCount" label="失败" width="80" />
+      <el-table-column prop="gateName" label="通道" min-width="120"  sortable />
+      <el-table-column prop="totalCount" label="总条数" width="90"  sortable />
+      <el-table-column prop="successCount" label="成功" width="80"  sortable />
+      <el-table-column prop="failCount" label="失败" width="80"  sortable />
       <el-table-column label="状态" width="110">
         <template #default="{ row }">
           <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="startedAt" label="开始时间" width="180" />
-      <el-table-column prop="finishedAt" label="结束时间" width="180" />
+      <el-table-column prop="startedAt" label="开始时间" width="180"  sortable />
+      <el-table-column prop="finishedAt" label="结束时间" width="180"  sortable />
       <el-table-column label="操作" width="100" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click.stop="showItems(row)">明细</el-button>
@@ -36,8 +36,8 @@
 
     <el-dialog v-model="itemsVisible" :title="`批次明细 · ${currentBatch?.batchNo ?? ''}`" width="860px">
       <el-table v-loading="itemsLoading" :data="items" border stripe size="small" max-height="460">
-        <el-table-column prop="deviceName" label="设备" min-width="220" />
-        <el-table-column prop="personNo" label="人员编号" width="140" />
+        <el-table-column prop="deviceName" label="设备" min-width="220"  sortable />
+        <el-table-column prop="personNo" label="人员编号" width="140"  sortable />
         <el-table-column label="动作" width="100">
           <template #default="{ row }">{{ row.action === 2 ? '删除' : '下发' }}</template>
         </el-table-column>
@@ -48,9 +48,9 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="errorCode" label="错误码" width="140" />
-        <el-table-column prop="errorMsg" label="错误信息" min-width="180" />
-        <el-table-column prop="ackedAt" label="确认时间" width="170" />
+        <el-table-column prop="errorCode" label="错误码" width="140"  sortable />
+        <el-table-column prop="errorMsg" label="错误信息" min-width="180"  sortable />
+        <el-table-column prop="ackedAt" label="确认时间" width="170"  sortable />
       </el-table>
       <div class="pager">
         <el-pagination v-model:current-page="itemPage" v-model:page-size="itemSize" :total="itemTotal"

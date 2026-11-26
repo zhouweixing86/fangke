@@ -21,17 +21,17 @@
     </div>
 
     <el-table v-loading="loading" :data="devices" border stripe>
-      <el-table-column prop="deviceName" label="名称" width="140" />
+      <el-table-column prop="deviceName" label="名称" width="140"  sortable />
       <el-table-column label="门点" width="120">
         <template #default="{ row }">
           <el-tag v-if="row.gateName === '待分配'" size="small" type="warning">{{ row.gateName }}</el-tag>
           <span v-else>{{ row.gateName || '-' }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="directionText" label="方向" width="80" />
-      <el-table-column prop="deviceSn" label="SN" width="160" />
-      <el-table-column prop="ip" label="内网 IP" width="130" />
-      <el-table-column prop="model" label="型号" width="140" />
+      <el-table-column prop="directionText" label="方向" width="80"  sortable />
+      <el-table-column prop="deviceSn" label="SN" width="160"  sortable />
+      <el-table-column prop="ip" label="内网 IP" width="130"  sortable />
+      <el-table-column prop="model" label="型号" width="140"  sortable />
       <el-table-column label="通道" width="110">
         <template #default="{ row }">
           <el-tag size="small" :type="row.channel === 'VEHICLE' ? 'warning' : 'info'">
@@ -46,17 +46,19 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="人数" width="120">
+      <el-table-column label="人数 / 车牌" width="130" sortable :sort-by="countSortBy">
         <template #default="{ row }">
           <el-tooltip v-if="row.channel !== 'VEHICLE'"
                       :content="`设备自报 ${row.personCount} 人；平台应下发 ${row.expectedPersonCount} 人`"
                       placement="top">
             <span>{{ row.expectedPersonCount }} / {{ row.capacity || '-' }}</span>
           </el-tooltip>
-          <span v-else>{{ row.personCount }} / {{ row.capacity || '-' }}</span>
+          <el-tooltip v-else :content="`该相机当前已下发 ${row.plateCount} 个车牌`" placement="top">
+            <span>{{ row.plateCount }} 辆</span>
+          </el-tooltip>
         </template>
       </el-table-column>
-      <el-table-column prop="lastHeartbeat" label="最近心跳" width="160" />
+      <el-table-column prop="lastHeartbeat" label="最近心跳" width="160"  sortable />
       <el-table-column label="操作" width="320" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">档案</el-button>
@@ -181,8 +183,8 @@
 
           <el-divider content-position="left">最近下发</el-divider>
           <el-table :data="cmdStatus?.commands || []" size="small" border max-height="220">
-            <el-table-column prop="createdAt" label="入队时间" width="160" />
-            <el-table-column prop="cmdText" label="指令" width="110" />
+            <el-table-column prop="createdAt" label="入队时间" width="160"  sortable />
+            <el-table-column prop="cmdText" label="指令" width="110"  sortable />
             <el-table-column label="状态" width="90">
               <template #default="{ row }">
                 <el-tag size="small" :type="row.status === 2 ? 'success'
@@ -191,8 +193,8 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="retryCount" label="重试" width="70" />
-            <el-table-column prop="errorMsg" label="错误" show-overflow-tooltip />
+            <el-table-column prop="retryCount" label="重试" width="70"  sortable />
+            <el-table-column prop="errorMsg" label="错误" show-overflow-tooltip  sortable />
           </el-table>
           <div class="toolbar" style="margin-top: 8px">
             <el-button size="small" :icon="Refresh" @click="loadCmdStatus">刷新队列</el-button>
@@ -315,7 +317,7 @@
         <div v-for="(err, idx) in syncResult.cloud.errors" :key="idx" class="mono">{{ err }}</div>
       </div>
       <el-table :data="plates?.plates || []" border size="small" max-height="360">
-        <el-table-column prop="plateNo" label="车牌" width="120" />
+        <el-table-column prop="plateNo" label="车牌" width="120"  sortable />
         <el-table-column label="来源" width="80">
           <template #default="{ row }">
             <el-tag size="small" :type="row.ownerType === 'EMPLOYEE' ? 'primary' : 'success'">
@@ -323,10 +325,10 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="ownerName" label="姓名" width="100" />
-        <el-table-column prop="personNo" label="人员编号" width="120" />
-        <el-table-column prop="validFrom" label="生效时间" width="160" />
-        <el-table-column prop="validToText" label="有效期至" width="110" />
+        <el-table-column prop="ownerName" label="姓名" width="100"  sortable />
+        <el-table-column prop="personNo" label="人员编号" width="120"  sortable />
+        <el-table-column prop="validFrom" label="生效时间" width="160"  sortable />
+        <el-table-column prop="validToText" label="有效期至" width="110"  sortable />
       </el-table>
       <div v-if="syncResult?.devices.length" style="margin-top: 10px">
         <div class="text-muted" style="margin-bottom: 4px">下发结果</div>
@@ -348,16 +350,16 @@
           <el-button size="small" :icon="Refresh" @click="loadPushState">刷新下发状态</el-button>
         </div>
         <el-table v-if="pushState.rows.length" :data="pushState.rows" size="small" border max-height="200">
-          <el-table-column prop="plateNo" label="车牌" width="110" />
-          <el-table-column prop="personName" label="姓名" width="100" />
-          <el-table-column prop="beginTime" label="生效" width="150" />
-          <el-table-column prop="endTime" label="到期" width="150" />
+          <el-table-column prop="plateNo" label="车牌" width="110"  sortable />
+          <el-table-column prop="personName" label="姓名" width="100"  sortable />
+          <el-table-column prop="beginTime" label="生效" width="150"  sortable />
+          <el-table-column prop="endTime" label="到期" width="150"  sortable />
           <el-table-column label="状态" width="90">
             <template #default="{ row }">
               <el-tag size="small" :type="row.state === 'PUSHED' ? 'success' : 'danger'">{{ row.state }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="lastError" label="错误" show-overflow-tooltip />
+          <el-table-column prop="lastError" label="错误" show-overflow-tooltip  sortable />
         </el-table>
         <div v-else class="text-muted" style="margin-top: 4px">
           还没有下发记录：点上方「下发到车闸」可立即对账一次。
@@ -416,6 +418,11 @@ const route = useRoute()
 
 /** 人行终端 / 车闸相机分开管理（docs/18）；空字符串=全部（默认全看，避免“装了车闸却看不到”） */
 const deviceKind = ref<string>('')
+
+/** 列表「人数 / 车牌」列的排序值：人行终端按平台应下发人数，车闸相机按已下发车牌数 */
+function countSortBy(row: DeviceView): number {
+  return row.channel === 'VEHICLE' ? (row.plateCount || 0) : (row.expectedPersonCount || 0)
+}
 
 const loading = ref(false)
 const devices = ref<DeviceView[]>([])

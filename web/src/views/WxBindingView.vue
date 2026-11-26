@@ -15,8 +15,8 @@
     </div>
 
     <el-table v-loading="loading" :data="rows" border stripe>
-      <el-table-column prop="name" label="姓名" width="120" />
-      <el-table-column prop="phoneMask" label="手机号" width="140" />
+      <el-table-column prop="name" label="姓名" width="120"  sortable />
+      <el-table-column prop="phoneMask" label="手机号" width="140"  sortable />
       <el-table-column label="已授予角色" min-width="260">
         <template #default="{ row }">
           <el-tag v-for="code in roleCodesOf(row)" :key="code" size="small" type="success" closable
@@ -32,8 +32,8 @@
           <span v-else class="text-muted">-</span>
         </template>
       </el-table-column>
-      <el-table-column prop="openid" label="openid" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="createdAt" label="绑定时间" width="170" />
+      <el-table-column prop="openid" label="openid" min-width="180" show-overflow-tooltip  sortable />
+      <el-table-column prop="createdAt" label="绑定时间" width="170"  sortable />
       <el-table-column label="操作" width="130" fixed="right">
         <template #default="{ row }">
           <el-button link type="danger" @click="revokeAll(row)">解除绑定</el-button>

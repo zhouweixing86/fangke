@@ -10,15 +10,15 @@
     </div>
 
     <el-table v-loading="loading" :data="gates" border stripe>
-      <el-table-column prop="gateCode" label="门点编码" width="150" />
-      <el-table-column prop="gateName" label="名称" width="150">
+      <el-table-column prop="gateCode" label="门点编码" width="150"  sortable />
+      <el-table-column prop="gateName" label="名称" width="150" sortable>
         <template #default="{ row }">
           {{ row.gateName }}
           <el-tag v-if="row.unassigned" size="small" type="info" style="margin-left: 6px">系统</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="gateTypeText" label="类型" width="100" />
-      <el-table-column prop="sortNo" label="排序" width="80" />
+      <el-table-column prop="gateTypeText" label="类型" width="100"  sortable />
+      <el-table-column prop="sortNo" label="排序" width="80"  sortable />
       <el-table-column label="设备数" width="100">
         <template #default="{ row }">
           <router-link v-if="row.deviceCount > 0" :to="`/devices?gateId=${row.id}`">
@@ -34,7 +34,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="remark" label="备注" min-width="220" />
+      <el-table-column prop="remark" label="备注" min-width="220"  sortable />
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">编辑</el-button>

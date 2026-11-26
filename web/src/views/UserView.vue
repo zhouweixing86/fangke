@@ -19,9 +19,9 @@
       title="角色写在登录 token 里：改完角色后，该账号需重新登录才生效（token 有效期 8 小时）。" />
 
     <el-table v-loading="loading" :data="rows" border stripe>
-      <el-table-column prop="username" label="账号" width="140" />
-      <el-table-column prop="realName" label="姓名" width="120" />
-      <el-table-column prop="userTypeText" label="类型" width="110" />
+      <el-table-column prop="username" label="账号" width="140"  sortable />
+      <el-table-column prop="realName" label="姓名" width="120"  sortable />
+      <el-table-column prop="userTypeText" label="类型" width="110"  sortable />
       <el-table-column label="角色" min-width="180">
         <template #default="{ row }">
           <el-tag v-for="role in row.roles" :key="role" size="small" class="role-tag">
@@ -34,8 +34,8 @@
           <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">{{ row.statusText }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="lastLoginAt" label="最后登录" width="170" />
-      <el-table-column prop="createdAt" label="创建时间" width="170" />
+      <el-table-column prop="lastLoginAt" label="最后登录" width="170"  sortable />
+      <el-table-column prop="createdAt" label="创建时间" width="170"  sortable />
       <el-table-column label="操作" width="220" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
@@ -62,9 +62,9 @@
           title="角色决定账号能看到哪些页面：勾了哪个模块，登录后左侧就会出现对应菜单，接口也按同一权限校验。一个账号可分配多个角色，权限取并集。" />
 
         <el-table v-loading="roleLoading" :data="roleRows" border stripe>
-          <el-table-column prop="roleName" label="角色名称" width="150" />
-          <el-table-column prop="roleCode" label="编码" width="150" />
-          <el-table-column prop="description" label="说明" min-width="180" />
+          <el-table-column prop="roleName" label="角色名称" width="150"  sortable />
+          <el-table-column prop="roleCode" label="编码" width="150"  sortable />
+          <el-table-column prop="description" label="说明" min-width="180"  sortable />
           <el-table-column label="页面权限" min-width="300">
             <template #default="{ row }">
               <el-tag v-for="p in permText(row.perms)" :key="p" size="small" class="perm-tag">{{ p }}</el-tag>

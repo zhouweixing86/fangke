@@ -16,17 +16,17 @@
     </div>
 
     <el-table v-loading="loading" :data="rows" border stripe>
-      <el-table-column prop="appointmentNo" label="预约单号" width="170" />
-      <el-table-column prop="visitorName" label="访客" width="110" />
-      <el-table-column prop="idCardMask" label="证件号" width="180" />
-      <el-table-column prop="visitorType" label="类型" width="80" />
-      <el-table-column prop="purpose" label="事由" min-width="130" />
+      <el-table-column prop="appointmentNo" label="预约单号" width="170"  sortable />
+      <el-table-column prop="visitorName" label="访客" width="110"  sortable />
+      <el-table-column prop="idCardMask" label="证件号" width="180"  sortable />
+      <el-table-column prop="visitorType" label="类型" width="80"  sortable />
+      <el-table-column prop="purpose" label="事由" min-width="130"  sortable />
       <el-table-column label="区域" width="120">
         <template #default="{ row }">{{ row.areaName || '-' }}</template>
       </el-table-column>
-      <el-table-column prop="startTime" label="开始" width="150" />
-      <el-table-column prop="endTime" label="结束" width="150" />
-      <el-table-column prop="sourceText" label="来源" width="110" />
+      <el-table-column prop="startTime" label="开始" width="150"  sortable />
+      <el-table-column prop="endTime" label="结束" width="150"  sortable />
+      <el-table-column prop="sourceText" label="来源" width="110"  sortable />
       <el-table-column label="申请门点" width="160">
         <template #default="{ row }">
           <el-tag v-if="row.gateScope === 2" size="small" type="warning">全部门点</el-tag>

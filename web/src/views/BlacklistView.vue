@@ -17,9 +17,9 @@
       title="命中黑名单的访客在提交预约时直接拒绝（BR-V-005）。列表只展示脱敏值，明文加密入库、不落日志。" />
 
     <el-table v-loading="loading" :data="rows" border stripe>
-      <el-table-column prop="targetTypeText" label="类型" width="110" />
-      <el-table-column prop="targetMask" label="对象" width="200" />
-      <el-table-column prop="reason" label="拉黑原因" min-width="180" />
+      <el-table-column prop="targetTypeText" label="类型" width="110"  sortable />
+      <el-table-column prop="targetMask" label="对象" width="200"  sortable />
+      <el-table-column prop="reason" label="拉黑原因" min-width="180"  sortable />
       <el-table-column label="有效期" width="320">
         <template #default="{ row }">
           <span class="text-muted">
@@ -32,7 +32,7 @@
           <el-tag :type="row.status === 1 ? 'danger' : 'info'" size="small">{{ row.statusText }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createdAt" label="创建时间" width="170" />
+      <el-table-column prop="createdAt" label="创建时间" width="170"  sortable />
       <el-table-column label="操作" width="190" fixed="right">
         <template #default="{ row }">
           <el-button v-if="row.status === 1" link type="danger" @click="enforce(row)">立即生效</el-button>

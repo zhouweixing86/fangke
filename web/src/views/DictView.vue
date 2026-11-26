@@ -15,15 +15,15 @@
     </div>
 
     <el-table v-loading="loading" :data="rows" border stripe>
-      <el-table-column prop="name" :label="currentTab.label" min-width="160" />
-      <el-table-column prop="sort" label="排序" width="90" />
+      <el-table-column prop="name" :label="currentTab.label" min-width="160"  sortable />
+      <el-table-column prop="sort" label="排序" width="90"  sortable />
       <el-table-column label="状态" width="140">
         <template #default="{ row }">
           <el-switch :model-value="row.status === 1" active-text="启用" inactive-text="停用"
             @change="toggle(row)" />
         </template>
       </el-table-column>
-      <el-table-column prop="remark" label="备注" min-width="180" />
+      <el-table-column prop="remark" label="备注" min-width="180"  sortable />
       <el-table-column label="操作" width="160" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">编辑</el-button>

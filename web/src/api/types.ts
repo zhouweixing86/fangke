@@ -32,6 +32,10 @@ export interface DeviceView {
   online: boolean
   lastHeartbeat: string
   personCount: number
+  /** 平台应下发人数（按门点统计有效授权）；人行终端人数列以它为准 */
+  expectedPersonCount: number
+  /** 车闸相机当前已下发车牌数 */
+  plateCount: number
   capacity: number
   remark: string
 }
@@ -83,7 +87,7 @@ export interface EmployeeView {
   deptId: number | null
   deptName: string
   title: string
-  /** 车牌号（主车，二期车辆识别用） */
+  /** 车牌号（主车，用于车闸相机下发） */
   plateNo: string
   phoneMask: string
   idCardMask: string

@@ -32,12 +32,12 @@
             <span class="text-muted">离场请使用「签离」或让访客在出口设备刷证</span>
           </div>
           <el-table v-loading="onsiteLoading" :data="onsiteList" border stripe>
-            <el-table-column prop="appointmentNo" label="预约单号" width="170" />
-            <el-table-column prop="visitorName" label="访客" width="120" />
-            <el-table-column prop="idCardMask" label="证件号" width="180" />
-            <el-table-column prop="purpose" label="事由" min-width="140" />
-            <el-table-column prop="checkinAt" label="入场时间" width="150" />
-            <el-table-column prop="endTime" label="预约结束" width="150" />
+            <el-table-column prop="appointmentNo" label="预约单号" width="170"  sortable />
+            <el-table-column prop="visitorName" label="访客" width="120"  sortable />
+            <el-table-column prop="idCardMask" label="证件号" width="180"  sortable />
+            <el-table-column prop="purpose" label="事由" min-width="140"  sortable />
+            <el-table-column prop="checkinAt" label="入场时间" width="150"  sortable />
+            <el-table-column prop="endTime" label="预约结束" width="150"  sortable />
             <el-table-column label="状态" width="90">
               <template #default="{ row }">
                 <el-tag v-if="row.overdue" type="danger" size="small">已超时</el-tag>
@@ -62,13 +62,13 @@
             title="预约提交后进入待审核，由保安/管理员审核；审核通过即下发门禁授权"
             style="margin-bottom: 12px" />
           <el-table v-loading="pendingLoading" :data="pendingList" border stripe>
-            <el-table-column prop="appointmentNo" label="预约单号" width="170" />
-            <el-table-column prop="visitorName" label="访客" width="120" />
-            <el-table-column prop="idCardMask" label="证件号" width="180" />
-            <el-table-column prop="purpose" label="事由" min-width="140" />
-            <el-table-column prop="sourceText" label="来源" width="120" />
-            <el-table-column prop="startTime" label="预约开始" width="150" />
-            <el-table-column prop="createdAt" label="提交时间" width="150" />
+            <el-table-column prop="appointmentNo" label="预约单号" width="170"  sortable />
+            <el-table-column prop="visitorName" label="访客" width="120"  sortable />
+            <el-table-column prop="idCardMask" label="证件号" width="180"  sortable />
+            <el-table-column prop="purpose" label="事由" min-width="140"  sortable />
+            <el-table-column prop="sourceText" label="来源" width="120"  sortable />
+            <el-table-column prop="startTime" label="预约开始" width="150"  sortable />
+            <el-table-column prop="createdAt" label="提交时间" width="150"  sortable />
             <el-table-column label="操作" width="110" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click="remind(row)">催办</el-button>
@@ -91,17 +91,17 @@
             title="审核通过后立即下发门禁授权；发现异常请拒绝放行"
             style="margin-bottom: 12px" />
           <el-table v-loading="reviewLoading" :data="reviewList" border stripe>
-            <el-table-column prop="appointmentNo" label="预约单号" width="170" />
+            <el-table-column prop="appointmentNo" label="预约单号" width="170"  sortable />
             <el-table-column label="当前节点" width="120">
               <template #default="{ row }">
                 <el-tag size="small" effect="plain">{{ row.nodeName || `第 ${row.level} 级` }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="visitorName" label="访客" width="120" />
-            <el-table-column prop="idCardMask" label="证件号" width="180" />
-            <el-table-column prop="purpose" label="事由" min-width="140" />
-            <el-table-column prop="startTime" label="预约开始" width="150" />
-            <el-table-column prop="endTime" label="预约结束" width="150" />
+            <el-table-column prop="visitorName" label="访客" width="120"  sortable />
+            <el-table-column prop="idCardMask" label="证件号" width="180"  sortable />
+            <el-table-column prop="purpose" label="事由" min-width="140"  sortable />
+            <el-table-column prop="startTime" label="预约开始" width="150"  sortable />
+            <el-table-column prop="endTime" label="预约结束" width="150"  sortable />
             <el-table-column label="操作" width="110" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click="openReview(row)">审核</el-button>

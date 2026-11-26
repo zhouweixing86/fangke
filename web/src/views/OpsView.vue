@@ -19,16 +19,16 @@
           <el-table-column label="任务" width="160">
             <template #default="{ row }">{{ codeLabel(row.jobCode) }}</template>
           </el-table-column>
-          <el-table-column prop="startedAt" label="开始时间" width="170" />
-          <el-table-column prop="finishedAt" label="结束时间" width="170" />
+          <el-table-column prop="startedAt" label="开始时间" width="170"  sortable />
+          <el-table-column prop="finishedAt" label="结束时间" width="170"  sortable />
           <el-table-column label="状态" width="90">
             <template #default="{ row }">
               <el-tag :type="row.status === 1 ? 'success' : row.status === 2 ? 'danger' : 'warning'"
                 size="small">{{ row.statusText }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="affected" label="处理条数" width="100" />
-          <el-table-column prop="message" label="说明" min-width="220" />
+          <el-table-column prop="affected" label="处理条数" width="100"  sortable />
+          <el-table-column prop="message" label="说明" min-width="220"  sortable />
         </el-table>
 
         <div class="pager">
@@ -66,13 +66,13 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="createdAt" label="时间" width="170" />
+          <el-table-column prop="createdAt" label="时间" width="170"  sortable />
           <el-table-column label="接收方" width="120">
             <template #default="{ row }">{{ row.receiverTypeText }}#{{ row.receiverId }}</template>
           </el-table-column>
-          <el-table-column prop="channelText" label="渠道" width="80" />
-          <el-table-column prop="templateCode" label="模板" width="180" />
-          <el-table-column prop="title" label="标题" width="160" />
+          <el-table-column prop="channelText" label="渠道" width="80"  sortable />
+          <el-table-column prop="templateCode" label="模板" width="180"  sortable />
+          <el-table-column prop="title" label="标题" width="160"  sortable />
           <el-table-column label="状态" width="90">
             <template #default="{ row }">
               <el-tag :type="row.status === 1 ? 'success' : row.status === 2 ? 'danger' : 'warning'"
@@ -84,7 +84,7 @@
               <span class="text-muted">{{ row.read ? '已读' : '未读' }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="retryCount" label="重试" width="80" />
+          <el-table-column prop="retryCount" label="重试" width="80"  sortable />
         </el-table>
 
         <div class="pager">

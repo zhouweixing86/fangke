@@ -49,11 +49,11 @@
     </div>
 
     <el-table v-loading="loading" :data="daily" border stripe style="margin-top: 16px">
-      <el-table-column prop="date" label="日期" width="130" />
-      <el-table-column prop="appointments" label="预约数" width="100" />
-      <el-table-column prop="checkins" label="到访人次" width="110" />
-      <el-table-column prop="eventPass" label="通行成功" width="110" />
-      <el-table-column prop="eventFail" label="通行失败" width="110" />
+      <el-table-column prop="date" label="日期" width="130"  sortable />
+      <el-table-column prop="appointments" label="预约数" width="100"  sortable />
+      <el-table-column prop="checkins" label="到访人次" width="110"  sortable />
+      <el-table-column prop="eventPass" label="通行成功" width="110"  sortable />
+      <el-table-column prop="eventFail" label="通行失败" width="110"  sortable />
       <el-table-column label="通行趋势" min-width="240">
         <template #default="{ row }">
           <div class="bar-track">
@@ -68,40 +68,40 @@
       <div class="group-card">
         <div class="group-title">按部门（访客）</div>
         <el-table :data="visitorReport?.byDept ?? []" border size="small">
-          <el-table-column prop="key" label="部门" min-width="110" />
-          <el-table-column prop="total" label="预约" width="70" />
-          <el-table-column prop="a" label="通过" width="70" />
-          <el-table-column prop="b" label="到访" width="70" />
+          <el-table-column prop="key" label="部门" min-width="110"  sortable />
+          <el-table-column prop="total" label="预约" width="70"  sortable />
+          <el-table-column prop="a" label="通过" width="70"  sortable />
+          <el-table-column prop="b" label="到访" width="70"  sortable />
         </el-table>
       </div>
 
       <div class="group-card">
         <div class="group-title">按访客类型</div>
         <el-table :data="visitorReport?.byType ?? []" border size="small">
-          <el-table-column prop="key" label="类型" min-width="90" />
-          <el-table-column prop="total" label="预约" width="70" />
-          <el-table-column prop="a" label="通过" width="70" />
-          <el-table-column prop="b" label="到访" width="70" />
+          <el-table-column prop="key" label="类型" min-width="90"  sortable />
+          <el-table-column prop="total" label="预约" width="70"  sortable />
+          <el-table-column prop="a" label="通过" width="70"  sortable />
+          <el-table-column prop="b" label="到访" width="70"  sortable />
         </el-table>
       </div>
 
       <div class="group-card">
         <div class="group-title">按设备（通行）</div>
         <el-table :data="accessReport?.byDevice ?? []" border size="small">
-          <el-table-column prop="key" label="设备" min-width="130" />
-          <el-table-column prop="total" label="事件" width="70" />
-          <el-table-column prop="a" label="通过" width="70" />
-          <el-table-column prop="b" label="失败" width="70" />
+          <el-table-column prop="key" label="设备" min-width="130"  sortable />
+          <el-table-column prop="total" label="事件" width="70"  sortable />
+          <el-table-column prop="a" label="通过" width="70"  sortable />
+          <el-table-column prop="b" label="失败" width="70"  sortable />
         </el-table>
       </div>
 
       <div class="group-card">
         <div class="group-title">按识别方式</div>
         <el-table :data="accessReport?.byIdentifyType ?? []" border size="small">
-          <el-table-column prop="key" label="方式" min-width="90" />
-          <el-table-column prop="total" label="事件" width="70" />
-          <el-table-column prop="a" label="通过" width="70" />
-          <el-table-column prop="b" label="失败" width="70" />
+          <el-table-column prop="key" label="方式" min-width="90"  sortable />
+          <el-table-column prop="total" label="事件" width="70"  sortable />
+          <el-table-column prop="a" label="通过" width="70"  sortable />
+          <el-table-column prop="b" label="失败" width="70"  sortable />
         </el-table>
       </div>
     </div>

@@ -76,7 +76,7 @@
       <el-button size="small" type="danger" plain @click="doClearLogs">清空</el-button>
     </div>
     <el-table :data="logs" border size="small" max-height="420" v-loading="logsLoading">
-      <el-table-column prop="created_at" label="时间" width="180" />
+      <el-table-column prop="created_at" label="时间" width="180"  sortable />
       <el-table-column label="方向" width="80">
         <template #default="{ row }">
           <el-tag size="small" :type="row.direction === 'UP' ? 'success' : 'primary'">
@@ -84,10 +84,10 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="device_sn" label="设备 SN" width="170" />
-      <el-table-column prop="topic" label="主题" width="200" show-overflow-tooltip />
-      <el-table-column prop="message" label="结果" width="240" show-overflow-tooltip />
-      <el-table-column prop="payload" label="报文" show-overflow-tooltip />
+      <el-table-column prop="device_sn" label="设备 SN" width="170"  sortable />
+      <el-table-column prop="topic" label="主题" width="200" show-overflow-tooltip  sortable />
+      <el-table-column prop="message" label="结果" width="240" show-overflow-tooltip  sortable />
+      <el-table-column prop="payload" label="报文" show-overflow-tooltip  sortable />
     </el-table>
   </div>
 </template>

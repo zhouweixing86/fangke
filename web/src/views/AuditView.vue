@@ -19,12 +19,12 @@
       title="审计日志只增不删（BR-D-010）：任何账号（含管理员）都不能修改或删除这里的记录。" />
 
     <el-table v-loading="loading" :data="rows" border stripe>
-      <el-table-column prop="createdAt" label="时间" width="170" />
-      <el-table-column prop="userName" label="操作账号" width="120" />
-      <el-table-column prop="module" label="模块" width="110" />
-      <el-table-column prop="action" label="动作" width="170" />
-      <el-table-column prop="target" label="目标" min-width="160" />
-      <el-table-column prop="requestIp" label="来源 IP" width="130" />
+      <el-table-column prop="createdAt" label="时间" width="170"  sortable />
+      <el-table-column prop="userName" label="操作账号" width="120"  sortable />
+      <el-table-column prop="module" label="模块" width="110"  sortable />
+      <el-table-column prop="action" label="动作" width="170"  sortable />
+      <el-table-column prop="target" label="目标" min-width="160"  sortable />
+      <el-table-column prop="requestIp" label="来源 IP" width="130"  sortable />
       <el-table-column label="结果" width="80">
         <template #default="{ row }">
           <el-tag :type="row.result === 1 ? 'success' : 'danger'" size="small">{{ row.resultText }}</el-tag>

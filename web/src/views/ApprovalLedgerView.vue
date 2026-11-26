@@ -28,9 +28,9 @@
     </div>
 
     <el-table v-loading="loading" :data="rows" border stripe>
-      <el-table-column prop="createdAt" label="审批时间" width="170" />
-      <el-table-column prop="appointmentNo" label="预约单号" width="170" />
-      <el-table-column prop="visitorName" label="访客" width="110" />
+      <el-table-column prop="createdAt" label="审批时间" width="170"  sortable />
+      <el-table-column prop="appointmentNo" label="预约单号" width="170"  sortable />
+      <el-table-column prop="visitorName" label="访客" width="110"  sortable />
       <el-table-column label="审批节点" min-width="130">
         <template #default="{ row }">{{ row.nodeName }}</template>
       </el-table-column>
@@ -47,7 +47,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="comment" label="意见" min-width="160" show-overflow-tooltip />
+      <el-table-column prop="comment" label="意见" min-width="160" show-overflow-tooltip  sortable />
       <el-table-column label="批准门点" min-width="130">
         <template #default="{ row }">{{ row.gates || '-' }}</template>
       </el-table-column>

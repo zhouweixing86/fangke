@@ -30,9 +30,9 @@
     </div>
 
     <el-table v-loading="loading" :data="rows" border stripe>
-      <el-table-column prop="day" label="日期" width="110" />
-      <el-table-column prop="personName" label="姓名" width="110" />
-      <el-table-column prop="personNo" label="人员编号" width="140" />
+      <el-table-column prop="day" label="日期" width="110"  sortable />
+      <el-table-column prop="personName" label="姓名" width="110"  sortable />
+      <el-table-column prop="personNo" label="人员编号" width="140"  sortable />
       <el-table-column label="人员类型" width="95">
         <template #default="{ row }">
           <el-tag :type="row.personType === 'EMPLOYEE' ? 'primary' : 'success'" size="small">
@@ -45,8 +45,8 @@
           <span :class="{ 'text-muted': !row.deptName }">{{ row.deptName || '-' }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="firstIn" label="最早进入" width="165" />
-      <el-table-column prop="lastOut" label="最晚出去" width="165" />
+      <el-table-column prop="firstIn" label="最早进入" width="165"  sortable />
+      <el-table-column prop="lastOut" label="最晚出去" width="165"  sortable />
       <el-table-column label="进 / 出" width="90">
         <template #default="{ row }">
           <span :class="{ 'text-muted': row.inCount === 0 }">{{ row.inCount }}</span>
@@ -54,7 +54,7 @@
           <span :class="{ 'text-muted': row.outCount === 0 }">{{ row.outCount }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="channelText" label="通道" width="105" />
+      <el-table-column prop="channelText" label="通道" width="105"  sortable />
       <el-table-column label="操作" width="90" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openDetail(row)">详情</el-button>
@@ -81,7 +81,7 @@
       </div>
 
       <el-table v-loading="denyLoading" :data="denyRows" border stripe>
-        <el-table-column prop="eventTime" label="时间" width="165" />
+        <el-table-column prop="eventTime" label="时间" width="165"  sortable />
         <el-table-column label="进出" width="70">
           <template #default="{ row }">
             <el-tag :type="row.direction === 1 ? 'success' : 'info'" size="small">
@@ -89,10 +89,10 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="identifyTypeText" label="识别方式" width="95" />
-        <el-table-column prop="personName" label="姓名" width="110" />
-        <el-table-column prop="idCardMask" label="证件号" width="150" />
-        <el-table-column prop="personNo" label="人员编号" width="130" />
+        <el-table-column prop="identifyTypeText" label="识别方式" width="95"  sortable />
+        <el-table-column prop="personName" label="姓名" width="110"  sortable />
+        <el-table-column prop="idCardMask" label="证件号" width="150"  sortable />
+        <el-table-column prop="personNo" label="人员编号" width="130"  sortable />
         <el-table-column label="原因" min-width="150">
           <template #default="{ row }">
             <el-tag v-if="row.failReason" type="danger" size="small" effect="plain">
@@ -101,7 +101,7 @@
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="deviceSn" label="设备" width="150" />
+        <el-table-column prop="deviceSn" label="设备" width="150"  sortable />
         <el-table-column label="照片" width="80">
           <template #default="{ row }">
             <el-button v-if="row.hasMedia" link type="primary" @click="showMedia({ eventId: row.id } as any)">
@@ -191,7 +191,7 @@
 
         <div class="section-title">进出明细（{{ detail.records.length }} 条）</div>
         <el-table :data="detail.records" border size="small">
-          <el-table-column prop="eventTime" label="时间" width="160" />
+          <el-table-column prop="eventTime" label="时间" width="160"  sortable />
           <el-table-column label="进出" width="70">
             <template #default="{ row }">
               <el-tag :type="row.direction === 1 ? 'success' : 'info'" size="small">
@@ -199,15 +199,15 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="channelText" label="通行方式" width="90" />
-          <el-table-column prop="methodText" label="识别方式" width="100" />
+          <el-table-column prop="channelText" label="通行方式" width="90"  sortable />
+          <el-table-column prop="methodText" label="识别方式" width="100"  sortable />
           <el-table-column label="点位" min-width="180">
             <template #default="{ row }">
               <span>{{ row.gateName || '-' }}</span>
               <span v-if="row.deviceName" class="text-muted"> · {{ row.deviceName }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="plateNo" label="车牌" width="110" />
+          <el-table-column prop="plateNo" label="车牌" width="110"  sortable />
           <el-table-column label="照片" width="85">
             <template #default="{ row }">
               <el-image v-if="row.photoUrl" :src="row.photoUrl" :preview-src-list="[row.photoUrl]"

@@ -233,6 +233,16 @@ public class DeviceAdminController {
         }
         view.put("expectedPersonCount", expected);
         view.put("personCountSource", d.getPersonCount() == null ? "PLATFORM" : "DEVICE");
+        // 车闸相机没有「人」，有意义的是当前已下发的车牌数（对账状态里的条数）
+        int plateCount = 0;
+        if (d.getChannel() == Device.Channel.VEHICLE && d.getDeviceSn() != null) {
+            try {
+                plateCount = plateStateRepository.fingerprints(d.getDeviceSn()).size();
+            } catch (Exception ignored) {
+                // 查不到不影响列表
+            }
+        }
+        view.put("plateCount", plateCount);
         view.put("capacity", d.getCapacity() == null ? 0 : d.getCapacity());
         view.put("remark", nullSafe(d.getRemark()));
         view.put("heartSeconds", Math.max(5, props.getDevice().getPullHeartSeconds()));
