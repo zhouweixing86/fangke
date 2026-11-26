@@ -85,6 +85,14 @@ public class VehicleMqttService {
     /** 开闸，见协议 §4.4.2（data 为空串）。 */
     private static final String OPEN_GATE = "{\"command\":\"Open\",\"data\":\"\"," + PROTOCOL_SUFFIX;
     /**
+     * 清空相机里存储的数据，见协议 §4.4.23。
+     *
+     * <p>{@code clearCarInfo=1} 会清掉「固定车信息（名单）+ 放行规则」，清完必须重新下发名单和放行规则；
+     * 这是「强制同步」纠正「有人在相机本地导入名单」的唯一可靠手段（协议没有读名单指令）。
+     */
+    private static final String CLEAR_DATA =
+            "{\"command\":\"ClearData\",\"data\":\"{\\\"clearCarInfo\\\":1}\"," + PROTOCOL_SUFFIX;
+    /**
      * 协议配置开关，见协议 §4.4.22：设备 Conn 后下发。
      *
      * <p>`enableReply=1` 让相机每条下行都回执；`enableOffline=1` 让它在断网期间缓存识别结果、
@@ -301,17 +309,7 @@ public class VehicleMqttService {
     public Map<String, Object> openGate(String deviceSn, String plateNo, String operator) {
         // 先按心跳判断在线：相机是 MQTT 客户端（cleanSession=1），离线期间发的指令它会丢，
         // 直接回「开闸成功」会让人以为闸开了。离线就明确报错。
-        Device device = deviceService.list(null).stream()
-                .filter(d -> deviceSn.equals(d.getDeviceSn()))
-                .findFirst()
-                .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_INVALID,
-                        "设备不存在：" + deviceSn + "（先在「设备管理 → 车闸相机」登记）"));
-        if (!device.isFreshOnline(OFFLINE_SECONDS)) {
-            String last = device.getLastHeartbeat() == null ? "从未上报"
-                    : DATETIME.format(device.getLastHeartbeat());
-            throw new BusinessException(ErrorCode.PARAM_INVALID,
-                    "车闸相机当前离线（最近心跳 " + last + "），开闸指令收不到，请先确认现场网络");
-        }
+        Device device = requireOnlineDevice(deviceSn, "开闸指令收不到，请先确认现场网络");
         Long gateId = device.getGateId();
         int direction = device.getDirection();
         String plate = plateNo == null ? "" : VehicleAccessService.normalize(plateNo);
@@ -337,6 +335,51 @@ public class VehicleMqttService {
         Map<String, Object> view = result("OPEN", deviceSn, plate, payload);
         view.put("operator", operator == null ? "" : operator);
         return view;
+    }
+
+    /**
+     * 强制同步：先让相机清空本地名单与放行规则（{@code ClearData}），再按平台数据全量重推。
+     *
+     * <p>用在「怀疑相机里的名单和平台对不上」的时候——协议没有读名单指令，没法逐条比对；
+     * 唯一可靠的做法就是清空后重建。现场有人在相机上手工导入/删除名单时，点这个按钮即可回到平台的账。
+     */
+    public Map<String, Object> forceResync(String deviceSn) {
+        Device device = requireOnlineDevice(deviceSn, "清空/重推指令收不到，请先确认现场网络");
+        String payload = fill(CLEAR_DATA, envelopeValues(deviceSn, Map.of()));
+        gateway.publish(deviceSn, payload);
+        logRepository.save("DOWN", deviceSn, topicOf(deviceSn), payload, "强制同步：清空相机本地名单与放行规则");
+        // 相机处理 ClearData 是异步的，等一会儿再推，避免和随后的 AddCarInfo 抢
+        try {
+            Thread.sleep(2500L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        stateRepository.removeDevice(deviceSn);
+        Map<String, Object> repushed = syncDevicePlates(deviceSn, device.getGateId());
+        // ClearData 连放行规则一起清了，这里补回去（否则相机不认识名单车，闸不会自己开）
+        applyPassRule(deviceSn);
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("deviceSn", deviceSn);
+        view.put("cleared", true);
+        view.put("repushed", repushed);
+        view.put("connected", gateway.isConnected());
+        return view;
+    }
+
+    /** 找设备并确认在线（心跳新鲜）；离线时给可读原因——相机是 MQTT 客户端，离线发的指令会丢。 */
+    private Device requireOnlineDevice(String deviceSn, String offlineHint) {
+        Device device = deviceService.list(null).stream()
+                .filter(d -> deviceSn.equals(d.getDeviceSn()))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_INVALID,
+                        "设备不存在：" + deviceSn + "（先在「设备管理 → 车闸相机」登记）"));
+        if (!device.isFreshOnline(OFFLINE_SECONDS)) {
+            String last = device.getLastHeartbeat() == null ? "从未上报"
+                    : DATETIME.format(device.getLastHeartbeat());
+            throw new BusinessException(ErrorCode.PARAM_INVALID,
+                    "车闸相机当前离线（最近心跳 " + last + "），" + offlineHint);
+        }
+        return device;
     }
 
     /**

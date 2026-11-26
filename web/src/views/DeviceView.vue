@@ -305,6 +305,7 @@
       <div class="toolbar">
         <el-button :loading="platesLoading" :icon="Refresh" @click="loadPlates">刷新清单</el-button>
         <el-button type="primary" :loading="platesSyncing" @click="doSyncPlates">下发到车闸相机</el-button>
+        <el-button type="warning" plain :loading="forceResyncing" @click="doForceResync">强制同步（清空重推）</el-button>
         <span class="spacer" />
         <span class="text-muted">
           员工 {{ plates?.summary.employee || 0 }} 辆 · 访客 {{ plates?.summary.visitor || 0 }} 辆 ·
@@ -402,6 +403,7 @@ import {
   openDeviceDoor,
   syncVehiclePlates,
   updateDevice,
+  vehicleMqttForceResync,
   vehicleMqttOpen,
   type DeviceCommandStatus,
   type DeviceRemoteInfo
@@ -448,6 +450,7 @@ const editForm = ref({
 const platesVisible = ref(false)
 const platesLoading = ref(false)
 const platesSyncing = ref(false)
+const forceResyncing = ref(false)
 const platesRow = ref<DeviceView | null>(null)
 const plates = ref<VehiclePlateSnapshot | null>(null)
 const syncResult = ref<VehiclePlateSyncResult | null>(null)
@@ -606,6 +609,37 @@ async function doSyncPlates() {
     showRemoteError(error)
   } finally {
     platesSyncing.value = false
+  }
+}
+
+/**
+ * 强制同步：让相机先清空本地名单与放行规则，再按平台数据全量重推。
+ * 用在「相机上可能被人手工导入/删除过名单、平台对不上」的情况（协议没有读名单指令，只能清空重建）。
+ */
+async function doForceResync() {
+  const deviceSn = platesRow?.value?.deviceSn
+  if (!deviceSn) {
+    ElMessage.warning('请从某台车闸相机进入后再执行强制同步')
+    return
+  }
+  await ElMessageBox.confirm(
+    `会先让相机「清空本地名单 + 放行规则」，再按平台数据全量重推。\n`
+    + `执行后相机会有几秒钟没有名单，期间不识别车牌。\n\n设备：${deviceSn}`,
+    '强制同步（清空重推）',
+    { type: 'warning', confirmButtonText: '开始强制同步' }
+  )
+  forceResyncing.value = true
+  try {
+    const result = await vehicleMqttForceResync(deviceSn)
+    const repushed = (result.repushed || {}) as Record<string, unknown>
+    ElMessage.success(
+      `已清空并重推：新增 ${repushed.added ?? 0} / 更新 ${repushed.updated ?? 0} / 删除 ${repushed.removed ?? 0}`
+    )
+    await Promise.all([loadPlates(), loadPushState()])
+  } catch (error) {
+    showRemoteError(error)
+  } finally {
+    forceResyncing.value = false
   }
 }
 

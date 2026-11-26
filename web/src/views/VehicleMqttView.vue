@@ -45,6 +45,7 @@
               <el-button type="primary" :loading="busy === 'add'" @click="doAdd">下发 / 更新</el-button>
               <el-button type="danger" plain :loading="busy === 'del'" @click="doDelete">删除车牌</el-button>
               <el-button :loading="busy === 'import'" @click="doImport">全量对齐</el-button>
+              <el-button type="warning" plain :loading="busy === 'force'" @click="doForceResync">强制同步</el-button>
             </el-form-item>
           </el-form>
           <div class="text-muted">
@@ -103,6 +104,7 @@ import {
   vehicleMqttDeletePlate,
   vehicleMqttEnableReply,
   vehicleMqttImport,
+  vehicleMqttForceResync,
   vehicleMqttLogs,
   vehicleMqttRaw,
   vehicleMqttReconnect,
@@ -230,6 +232,32 @@ async function doImport() {
   try {
     const result = await vehicleMqttImport()
     ElMessage.success(`已推送 ${result.plateTotal} 条车牌到 ${result.devices.length} 台设备`)
+    await loadLogs()
+  } catch (error) {
+    ElMessage.error(errorText(error))
+  } finally {
+    busy.value = ''
+  }
+}
+
+async function doForceResync() {
+  if (!form.value.deviceSn) {
+    ElMessage.warning('请先选择要强制同步的车闸设备')
+    return
+  }
+  await ElMessageBox.confirm(
+    `会先让相机「清空本地名单 + 放行规则」，再按平台数据全量重推。\n`
+    + `用在相机上可能被人工导入过名单、平台对不上的情况；执行后相机会短暂无名单（几秒）。\n\n设备：${form.value.deviceSn}`,
+    '强制同步（清空重推）',
+    { type: 'warning', confirmButtonText: '开始强制同步' }
+  )
+  busy.value = 'force'
+  try {
+    const result = await vehicleMqttForceResync(form.value.deviceSn)
+    const repushed = (result.repushed || {}) as Record<string, unknown>
+    ElMessage.success(
+      `已清空并重推：新增 ${repushed.added ?? 0} / 更新 ${repushed.updated ?? 0} / 删除 ${repushed.removed ?? 0}`
+    )
     await loadLogs()
   } catch (error) {
     ElMessage.error(errorText(error))

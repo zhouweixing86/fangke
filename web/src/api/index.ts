@@ -241,6 +241,11 @@ export const vehicleMqttSync = (deviceSn: string) =>
   post<Record<string, unknown>>(
     `/admin/vehicle/mqtt/sync?deviceSn=${encodeURIComponent(deviceSn)}`
   )
+/** 强制同步：让相机清空本地名单与放行规则后按平台数据全量重推（纠正相机上被人工导入的名单） */
+export const vehicleMqttForceResync = (deviceSn: string) =>
+  post<Record<string, unknown>>(
+    `/admin/vehicle/mqtt/force-resync?deviceSn=${encodeURIComponent(deviceSn)}`
+  )
 /** 全量对齐：把平台当前车牌推给所有车闸相机 */
 export const vehicleMqttImport = (gateId?: number) =>
   post<{ plateTotal: number; devices: unknown[] }>('/admin/vehicle/mqtt/import', undefined, gateId ? { gateId } : undefined)

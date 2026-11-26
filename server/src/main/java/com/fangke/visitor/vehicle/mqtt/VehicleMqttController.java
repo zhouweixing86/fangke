@@ -102,6 +102,16 @@ public class VehicleMqttController {
         return ApiResponse.ok(service.deletePlate(deviceSn.trim(), plateNo));
     }
 
+    /** 强制同步：先清空相机本地名单（含别人手工导入的）与放行规则，再按平台数据全量重推。 */
+    @PostMapping("/force-resync")
+    @AuditLog(module = "VEHICLE", action = "MQTT_FORCE_RESYNC")
+    public ApiResponse<Map<String, Object>> forceResync(@RequestParam String deviceSn) {
+        if (deviceSn == null || deviceSn.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_MISSING, "deviceSn 不能为空");
+        }
+        return ApiResponse.ok(service.forceResync(deviceSn.trim()));
+    }
+
     /** 使能下行回执（相机回复 errCode，便于确认下发是否被接受）。 */
     @PostMapping("/enable-reply")
     @AuditLog(module = "VEHICLE", action = "MQTT_ENABLE_REPLY")

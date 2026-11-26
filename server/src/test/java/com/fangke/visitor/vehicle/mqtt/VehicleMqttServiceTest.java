@@ -17,6 +17,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -216,6 +217,33 @@ class VehicleMqttServiceTest {
         verify(gateway, times(3)).publish(eq(SN), org.mockito.ArgumentMatchers.anyString());
         verify(stateRepository).upsert(SN, "苏A11111", fingerprint);
         verify(stateRepository).remove(SN, "苏A99999");
+    }
+
+    @Test
+    @DisplayName("强制同步：先 ClearData 清空相机名单，再全量重推并补回放行规则")
+    void forceResyncClearsThenRepushes() {
+        com.fangke.visitor.device.model.Device online = new com.fangke.visitor.device.model.Device();
+        online.setDeviceSn(SN);
+        online.setOnline(true);
+        online.setGateId(1L);
+        online.setLastHeartbeat(java.time.LocalDateTime.now());
+        when(deviceService.list(null)).thenReturn(List.of(online));
+        when(plateService.snapshot(1L)).thenReturn(List.of(new PlatePayload("苏A1",
+                PlatePayload.OWNER_EMPLOYEE, 1L, "张三", "E1",
+                java.time.LocalDateTime.of(2026, 11, 26, 0, 0),
+                java.time.LocalDateTime.of(2026, 12, 31, 23, 59))));
+
+        java.util.Map<String, Object> result = service.forceResync(SN);
+
+        ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+        verify(gateway, times(3)).publish(eq(SN), payload.capture());
+        java.util.List<String> sent = payload.getAllValues();
+        assertTrue(sent.get(0).contains("ClearData"), sent.get(0));
+        assertTrue(sent.get(0).contains("clearCarInfo"), sent.get(0));
+        assertTrue(sent.get(1).contains("AddCarInfo") && sent.get(1).contains("苏A1"), sent.get(1));
+        assertTrue(sent.get(2).contains("DlPassRule"), sent.get(2));
+        verify(stateRepository).removeDevice(SN);
+        assertNotNull(result.get("repushed"));
     }
 
     @Test
