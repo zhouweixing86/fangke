@@ -47,6 +47,7 @@ public class DeviceAdminController {
     private final DeviceCapabilityService capabilityService;
     private final GateService gateService;
     private final com.fangke.visitor.vehicle.mqtt.VehicleMqttPlateStateRepository plateStateRepository;
+    private final com.fangke.visitor.device.service.ExpectedPersonPort expectedPersonPort;
     private final com.fangke.visitor.config.AppProperties props;
 
     public DeviceAdminController(DeviceRepository deviceRepository,
@@ -55,6 +56,7 @@ public class DeviceAdminController {
                                  DeviceCapabilityService capabilityService,
                                  GateService gateService,
                                  com.fangke.visitor.vehicle.mqtt.VehicleMqttPlateStateRepository plateStateRepository,
+                                 com.fangke.visitor.device.service.ExpectedPersonPort expectedPersonPort,
                                  com.fangke.visitor.config.AppProperties props) {
         this.deviceRepository = deviceRepository;
         this.adapterFactory = adapterFactory;
@@ -62,6 +64,7 @@ public class DeviceAdminController {
         this.capabilityService = capabilityService;
         this.gateService = gateService;
         this.plateStateRepository = plateStateRepository;
+        this.expectedPersonPort = expectedPersonPort;
         this.props = props;
     }
 
@@ -218,6 +221,18 @@ public class DeviceAdminController {
         view.put("online", isFresh(d));
         view.put("lastHeartbeat", d.getLastHeartbeat() == null ? "" : DATETIME.format(d.getLastHeartbeat()));
         view.put("personCount", d.getPersonCount() == null ? 0 : d.getPersonCount());
+        // 设备自报人数只在新终端心跳里给；老协议不给就会一直停在最后一次上报的值（例如清完名单仍显示 8）。
+        // 所以再给一个「平台应下发人数」：按门点算 access_grant 里的有效授权，管理端以它为准。
+        int expected = 0;
+        if (d.getChannel() != Device.Channel.VEHICLE && d.getGateId() != null) {
+            try {
+                expected = expectedPersonPort.expectedOn(d.getGateId(), java.time.Instant.now()).size();
+            } catch (Exception ignored) {
+                // 算不出来不影响列表
+            }
+        }
+        view.put("expectedPersonCount", expected);
+        view.put("personCountSource", d.getPersonCount() == null ? "PLATFORM" : "DEVICE");
         view.put("capacity", d.getCapacity() == null ? 0 : d.getCapacity());
         view.put("remark", nullSafe(d.getRemark()));
         view.put("heartSeconds", Math.max(5, props.getDevice().getPullHeartSeconds()));

@@ -46,8 +46,15 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="人数" width="100">
-        <template #default="{ row }">{{ row.personCount }} / {{ row.capacity || '-' }}</template>
+      <el-table-column label="人数" width="120">
+        <template #default="{ row }">
+          <el-tooltip v-if="row.channel !== 'VEHICLE'"
+                      :content="`设备自报 ${row.personCount} 人；平台应下发 ${row.expectedPersonCount} 人`"
+                      placement="top">
+            <span>{{ row.expectedPersonCount }} / {{ row.capacity || '-' }}</span>
+          </el-tooltip>
+          <span v-else>{{ row.personCount }} / {{ row.capacity || '-' }}</span>
+        </template>
       </el-table-column>
       <el-table-column prop="lastHeartbeat" label="最近心跳" width="160" />
       <el-table-column label="操作" width="320" fixed="right">
