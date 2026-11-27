@@ -200,6 +200,8 @@ export interface ApprovalDetail {
   qrRequested?: boolean
   /** 当前是否已同意二维码开门 */
   qrApproved?: boolean
+  /** 随行人员（跟随申请人一次放行，不单独刷证） */
+  mates?: Array<{ name: string; phoneMask: string }>
 }
 
 /** 审批页门点选择：可选门点 + 访客申请集合 + 当前批准集合 */
@@ -413,6 +415,8 @@ export interface ReviewDetail {
   allowEditGates?: boolean
   /** 本节点是否允许审批二维码 */
   allowQr?: boolean
+  /** 随行人员（跟随申请人一次放行，不单独刷证） */
+  mates?: Array<{ name: string; phoneMask: string }>
 }
 
 /** 管理端消息中心（审批抄送） */

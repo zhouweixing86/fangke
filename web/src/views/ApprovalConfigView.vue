@@ -34,7 +34,6 @@
           </div>
           <div class="node-opts">
             <el-checkbox v-model="node.allowEditGates">允许调整开放门点</el-checkbox>
-            <el-checkbox v-model="node.allowQr">允许审批二维码开门</el-checkbox>
           </div>
           <div class="node-cc">
             <span class="label">办结后抄送</span>

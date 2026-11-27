@@ -17,6 +17,10 @@
           <text class="label">批准门点</text>
           <text>{{ gateText }}</text>
         </view>
+        <view class="row">
+          <text class="label">随行人员</text>
+          <text>{{ mateText }}</text>
+        </view>
       </view>
 
       <view v-if="detail.actions && detail.actions.length" class="card">
@@ -62,6 +66,13 @@ const gateText = computed(() => {
     : gates.appliedGateIds
   const names = (ids || []).map((id) => gates.selectable.find((g) => g.id === id)?.name || String(id))
   return names.join('、') || (gates.gateScope === 2 ? '全部门点' : '-')
+})
+
+/** 随行人员：只展示姓名与人数；他们跟随申请人一次放行，不单独刷证 */
+const mateText = computed(() => {
+  const mates = detail.value?.mates ?? []
+  if (!mates.length) return '无'
+  return mates.map((m) => m.name).join('、') + '（' + mates.length + ' 人）'
 })
 
 async function load() {

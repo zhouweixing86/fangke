@@ -154,6 +154,9 @@
           <el-descriptions-item label="时段" :span="2">
             {{ reviewDetail.startTime }} ~ {{ reviewDetail.endTime }}
           </el-descriptions-item>
+          <el-descriptions-item label="随行人员" :span="2">
+            {{ reviewMateText }}
+          </el-descriptions-item>
         </el-descriptions>
 
         <div class="text-muted" style="margin: 14px 0 6px">
@@ -173,13 +176,6 @@
 
         <el-input v-model="reviewComment" type="textarea" :rows="2" style="margin-top: 12px"
           placeholder="通过可不填；拒绝放行必须填原因（如：人证不符）" />
-
-        <div v-if="reviewDetail.qrRequested && reviewDetail.allowQr !== false" class="qr-review">
-          <div class="text-muted" style="margin-bottom: 4px">
-            访客申请用二维码进闸（60 秒动态码）
-          </div>
-          <el-checkbox v-model="reviewQrApproved">同意二维码开门</el-checkbox>
-        </div>
 
         <div v-if="reviewDetail.actions.length" style="margin-top: 14px">
           <div class="text-muted" style="margin-bottom: 4px">审批轨迹</div>
@@ -344,8 +340,12 @@ const reviewDetail = ref<GuardReviewDetail | null>(null)
 const reviewTaskId = ref(0)
 const reviewGateIds = ref<number[]>([])
 const reviewComment = ref('')
-/** 是否同意访客的「二维码开门」申请（仅当访客申请过时显示开关） */
-const reviewQrApproved = ref(false)
+/** 随行人员：跟随申请人一次放行，不单独刷证（C-111） */
+const reviewMateText = computed(() => {
+  const mates = reviewDetail.value?.mates ?? []
+  if (!mates.length) return '无'
+  return mates.map((m) => m.name).join('、') + `（${mates.length} 人）`
+})
 
 /** 访客申请的开放范围（只读展示，用于对比审核时是否收窄） */
 const appliedText = computed(() => {
@@ -382,9 +382,6 @@ async function openReview(row: ReviewRow) {
   const detail = await guardReviewDetail(row.taskId)
   reviewDetail.value = detail
   reviewGateIds.value = [...(detail.gates?.approvedGateIds ?? [])]
-  // 访客申请了二维码就默认勾上「同意」——绝大多数场景都会同意，减少一次点击；
-  // 已明确拒绝过（申请了但 approved=false）时也默认勾上，由审核人再决定是否取消。
-  reviewQrApproved.value = Boolean(detail.qrRequested) || Boolean(detail.qrApproved)
   reviewVisible.value = true
 }
 
@@ -398,8 +395,7 @@ async function doPass() {
   try {
     const result = await guardReviewPass(reviewTaskId.value, {
       comment: reviewComment.value || undefined,
-      approvedGateIds: reviewGateIds.value,
-      qrApproved: reviewDetail.value.qrRequested ? reviewQrApproved.value : undefined
+      approvedGateIds: reviewGateIds.value
     })
     ElMessage.success(result.dispatchStarted ? '已通过，门禁授权下发中' : `已通过（${result.statusText}）`)
     reviewVisible.value = false

@@ -87,12 +87,18 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                                  List<Long> appliedGateIds, List<Long> approvedGateIds) {
     }
 
+    /** 随行人员（审批人需要知道这一单实际带了几个人、都是谁）。 */
+    public record MateView(String name, String phoneMask) {
+    }
+
     public record DetailView(long taskId, int level, String nodeName, int status, String statusText,
                              String appointmentNo, int appointmentStatus, String appointmentStatusText,
                              String visitorName, String idCardMask, String visitorType, String purpose,
                              String visitPhoneMask, String startTime, String endTime,
                              GateAssignment gates,
                              boolean canAct, List<ActionView> actions,
+                             /** 随行人员：跟随申请人一次放行，不单独刷证（C-111） */
+                             List<MateView> mates,
                              /** 访客是否申请二维码开门（审批页据 this 决定要不要显示开关） */
                              boolean qrRequested,
                              /** 当前是否已同意二维码开门 */
@@ -524,6 +530,10 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         boolean allowEditGates = flowNode != null ? flowNode.allowEditGates()
                 : node == null || node.allowEditGates();
         boolean allowQr = flowNode != null ? flowNode.allowQr() : node == null || node.allowQr();
+        List<MateView> mates = appointmentRepository.findMates(appointment.getId()).stream()
+                .filter(m -> !m.main())
+                .map(m -> new MateView(m.name(), m.phoneMask() == null ? "" : m.phoneMask()))
+                .toList();
         return new DetailView(task.id(), task.level(), nodeName, task.status(), taskStatusText(task.status()),
                 appointment.getAppointmentNo(), appointment.getStatus(),
                 Appointment.statusText(appointment.getStatus()),
@@ -531,7 +541,7 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                 visitor == null ? "" : visitor.getIdCardMask(),
                 appointment.getVisitorType(), appointment.getPurpose(), appointment.getVisitPhoneMask(),
                 DATETIME.format(appointment.getStartTime()), DATETIME.format(appointment.getEndTime()),
-                gates, canAct, actions,
+                gates, canAct, actions, mates,
                 appointment.isQrRequested(), appointment.isQrApproved(),
                 allowEditGates, allowQr);
     }

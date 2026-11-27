@@ -88,6 +88,7 @@
           <view class="line"><text class="tag tag--warn">{{ review.nodeName || `第 ${review.level} 级审核` }}</text></view>
           <view class="line">{{ review.purpose || '事由未填' }} · {{ review.visitorType }}</view>
           <view class="line">{{ review.startTime }} ~ {{ review.endTime }}</view>
+          <view class="line muted">随行人员：{{ reviewMateText }}</view>
 
           <view v-if="review.gates && review.allowEditGates !== false">
             <view class="sheet-label">开放门点（可增减）</view>
@@ -118,7 +119,7 @@
 
 <script setup lang="ts">
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import TabBar from '@/components/TabBar.vue'
 import { guardCheckout, guardDashboard, guardOnsite, guardOpenDoor, guardRemind,
   guardReviewDetail, guardReviewPass, guardReviewReject, guardReviewTodo,
@@ -177,6 +178,12 @@ async function openCcMessage(message: MyNotification) {
 
 /* 审核弹层 */
 const reviewVisible = ref(false)
+/** 随行人员：跟随申请人一次放行，不单独刷证（C-111） */
+const reviewMateText = computed(() => {
+  const mates = review.value?.mates ?? []
+  if (!mates.length) return '无'
+  return mates.map((m) => m.name).join('、') + '（' + mates.length + ' 人）'
+})
 const review = ref<ReviewDetail | null>(null)
 const reviewGateIds = ref<number[]>([])
 const reviewComment = ref('')

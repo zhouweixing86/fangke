@@ -403,6 +403,8 @@ export interface GuardReviewDetail {
   allowEditGates?: boolean
   /** 本节点是否允许审批二维码 */
   allowQr?: boolean
+  /** 随行人员（跟随申请人一次放行，不单独刷证） */
+  mates?: Array<{ name: string; phoneMask: string }>
 }
 
 export interface OnsiteRow {

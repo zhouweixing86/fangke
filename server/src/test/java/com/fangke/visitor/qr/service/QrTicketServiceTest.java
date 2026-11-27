@@ -128,6 +128,17 @@ class QrTicketServiceTest {
     }
 
     @Test
+    @DisplayName("C-111：二维码默认开通，未标记「已同意」的老预约访客端也能取码")
+    void issueWorksWithoutQrApprovalFlag() {
+        assertFalse(appointment.isQrApproved(), "老预约可能没有写入 agreed 标记");
+
+        QrTicketService.IssueResult result = service.issue(APPOINTMENT_NO, null, QrTicketService.CHANNEL_APP);
+
+        assertTrue(verifier.verify(result.code(), Instant.now()).valid());
+        assertEquals(QrTicketService.CHANNEL_APP, ticketRepo.rows.get(0).issuedChannel());
+    }
+
+    @Test
     @DisplayName("没有生效授权：拒绝签发")
     void issueRequiresActiveGrant() {
         when(grantChecker.check(eq(APPOINTMENT_NO), any(), any(Instant.class)))
