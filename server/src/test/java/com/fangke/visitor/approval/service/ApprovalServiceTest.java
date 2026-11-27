@@ -588,16 +588,16 @@ class ApprovalServiceTest {
     /* ---------------- 多级审批 / 会签 / 抄送（V24） ---------------- */
 
     private ApprovalNode node(long id, long templateId, int seq, String name, String role,
-                              String mode, boolean allowGates, boolean allowQr) {
+                              String mode, boolean allowGates) {
         return new ApprovalNode(id, templateId, seq, name, ApprovalNode.TYPE_ROLE, role, mode,
-                allowGates, allowQr);
+                allowGates);
     }
 
     @Test
     @DisplayName("多级审批：一级通过进入二级，二级通过才下发；末级节点办结后抄送")
     void multiLevelFlow() {
-        ApprovalNode first = node(11L, 9L, 1, "保安审核", "GUARD", "SINGLE", true, true);
-        ApprovalNode second = node(12L, 9L, 2, "行政复核", "ADMIN", "SINGLE", false, false);
+        ApprovalNode first = node(11L, 9L, 1, "保安审核", "GUARD", "SINGLE", true);
+        ApprovalNode second = node(12L, 9L, 2, "行政复核", "ADMIN", "SINGLE", false);
         templateRepo.template = new ApprovalTemplate(9L, "默认审批流程", "GLOBAL", true, null,
                 List.of(first, second), List.of(ApprovalCc.toRole(9L, 12L, "ADMIN")));
 
@@ -627,8 +627,8 @@ class ApprovalServiceTest {
     @Test
     @DisplayName("C-79：即使节点配成会签，也只建一条角色任务，任一人通过即流转")
     void allModeDegradesToAny() {
-        ApprovalNode first = node(21L, 10L, 1, "全员审核", "GUARD", "ALL", true, true);
-        ApprovalNode second = node(22L, 10L, 2, "终审", "ADMIN", "ANY", true, true);
+        ApprovalNode first = node(21L, 10L, 1, "全员审核", "GUARD", "ALL", true);
+        ApprovalNode second = node(22L, 10L, 2, "终审", "ADMIN", "ANY", true);
         templateRepo.template = new ApprovalTemplate(10L, "旧会签流程", "GLOBAL", true, null,
                 List.of(first, second), List.of());
 
@@ -645,18 +645,18 @@ class ApprovalServiceTest {
     @Test
     @DisplayName("C-82：提交后改模板不影响在途单（流程快照生效）")
     void inFlightFlowFrozenAfterTemplateChange() {
-        ApprovalNode first = node(51L, 13L, 1, "审批", "APPROVER", "ANY", true, true);
-        ApprovalNode second = node(52L, 13L, 2, "领导复核", "LEADER", "ANY", true, true);
+        ApprovalNode first = node(51L, 13L, 1, "审批", "APPROVER", "ANY", true);
+        ApprovalNode second = node(52L, 13L, 2, "领导复核", "LEADER", "ANY", true);
         templateRepo.template = new ApprovalTemplate(13L, "两级流程", "GLOBAL", true, null,
                 List.of(first, second), List.of());
 
         service.start(appointment);
 
         // 提交后管理员把模板改成三级，并把第 2 层角色换掉
-        ApprovalNode changedSecond = node(52L, 13L, 2, "保安复核", "GUARD", "ANY", true, true);
-        ApprovalNode addedThird = node(53L, 13L, 3, "领导终审", "LEADER", "ANY", true, true);
+        ApprovalNode changedSecond = node(52L, 13L, 2, "保安复核", "GUARD", "ANY", true);
+        ApprovalNode addedThird = node(53L, 13L, 3, "领导终审", "LEADER", "ANY", true);
         templateRepo.template = new ApprovalTemplate(13L, "三级流程", "GLOBAL", true, null,
-                List.of(node(51L, 13L, 1, "审批", "APPROVER", "ANY", true, true), changedSecond, addedThird),
+                List.of(node(51L, 13L, 1, "审批", "APPROVER", "ANY", true), changedSecond, addedThird),
                 List.of());
 
         service.guardPass(onlyTaskId(), 99L, List.of("APPROVER"), "ok", null);
@@ -675,7 +675,7 @@ class ApprovalServiceTest {
     @Test
     @DisplayName("提交时抄送：流程启动就通知抄送角色")
     void submitCcNotified() {
-        ApprovalNode first = node(31L, 11L, 1, "保安审核", "GUARD", "SINGLE", true, true);
+        ApprovalNode first = node(31L, 11L, 1, "保安审核", "GUARD", "SINGLE", true);
         templateRepo.template = new ApprovalTemplate(11L, "抄送流程", "GLOBAL", true, null,
                 List.of(first), List.of(ApprovalCc.toRole(11L, null, "ADMIN")));
 
@@ -686,17 +686,16 @@ class ApprovalServiceTest {
     }
 
     @Test
-    @DisplayName("节点限制：不允许批二维码的节点，即使传了 qrApproved 也不生效")
-    void nodeRestrictionIgnoresQr() {
-        ApprovalNode first = node(41L, 12L, 1, "只读审核", "GUARD", "SINGLE", true, false);
+    @DisplayName("审批通过：只管门点与下发，不再改动二维码标记（二维码默认开通）")
+    void passLeavesQrFlagsUntouched() {
+        ApprovalNode first = node(41L, 12L, 1, "只读审核", "GUARD", "SINGLE", true);
         templateRepo.template = new ApprovalTemplate(12L, "受限流程", "GLOBAL", true, null,
                 List.of(first), List.of());
-        appointment.setQrRequested(true);
 
         service.start(appointment);
-        service.guardPass(onlyTaskId(), 99L, List.of("GUARD"), "ok", null, true);
+        service.guardPass(onlyTaskId(), 99L, List.of("GUARD"), "ok", null);
 
-        assertFalse(appointment.isQrApproved(), "节点不允许批二维码时不能写入同意");
+        assertFalse(appointment.isQrApproved(), "审批流程不再写二维码标记（创建时已默认开通）");
         assertTrue(dispatches.contains("A2026111600001"));
     }
 }

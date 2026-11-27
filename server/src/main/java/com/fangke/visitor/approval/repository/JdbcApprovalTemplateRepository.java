@@ -32,8 +32,7 @@ public class JdbcApprovalTemplateRepository implements ApprovalTemplateRepositor
             rs.getInt("assignee_type"),
             rs.getString("assignee_role"),
             rs.getString("approve_mode"),
-            rs.getInt("allow_edit_gates") == 1,
-            rs.getInt("allow_qr") == 1);
+            rs.getInt("allow_edit_gates") == 1);
 
     private static final RowMapper<ApprovalCc> CC_MAPPER = (rs, i) -> {
         long rawNodeId = rs.getLong("node_id");
@@ -123,16 +122,16 @@ public class JdbcApprovalTemplateRepository implements ApprovalTemplateRepositor
             // 客户端传的 seq 只用于排序，实际按 1..n 重排，避免中间断号
             jdbc.update("""
                             INSERT INTO approval_node (template_id, seq, node_name, assignee_type,
-                                assignee_role, approve_mode, allow_edit_gates, allow_qr)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                assignee_role, approve_mode, allow_edit_gates)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
                             ON DUPLICATE KEY UPDATE node_name = VALUES(node_name),
                                 assignee_type = VALUES(assignee_type), assignee_role = VALUES(assignee_role),
                                 approve_mode = VALUES(approve_mode),
-                                allow_edit_gates = VALUES(allow_edit_gates), allow_qr = VALUES(allow_qr)
+                                allow_edit_gates = VALUES(allow_edit_gates)
                             """,
                     templateId, seq, node.nodeName(), ApprovalNode.TYPE_ROLE, node.assigneeRole(),
                     ApprovalNode.normalizeMode(node.approveMode()),
-                    node.allowEditGates() ? 1 : 0, node.allowQr() ? 1 : 0);
+                    node.allowEditGates() ? 1 : 0);
             keep.add(seq);
             seq++;
         }

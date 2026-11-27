@@ -34,7 +34,7 @@ public class ApprovalTemplateAdminService {
 
     /** 管理端提交的一个节点（抄送用角色码，比让前端传 nodeId 稳）。 */
     public record NodeSpec(String nodeName, String assigneeRole, String approveMode,
-                           Boolean allowEditGates, Boolean allowQr, List<String> ccRoles) {
+                           Boolean allowEditGates, List<String> ccRoles) {
     }
 
     /** 整份模板：节点 + 提交时抄送。 */
@@ -108,8 +108,7 @@ public class ApprovalTemplateAdminService {
             NodeSpec spec = nodes.get(i);
             entities.add(ApprovalNode.of(templateId, i + 1, spec.nodeName().trim(),
                     spec.assigneeRole().trim(), ApprovalNode.MODE_ANY,
-                    spec.allowEditGates() == null || spec.allowEditGates(),
-                    spec.allowQr() == null || spec.allowQr()));
+                    spec.allowEditGates() == null || spec.allowEditGates()));
         }
         templateRepository.replaceNodes(templateId, entities);
 

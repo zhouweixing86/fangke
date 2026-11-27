@@ -43,7 +43,7 @@ public class ApprovalAdminController {
     }
 
     public record NodeRequest(String nodeName, String assigneeRole, String approveMode,
-                              Boolean allowEditGates, Boolean allowQr, List<String> ccRoles) {
+                              Boolean allowEditGates, List<String> ccRoles) {
     }
 
     public record TemplateRequest(String templateName, Boolean enabled, String remark,
@@ -140,7 +140,7 @@ public class ApprovalAdminController {
         if (request != null && request.nodes() != null) {
             for (NodeRequest node : request.nodes()) {
                 nodes.add(new ApprovalTemplateAdminService.NodeSpec(node.nodeName(), node.assigneeRole(),
-                        node.approveMode(), node.allowEditGates(), node.allowQr(), node.ccRoles()));
+                        node.approveMode(), node.allowEditGates(), node.ccRoles()));
             }
         }
         return new ApprovalTemplateAdminService.TemplateSpec(
@@ -169,7 +169,6 @@ public class ApprovalAdminController {
             item.put("approveMode", node.approveMode());
             item.put("approveModeText", node.modeText());
             item.put("allowEditGates", node.allowEditGates());
-            item.put("allowQr", node.allowQr());
             item.put("ccRoles", template.ccsOfNode(node.id()).stream()
                     .map(ApprovalCc::targetValue).toList());
             nodes.add(item);

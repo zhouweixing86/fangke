@@ -136,7 +136,7 @@ public class AppointmentService {
         appointment.setGateScope(applied.scope());
         appointment.setStartTime(start);
         appointment.setEndTime(end);
-        appointment.setMateMode(v.mateMode);
+        appointment.setMateMode(Appointment.MATE_TOGETHER);
         // 团体预约：总人数（含负责人）换算成同行人数；同时保留实际录入的同行人数量
         int mateCount = v.mates.size();
         if (request.groupCount() != null && request.groupCount() > 1) {
@@ -178,9 +178,9 @@ public class AppointmentService {
             approvalStarter.start(appointment);
         }
 
-        log.info("预约创建 no={} source={} visitor={} 时间={}~{} mateMode={} mates={}",
+        log.info("预约创建 no={} source={} visitor={} 时间={}~{} 随行={} 人",
                 appointment.getAppointmentNo(), source, visitor.getIdCardMask(),
-                appointment.getStartTime(), appointment.getEndTime(), v.mateMode, v.mates.size());
+                appointment.getStartTime(), appointment.getEndTime(), v.mates.size());
 
         return detail(appointment.getAppointmentNo());
     }
@@ -195,10 +195,10 @@ public class AppointmentService {
         AppointmentCreateRequest normalized = new AppointmentCreateRequest(
                 request.visitPhone(), request.department(), request.visitorType(), request.purpose(),
                 request.plateNo(), now.toLocalDate(), startTime, endTime,
-                request.visitor(), request.mates(), request.mateMode(), request.consentVersion(),
+                request.visitor(), request.mates(), request.consentVersion(),
                 request.gateId(), request.gateScope(), request.gateIds(),
                 request.company(), request.position(), request.period(), request.groupCount(),
-                request.wxOpenid(), request.qrRequested(), request.areaId());
+                request.wxOpenid(), request.areaId());
         return doCreate(normalized, Appointment.SOURCE_ONSITE, null, ip, ua);
     }
 
@@ -250,7 +250,7 @@ public class AppointmentService {
                              String visitPhone, Long visitEmployeeId, String visitorType,
                              String purpose, String company, String position, int period, String plateNo,
                              LocalDate date, LocalTime startTime,
-                             LocalTime endTime, int mateMode, List<AppointmentCreateRequest.MateInfo> mates,
+                             LocalTime endTime, List<AppointmentCreateRequest.MateInfo> mates,
                              String consentVersion, Long areaId) {
     }
 
@@ -330,7 +330,6 @@ public class AppointmentService {
         }
 
         // 同行人统一「随行一次放行」：只登记姓名 + 手机号，跟主访客一起进门，不单独下发名单
-        int mateMode = Appointment.MATE_TOGETHER;
         List<AppointmentCreateRequest.MateInfo> mates = request.mates() == null ? List.of() : request.mates();
         if (mates.size() > MAX_MATES) {
             throw new BusinessException(ErrorCode.PARAM_INVALID, "同行人最多 " + MAX_MATES + " 人");
@@ -375,7 +374,7 @@ public class AppointmentService {
         }
         return new Validated(name, idCard, visitorPhone, visitPhone, visitEmployeeId, visitorType,
                 trimToNull(purpose), company, position, period, trimToNull(plateNo), date,
-                startTime, endTime, mateMode, normalizedMates, consentVersion, areaId);
+                startTime, endTime, normalizedMates, consentVersion, areaId);
     }
 
     private AppointmentView toView(Appointment a, Visitor visitor) {

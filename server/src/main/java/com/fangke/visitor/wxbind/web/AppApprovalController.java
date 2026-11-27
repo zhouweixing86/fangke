@@ -107,9 +107,8 @@ public class AppApprovalController {
                 .map(WxBindingRepository.Binding::name).orElse("微信审批人");
         String comment = body == null ? null : asString(body.get("comment"));
         List<Long> gates = body == null ? null : asLongList(body.get("approvedGateIds"));
-        Boolean qrApproved = body == null ? null : asBoolean(body.get("qrApproved"));
         return ApiResponse.ok(approvalService.appPass(taskId, bindId, operatorName,
-                roleCodes(bindId), comment, gates, qrApproved));
+                roleCodes(bindId), comment, gates));
     }
 
     @PostMapping("/{taskId}/reject")
@@ -131,23 +130,6 @@ public class AppApprovalController {
 
     private String asString(Object value) {
         return value == null ? null : String.valueOf(value);
-    }
-
-    private Boolean asBoolean(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof Boolean b) {
-            return b;
-        }
-        String text = String.valueOf(value).trim();
-        if ("true".equalsIgnoreCase(text) || "1".equals(text)) {
-            return true;
-        }
-        if ("false".equalsIgnoreCase(text) || "0".equals(text)) {
-            return false;
-        }
-        throw new BusinessException(ErrorCode.PARAM_INVALID, "qrApproved 必须是布尔值");
     }
 
     private List<Long> asLongList(Object value) {

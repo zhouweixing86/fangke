@@ -5,11 +5,11 @@ import java.util.List;
 /**
  * 审批流程快照节点（C-82）。
  *
- * <p>预约提交时把当时的模板（节点顺序、处理角色、门点/二维码限制、节点抄送）整条链存下来，
+ * <p>预约提交时把当时的模板（节点顺序、处理角色、门点限制、节点抄送）整条链存下来，
  * 之后管理员改模板**不影响在途单**：在途单永远按提交时的流程走完。
  */
 public record FlowNode(int seq, String nodeName, String assigneeRole,
-                       boolean allowEditGates, boolean allowQr, List<String> ccRoles) {
+                       boolean allowEditGates, List<String> ccRoles) {
 
     /** 逗号分隔存库。 */
     public String ccRolesText() {

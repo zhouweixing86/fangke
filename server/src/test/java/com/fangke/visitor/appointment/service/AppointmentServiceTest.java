@@ -220,17 +220,17 @@ class AppointmentServiceTest {
                 areaId -> areaId != null && areaId == 1L ? Optional.of("一号库房") : Optional.empty());
     }
 
-    private AppointmentCreateRequest request(String visitorType, LocalDate date, Integer mateMode,
+    private AppointmentCreateRequest request(String visitorType, LocalDate date,
                                              List<AppointmentCreateRequest.MateInfo> mates) {
         return new AppointmentCreateRequest(
                 VISIT_PHONE, "行政部", visitorType, "技术交流", "",
                 date, LocalTime.of(9, 0), LocalTime.of(11, 0),
-                new AppointmentCreateRequest.VisitorInfo("张三", VISITOR_ID, "13900139000", "某某科技"),
-                mates, mateMode, "v1.0", null, null, null, null, null, null, null, null);
+                new AppointmentCreateRequest.VisitorInfo("张三", VISITOR_ID, "13900139000", "某某科技", null),
+                mates, "v1.0", null, null, null, null, null, null, null, null, null);
     }
 
     private AppointmentCreateRequest validRequest() {
-        return request("商务", LocalDate.now().plusDays(1), 0, List.of());
+        return request("商务", LocalDate.now().plusDays(1), List.of());
     }
 
     /* ---------------- 用例 ---------------- */
@@ -258,8 +258,8 @@ class AppointmentServiceTest {
         AppointmentCreateRequest withArea = new AppointmentCreateRequest(
                 VISIT_PHONE, "行政部", "商务", "技术交流", "",
                 LocalDate.now().plusDays(1), LocalTime.of(9, 0), LocalTime.of(11, 0),
-                new AppointmentCreateRequest.VisitorInfo("李四", VISITOR_ID, "13900139001", "某某科技"),
-                List.of(), 0, "v1.0", null, null, null, null, null, null, null, null, null, 1L);
+                new AppointmentCreateRequest.VisitorInfo("李四", VISITOR_ID, "13900139001", "某某科技", null),
+                List.of(), "v1.0", null, null, null, null, null, null, null, null, 1L);
 
         AppointmentView view = service.create(withArea, Appointment.SOURCE_SELF, "ip", "ua");
 
@@ -274,8 +274,8 @@ class AppointmentServiceTest {
         AppointmentCreateRequest badArea = new AppointmentCreateRequest(
                 VISIT_PHONE, "行政部", "商务", "技术交流", "",
                 LocalDate.now().plusDays(1), LocalTime.of(9, 0), LocalTime.of(11, 0),
-                new AppointmentCreateRequest.VisitorInfo("李四", VISITOR_ID, "13900139001", "某某科技"),
-                List.of(), 0, "v1.0", null, null, null, null, null, null, null, null, null, 99L);
+                new AppointmentCreateRequest.VisitorInfo("李四", VISITOR_ID, "13900139001", "某某科技", null),
+                List.of(), "v1.0", null, null, null, null, null, null, null, null, 99L);
 
         BusinessException e = assertThrows(BusinessException.class,
                 () -> service.create(badArea, Appointment.SOURCE_SELF, "ip", "ua"));
@@ -288,8 +288,8 @@ class AppointmentServiceTest {
         AppointmentCreateRequest noHost = new AppointmentCreateRequest(
                 null, "行政部", "商务", "技术交流", "",
                 LocalDate.now().plusDays(1), LocalTime.of(9, 0), LocalTime.of(11, 0),
-                new AppointmentCreateRequest.VisitorInfo("王五", VISITOR_ID, "13900139002", "某某科技"),
-                List.of(), 0, "v1.0", null, null, null, null, null, null, null, null);
+                new AppointmentCreateRequest.VisitorInfo("王五", VISITOR_ID, "13900139002", "某某科技", null),
+                List.of(), "v1.0", null, null, null, null, null, null, null, null, null);
 
         AppointmentView view = service.create(noHost, Appointment.SOURCE_SELF, "ip", "ua");
 
@@ -311,7 +311,7 @@ class AppointmentServiceTest {
     @DisplayName("过去的日期被拒（3001）")
     void pastDate() {
         BusinessException e = assertThrows(BusinessException.class, () -> service.create(
-                request("商务", LocalDate.now().minusDays(1), 0, List.of()),
+                request("商务", LocalDate.now().minusDays(1), List.of()),
                 Appointment.SOURCE_SELF, "ip", "ua"));
         assertEquals(ErrorCode.SLOT_EXPIRED.code(), e.getCode());
     }
@@ -320,7 +320,7 @@ class AppointmentServiceTest {
     @DisplayName("超过 30 天被拒")
     void tooFarAhead() {
         BusinessException e = assertThrows(BusinessException.class, () -> service.create(
-                request("商务", LocalDate.now().plusDays(31), 0, List.of()),
+                request("商务", LocalDate.now().plusDays(31), List.of()),
                 Appointment.SOURCE_SELF, "ip", "ua"));
         assertEquals(ErrorCode.PARAM_INVALID.code(), e.getCode());
     }
@@ -329,7 +329,7 @@ class AppointmentServiceTest {
     @DisplayName("访客类型非法被拒（只允许商务/施工/送货）")
     void invalidVisitorType() {
         BusinessException e = assertThrows(BusinessException.class, () -> service.create(
-                request("旅游", LocalDate.now().plusDays(1), 0, List.of()),
+                request("旅游", LocalDate.now().plusDays(1), List.of()),
                 Appointment.SOURCE_SELF, "ip", "ua"));
         assertEquals(ErrorCode.PARAM_INVALID.code(), e.getCode());
     }
@@ -340,8 +340,8 @@ class AppointmentServiceTest {
         AppointmentCreateRequest bad = new AppointmentCreateRequest(
                 VISIT_PHONE, null, "商务", null, null,
                 LocalDate.now().plusDays(1), LocalTime.of(11, 0), LocalTime.of(9, 0),
-                new AppointmentCreateRequest.VisitorInfo("张三", VISITOR_ID, null, null),
-                List.of(), 0, "v1.0", null, null, null, null, null, null, null, null);
+                new AppointmentCreateRequest.VisitorInfo("张三", VISITOR_ID, null, null, null),
+                List.of(), "v1.0", null, null, null, null, null, null, null, null, null);
         BusinessException e = assertThrows(BusinessException.class,
                 () -> service.create(bad, Appointment.SOURCE_SELF, "ip", "ua"));
         assertEquals(ErrorCode.PARAM_INVALID.code(), e.getCode());
@@ -351,7 +351,7 @@ class AppointmentServiceTest {
     @DisplayName("同行人只填姓名+手机号即可（不强制身份证），统一按「随行」落库")
     void matesOnlyNeedNameAndPhone() {
         AppointmentView view = service.create(
-                request("商务", LocalDate.now().plusDays(1), Appointment.MATE_SEPARATE,
+                request("商务", LocalDate.now().plusDays(1),
                         List.of(new AppointmentCreateRequest.MateInfo("李四", "13800001111", null),
                                 new AppointmentCreateRequest.MateInfo("王五", null, null))),
                 Appointment.SOURCE_SELF, "ip", "ua");
@@ -368,7 +368,7 @@ class AppointmentServiceTest {
     @DisplayName("二维码默认开通：所有预约都带码，不需要访客勾选、也不需要单独审批")
     void qrEnabledByDefault() {
         AppointmentView view = service.create(
-                request("商务", LocalDate.now().plusDays(1), Appointment.MATE_TOGETHER, List.of()),
+                request("商务", LocalDate.now().plusDays(1), List.of()),
                 Appointment.SOURCE_SELF, "ip", "ua");
 
         assertTrue(view.qrRequested(), "默认申请（等价于默认开通）");
@@ -388,12 +388,12 @@ class AppointmentServiceTest {
     @DisplayName("员工代邀：一级自动通过（status=30），超过 7 天被拒")
     void invite() {
         AppointmentView view = service.createInvite(
-                request("商务", LocalDate.now().plusDays(2), 0, List.of()), 5L, "ip", "ua");
+                request("商务", LocalDate.now().plusDays(2), List.of()), 5L, "ip", "ua");
         assertEquals(Appointment.APPROVED, view.status());
         assertFalse(view.canCancel(), "已通过的单不能撤回");
 
         BusinessException e = assertThrows(BusinessException.class, () -> service.createInvite(
-                request("商务", LocalDate.now().plusDays(8), 0, List.of()),
+                request("商务", LocalDate.now().plusDays(8), List.of()),
                 new java.util.Random().nextLong() + 100L, "ip", "ua"));
         assertEquals(ErrorCode.INVITE_LIMIT_EXCEEDED.code(), e.getCode());
     }
@@ -421,8 +421,8 @@ class AppointmentServiceTest {
         AppointmentCreateRequest noTime = new AppointmentCreateRequest(
                 VISIT_PHONE, null, "施工", null, null,
                 null, null, null,
-                new AppointmentCreateRequest.VisitorInfo("王五", VISITOR_ID, null, null),
-                List.of(), 0, "v1.0", null, null, null, null, null, null, null, null);
+                new AppointmentCreateRequest.VisitorInfo("王五", VISITOR_ID, null, null, null),
+                List.of(), "v1.0", null, null, null, null, null, null, null, null, null);
 
         AppointmentView view = service.createOnsite(noTime, "ip", "ua");
 

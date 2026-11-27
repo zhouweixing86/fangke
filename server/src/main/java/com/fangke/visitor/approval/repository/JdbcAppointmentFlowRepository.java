@@ -16,7 +16,6 @@ public class JdbcAppointmentFlowRepository implements AppointmentFlowRepository 
             rs.getString("node_name"),
             rs.getString("assignee_role"),
             rs.getInt("allow_edit_gates") == 1,
-            rs.getInt("allow_qr") == 1,
             FlowNode.splitRoles(rs.getString("cc_roles")));
 
     private final JdbcTemplate jdbc;
@@ -34,11 +33,11 @@ public class JdbcAppointmentFlowRepository implements AppointmentFlowRepository 
         for (FlowNode node : nodes) {
             jdbc.update("""
                             INSERT INTO appointment_flow (appointment_id, seq, node_name, assignee_role,
-                                allow_edit_gates, allow_qr, cc_roles)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                allow_edit_gates, cc_roles)
+                            VALUES (?, ?, ?, ?, ?, ?)
                             """,
                     appointmentId, node.seq(), node.nodeName(), node.assigneeRole(),
-                    node.allowEditGates() ? 1 : 0, node.allowQr() ? 1 : 0, node.ccRolesText());
+                    node.allowEditGates() ? 1 : 0, node.ccRolesText());
         }
     }
 

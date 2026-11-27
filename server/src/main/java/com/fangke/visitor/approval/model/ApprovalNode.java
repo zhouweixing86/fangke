@@ -15,7 +15,7 @@ package com.fangke.visitor.approval.model;
  */
 public record ApprovalNode(Long id, Long templateId, int seq, String nodeName,
                            int assigneeType, String assigneeRole, String approveMode,
-                           boolean allowEditGates, boolean allowQr) {
+                           boolean allowEditGates) {
 
     /** 处理人类型：角色（该角色任一账号可处理）。 */
     public static final int TYPE_ROLE = 2;
@@ -25,9 +25,9 @@ public record ApprovalNode(Long id, Long templateId, int seq, String nodeName,
     public static final String MODE_ANY = "ANY";
 
     public static ApprovalNode of(Long templateId, int seq, String nodeName, String role,
-                                  String mode, boolean allowEditGates, boolean allowQr) {
+                                  String mode, boolean allowEditGates) {
         return new ApprovalNode(null, templateId, seq, nodeName, TYPE_ROLE, role,
-                normalizeMode(mode), allowEditGates, allowQr);
+                normalizeMode(mode), allowEditGates);
     }
 
     public static String normalizeMode(String mode) {

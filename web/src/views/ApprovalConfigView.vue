@@ -106,7 +106,6 @@ interface NodeForm {
   assigneeRole: string
   approveMode: string
   allowEditGates: boolean
-  allowQr: boolean
   ccRoles: string[]
 }
 
@@ -123,7 +122,7 @@ const form = reactive<{
   enabled: true,
   remark: '',
   nodes: [{ nodeName: '管理端审核', assigneeRole: 'GUARD', approveMode: 'ANY',
-    allowEditGates: true, allowQr: true, ccRoles: [] }],
+    allowEditGates: true, ccRoles: [] }],
   submitCcRoles: []
 })
 
@@ -135,7 +134,6 @@ function toFormNode(node: ApprovalNodeView): NodeForm {
     assigneeRole: node.assigneeRole,
     approveMode: node.approveMode || 'SINGLE',
     allowEditGates: node.allowEditGates !== false,
-    allowQr: node.allowQr !== false,
     ccRoles: node.ccRoles || []
   }
 }
@@ -150,7 +148,7 @@ async function loadFlow() {
   if (!template) {
     form.id = null
     form.nodes = [{ nodeName: '管理端审核', assigneeRole: 'GUARD', approveMode: 'ANY',
-      allowEditGates: true, allowQr: true, ccRoles: [] }]
+      allowEditGates: true, ccRoles: [] }]
     form.submitCcRoles = []
     return
   }
@@ -162,7 +160,7 @@ async function loadFlow() {
   form.submitCcRoles = template.submitCcRoles || []
   if (form.nodes.length === 0) {
     form.nodes = [{ nodeName: '管理端审核', assigneeRole: 'GUARD', approveMode: 'ANY',
-      allowEditGates: true, allowQr: true, ccRoles: [] }]
+      allowEditGates: true, ccRoles: [] }]
   }
 }
 
@@ -178,7 +176,6 @@ function addNode() {
     assigneeRole: 'GUARD',
     approveMode: 'ANY',
     allowEditGates: true,
-    allowQr: true,
     ccRoles: []
   })
 }
@@ -217,7 +214,6 @@ async function saveFlow() {
       assigneeRole: n.assigneeRole,
       approveMode: n.approveMode,
       allowEditGates: n.allowEditGates,
-      allowQr: n.allowQr,
       ccRoles: n.ccRoles
     }))
   }

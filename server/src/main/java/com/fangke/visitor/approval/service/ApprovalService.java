@@ -99,14 +99,8 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                              boolean canAct, List<ActionView> actions,
                              /** 随行人员：跟随申请人一次放行，不单独刷证（C-111） */
                              List<MateView> mates,
-                             /** 访客是否申请二维码开门（审批页据 this 决定要不要显示开关） */
-                             boolean qrRequested,
-                             /** 当前是否已同意二维码开门 */
-                             boolean qrApproved,
                              /** 本节点是否允许调整门点（模板节点配置） */
-                             boolean allowEditGates,
-                             /** 本节点是否允许审批二维码 */
-                             boolean allowQr) {
+                             boolean allowEditGates) {
     }
 
     public record PassResult(String appointmentNo, int status, String statusText,
@@ -194,7 +188,7 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         if (template == null || template.firstNode() == null) {
             ApprovalConfig config = configRepository.loadGlobal();
             log.warn("未配置审批模板，退回单级审批 role={}", config.roleOrDefault());
-            return List.of(new FlowNode(1, "管理端审核", config.roleOrDefault(), true, true, List.of()));
+            return List.of(new FlowNode(1, "管理端审核", config.roleOrDefault(), true, List.of()));
         }
         List<FlowNode> chain = new ArrayList<>();
         int seq = 1;
@@ -202,7 +196,7 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
             List<String> ccRoles = template.ccsOfNode(node.id()).stream()
                     .map(ApprovalCc::targetValue).distinct().toList();
             chain.add(new FlowNode(seq++, node.nodeName(), node.assigneeRole(),
-                    node.allowEditGates(), node.allowQr(), ccRoles));
+                    node.allowEditGates(), ccRoles));
         }
         return chain;
     }
@@ -234,53 +228,38 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     /* ---------------- 审批动作 ---------------- */
 
     /**
-     * 管理端审核通过（单级审批）。操作人是后台账号（sys_user），不是员工。
+     * 管理端审核通过（操作人是后台账号 sys_user，不是员工）。
+     *
+     * <p>本节点办结后：会签未齐 → 等待；有下一节点 → 建下一节点任务；最后一节点 → 终审下发。
      */
     @Transactional
     public PassResult guardPass(Long taskId, Long operatorUserId, List<String> roles, String comment,
                                 List<Long> approvedGateIds) {
-        return guardPass(taskId, operatorUserId, roles, comment, approvedGateIds, null);
-    }
-
-    /**
-     * 管理端审核通过（多级审批）。
-     *
-     * <p>本节点办结后：会签未齐 → 等待；有下一节点 → 建下一节点任务；最后一节点 → 终审下发。
-     *
-     * @param qrApproved 是否同意二维码开门；{@code null} 表示不改（节点不允许时强制不改）
-     */
-    @Transactional
-    public PassResult guardPass(Long taskId, Long operatorUserId, List<String> roles, String comment,
-                                List<Long> approvedGateIds, Boolean qrApproved) {
         return doPass(taskId, operatorUserId, ApprovalTask.TYPE_ROLE, null, roles, comment,
-                approvedGateIds, qrApproved);
+                approvedGateIds);
     }
 
     /** 微信小程序审批通过（C-76）：身份来自扫码绑定的角色，审批轨迹记姓名。 */
     @Transactional
     public PassResult appPass(Long taskId, Long bindingId, String operatorName, List<String> roleCodes,
-                              String comment, List<Long> approvedGateIds, Boolean qrApproved) {
+                              String comment, List<Long> approvedGateIds) {
         return doPass(taskId, bindingId, OPERATOR_APP_USER, operatorName, roleCodes, comment,
-                approvedGateIds, qrApproved);
+                approvedGateIds);
     }
 
     private PassResult doPass(Long taskId, Long operatorId, int operatorType, String operatorName,
-                              List<String> roles, String comment, List<Long> approvedGateIds,
-                              Boolean qrApproved) {
+                              List<String> roles, String comment, List<Long> approvedGateIds) {
         ApprovalTask task = requirePendingAdminTask(taskId,
                 operatorType == OPERATOR_APP_USER ? null : operatorId, roles);
         Appointment appointment = loadAppointment(task.appointmentId());
         ApprovalNode node = nodeOf(task);
         FlowNode flowNode = flowNodeOf(task);
 
-        // 节点可以限制"能否改门点 / 能否批二维码"，越权传值直接忽略，避免被前端绕过
+        // 节点可以限制"能否改门点"，越权传值直接忽略，避免被前端绕过
         // 有快照就按**提交时**的限制（改模板不影响在途单）；历史单回落到模板节点
-        boolean allowQr = flowNode != null ? flowNode.allowQr() : node == null || node.allowQr();
         boolean allowEditGates = flowNode != null ? flowNode.allowEditGates()
                 : node == null || node.allowEditGates();
-        Boolean effectiveQr = allowQr ? qrApproved : null;
         List<Long> effectiveGates = allowEditGates ? approvedGateIds : null;
-        applyQrDecision(appointment, effectiveQr, operatorId);
 
         List<Long> approved = effectiveGates == null
                 ? null : appointmentGateService.saveApproved(appointment, effectiveGates);
@@ -529,7 +508,6 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                 ? ("第 " + task.level() + " 级审核") : task.nodeName();
         boolean allowEditGates = flowNode != null ? flowNode.allowEditGates()
                 : node == null || node.allowEditGates();
-        boolean allowQr = flowNode != null ? flowNode.allowQr() : node == null || node.allowQr();
         List<MateView> mates = appointmentRepository.findMates(appointment.getId()).stream()
                 .filter(m -> !m.main())
                 .map(m -> new MateView(m.name(), m.phoneMask() == null ? "" : m.phoneMask()))
@@ -541,9 +519,7 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
                 visitor == null ? "" : visitor.getIdCardMask(),
                 appointment.getVisitorType(), appointment.getPurpose(), appointment.getVisitPhoneMask(),
                 DATETIME.format(appointment.getStartTime()), DATETIME.format(appointment.getEndTime()),
-                gates, canAct, actions, mates,
-                appointment.isQrRequested(), appointment.isQrApproved(),
-                allowEditGates, allowQr);
+                gates, canAct, actions, mates, allowEditGates);
     }
 
     private ApprovalTask requireExists(Long taskId) {
@@ -599,6 +575,12 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
         appointment.setCurrentTaskId(null);
         appointmentRepository.update(appointment);
         dispatchTrigger.trigger(appointment);
+        // 二维码对所有预约默认开通：审批通过时顺手把设备接到平台核验地址（第三方 qrCodePush）
+        try {
+            qrConfigService.requestParamSync();
+        } catch (Exception e) {
+            log.warn("二维码核验地址下发失败 appointment={}：{}", appointment.getAppointmentNo(), e.getMessage());
+        }
         notifyPort.approvalResult(appointment.getId(), true, null);
         log.info("终审通过 appointment={}，已触发授权下发", appointment.getAppointmentNo());
         return new PassResult(appointment.getAppointmentNo(), appointment.getStatus(),
@@ -606,35 +588,6 @@ public class ApprovalService implements ApprovalStarter, ReminderPort {
     }
 
     /** 门点集合快照：写进审批动作流水，用于对比“申请 vs 批准”。 */
-    /**
-     * 处理「二维码开门」审批决定。
-     *
-     * <p>访客申请了才允许同意；不同意则显式置 0，便于访客端立刻看不到取码入口。
-     */
-    private void applyQrDecision(Appointment appointment, Boolean qrApproved, Long operatorId) {
-        if (qrApproved == null) {
-            return;
-        }
-        if (qrApproved && !appointment.isQrRequested()) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID,
-                    "访客没有申请二维码开门，不能直接同意");
-        }
-        appointment.setQrApproved(qrApproved);
-        appointment.setQrApprovedBy(qrApproved ? operatorId : null);
-        appointment.setQrApprovedAt(qrApproved ? LocalDateTime.now() : null);
-        appointmentRepository.update(appointment);
-        log.info("二维码开门审批 appointment={} approved={} operator={}",
-                appointment.getAppointmentNo(), qrApproved, operatorId);
-        if (qrApproved) {
-            // 同意二维码开门的同时把设备接到平台核验上，现场不用再手工配 thirdQrUrl
-            try {
-                qrConfigService.requestParamSync();
-            } catch (Exception e) {
-                log.warn("二维码核验地址下发失败 appointment={}：{}", appointment.getAppointmentNo(), e.getMessage());
-            }
-        }
-    }
-
     private String gateSnapshot(List<Long> gateIds) {
         if (gateIds == null || gateIds.isEmpty()) {
             return null;
