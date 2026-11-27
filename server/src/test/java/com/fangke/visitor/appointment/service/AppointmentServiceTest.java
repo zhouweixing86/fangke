@@ -348,34 +348,31 @@ class AppointmentServiceTest {
     }
 
     @Test
-    @DisplayName("各自刷证模式下同行人必须带身份证（3013）")
-    void mateIdCardRequired() {
-        BusinessException e = assertThrows(BusinessException.class, () -> service.create(
+    @DisplayName("同行人只填姓名+手机号即可（不强制身份证），统一按「随行」落库")
+    void matesOnlyNeedNameAndPhone() {
+        AppointmentView view = service.create(
                 request("商务", LocalDate.now().plusDays(1), Appointment.MATE_SEPARATE,
-                        List.of(new AppointmentCreateRequest.MateInfo("李四", null, null))),
-                Appointment.SOURCE_SELF, "ip", "ua"));
-        assertEquals(ErrorCode.MATE_ID_CARD_REQUIRED.code(), e.getCode());
+                        List.of(new AppointmentCreateRequest.MateInfo("李四", "13800001111", null),
+                                new AppointmentCreateRequest.MateInfo("王五", null, null))),
+                Appointment.SOURCE_SELF, "ip", "ua");
+
+        assertEquals(2, view.mates().size());
+        assertEquals("李四", view.mates().get(0).name());
+        assertEquals(null, view.mates().get(0).idCardMask(), "没填证件号就是空，不再报错");
+        assertEquals(3, appointmentRepo.mates.size(), "主访客 + 2 同行人");
+        assertTrue(appointmentRepo.mates.stream().anyMatch(AppointmentMate::main));
+        assertEquals(Appointment.MATE_TOGETHER, view.mateMode(), "同行人一律随行，不再区分各自刷证");
     }
 
     @Test
-    @DisplayName("随行模式下同行人身份证同样必填（访客只能刷证进门）")
-    void matesTogetherRequireIdCard() {
+    @DisplayName("二维码默认开通：所有预约都带码，不需要访客勾选、也不需要单独审批")
+    void qrEnabledByDefault() {
         AppointmentView view = service.create(
-                request("商务", LocalDate.now().plusDays(1), Appointment.MATE_TOGETHER,
-                        List.of(new AppointmentCreateRequest.MateInfo("李四", null, "340104199001011239"))),
+                request("商务", LocalDate.now().plusDays(1), Appointment.MATE_TOGETHER, List.of()),
                 Appointment.SOURCE_SELF, "ip", "ua");
 
-        assertEquals(1, view.mates().size());
-        assertEquals("李四", view.mates().get(0).name());
-        assertEquals(2, appointmentRepo.mates.size(), "主访客 + 1 同行人");
-        assertTrue(appointmentRepo.mates.stream().anyMatch(AppointmentMate::main));
-
-        BusinessException e = assertThrows(BusinessException.class,
-                () -> service.create(
-                        request("商务", LocalDate.now().plusDays(1), Appointment.MATE_TOGETHER,
-                                List.of(new AppointmentCreateRequest.MateInfo("王五", null, null))),
-                        Appointment.SOURCE_SELF, "ip", "ua"));
-        assertEquals(ErrorCode.MATE_ID_CARD_REQUIRED.code(), e.getCode());
+        assertTrue(view.qrRequested(), "默认申请（等价于默认开通）");
+        assertTrue(view.qrApproved(), "审批通过后即可出示二维码");
     }
 
     @Test

@@ -143,13 +143,11 @@ public class AppointmentService {
             mateCount = Math.max(mateCount, request.groupCount() - 1);
         }
         appointment.setMateCount(mateCount);
-        // 二维码开门：访客申请 ≠ 开通，必须审批人同意（代邀由邀请人直接决定，等同自审）
-        appointment.setQrRequested(Boolean.TRUE.equals(request.qrRequested()));
-        if (appointment.isQrRequested() && source == Appointment.SOURCE_INVITE) {
-            appointment.setQrApproved(true);
-            appointment.setQrApprovedBy(v.visitEmployeeId);
-            appointment.setQrApprovedAt(LocalDateTime.now());
-        }
+        // 二维码：所有预约默认开通（不再由访客勾选），审批通过后即可在「我的预约」出示
+        appointment.setQrRequested(true);
+        appointment.setQrApproved(true);
+        appointment.setQrApprovedBy(v.visitEmployeeId);
+        appointment.setQrApprovedAt(LocalDateTime.now());
         appointment.setApprovalLevel(1);
         // 代邀：一级自动通过；其余进入待审批（审批任务由 M5 的 ApprovalStarter 创建）
         appointment.setStatus(source == Appointment.SOURCE_INVITE
@@ -331,10 +329,8 @@ public class AppointmentService {
                     "结束时间必须晚于开始时间（暂不支持跨天预约）");
         }
 
-        int mateMode = request.mateMode() == null ? Appointment.MATE_TOGETHER : request.mateMode();
-        if (mateMode != Appointment.MATE_TOGETHER && mateMode != Appointment.MATE_SEPARATE) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID, "同行人模式只能是 0（随行）或 1（各自刷证）");
-        }
+        // 同行人统一「随行一次放行」：只登记姓名 + 手机号，跟主访客一起进门，不单独下发名单
+        int mateMode = Appointment.MATE_TOGETHER;
         List<AppointmentCreateRequest.MateInfo> mates = request.mates() == null ? List.of() : request.mates();
         if (mates.size() > MAX_MATES) {
             throw new BusinessException(ErrorCode.PARAM_INVALID, "同行人最多 " + MAX_MATES + " 人");
@@ -342,13 +338,8 @@ public class AppointmentService {
         List<AppointmentCreateRequest.MateInfo> normalizedMates = new ArrayList<>();
         for (AppointmentCreateRequest.MateInfo mate : mates) {
             String mateName = EmployeeValidator.requireText(mate.name(), "同行人姓名");
+            // 同行人跟随主访客通行，不再需要身份证号；填了才校验格式（兼容旧调用）
             String mateIdCard = EmployeeValidator.validateIdCard(mate.idCard());
-            // 访客一律刷身份证进门（不允许刷脸/不采集人脸），所以同行人也必须留下证件号，
-            // 否则这个人到了闸机前根本没有可用的通行凭证
-            if (mateIdCard == null) {
-                throw new BusinessException(ErrorCode.MATE_ID_CARD_REQUIRED,
-                        "同行人「" + mateName + "」需要填写身份证号");
-            }
             EmployeeValidator.validatePhone(mate.phone());
             normalizedMates.add(new AppointmentCreateRequest.MateInfo(mateName, mate.phone(), mateIdCard));
         }

@@ -100,11 +100,6 @@
           </view>
           <view v-else class="line muted">本节点不允许调整门点，沿用上一级的批准结果</view>
 
-          <label v-if="review.qrRequested && review.allowQr !== false" class="gate qr-row">
-            <checkbox :checked="reviewQrApproved" @click="reviewQrApproved = !reviewQrApproved" />
-            <text>同意二维码开门</text>
-          </label>
-
           <textarea v-model="reviewComment" class="opinion" maxlength="200"
             placeholder="通过可不填；拒绝必须填原因" />
 
@@ -184,7 +179,6 @@ async function openCcMessage(message: MyNotification) {
 const reviewVisible = ref(false)
 const review = ref<ReviewDetail | null>(null)
 const reviewGateIds = ref<number[]>([])
-const reviewQrApproved = ref(false)
 const reviewComment = ref('')
 const reviewActing = ref(false)
 
@@ -202,13 +196,12 @@ async function markAllCc() {
   ccUnread.value = 0
 }
 
-/** 打开审核弹层：二维码默认勾选（访客申请了就默认同意，减少一次点击） */
+/** 打开审核弹层 */
 async function openReview(row: ReviewRow) {
   try {
     const detail = await guardReviewDetail(row.taskId)
     review.value = detail
     reviewGateIds.value = [...(detail.gates?.approvedGateIds ?? [])]
-    reviewQrApproved.value = Boolean(detail.qrRequested) || Boolean(detail.qrApproved)
     reviewComment.value = ''
     reviewVisible.value = true
   } catch {
@@ -230,8 +223,7 @@ async function doPass() {
   try {
     const result = await guardReviewPass(review.value.taskId, {
       comment: reviewComment.value || undefined,
-      approvedGateIds: review.value.gates ? reviewGateIds.value : undefined,
-      qrApproved: review.value.qrRequested ? reviewQrApproved.value : undefined
+      approvedGateIds: review.value.gates ? reviewGateIds.value : undefined
     })
     reviewVisible.value = false
     await alert(

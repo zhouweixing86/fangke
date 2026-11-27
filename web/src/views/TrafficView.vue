@@ -167,6 +167,9 @@
               <el-descriptions-item label="被访人">{{ a.visitEmployeeName || '-' }}</el-descriptions-item>
               <el-descriptions-item label="批准门点">{{ a.approvedGates || '-' }}</el-descriptions-item>
               <el-descriptions-item label="车牌">{{ a.plateNo || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="随行人员">
+                {{ a.mates && a.mates.length ? a.mates.join('、') : '-' }}
+              </el-descriptions-item>
               <el-descriptions-item label="提交时间" :span="2">{{ shortTime(a.createdAt) }}</el-descriptions-item>
             </el-descriptions>
 

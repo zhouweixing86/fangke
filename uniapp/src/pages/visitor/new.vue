@@ -1,14 +1,9 @@
 <template>
   <view class="page">
-    <view class="seg">
-      <view class="seg-item" :class="{ active: mode === 'personal' }" @click="switchMode('personal')">个人预约</view>
-      <view class="seg-item" :class="{ active: mode === 'group' }" @click="switchMode('group')">团体预约</view>
-    </view>
-
     <view class="sheet">
       <view class="sheet-title">
         <text class="dot" />
-        <text>{{ mode === 'group' ? '团体预约信息' : '来访人员信息' }}</text>
+        <text>来访人员信息</text>
       </view>
 
       <picker :range="visitTypes" :value="typeIndex" @change="onType">
@@ -55,13 +50,12 @@
 
       <view class="row">
         <text class="label required">姓名</text>
-        <input v-model="form.name" class="input" :placeholder="mode === 'group' ? '预约负责人姓名' : '请填写您的姓名'" />
+        <input v-model="form.name" class="input" placeholder="请填写您的姓名" />
       </view>
 
       <view class="row">
         <text class="label required">手机号</text>
-        <input v-model="form.phone" class="input" type="number" maxlength="11"
-          :placeholder="mode === 'group' ? '预约负责人手机号' : '请填写您的手机号'" />
+        <input v-model="form.phone" class="input" type="number" maxlength="11" placeholder="请填写您的手机号" />
       </view>
 
       <view class="row">
@@ -71,14 +65,12 @@
 
       <view class="row">
         <text class="label required">公司</text>
-        <input v-model="form.company" class="input"
-          :placeholder="mode === 'group' ? '预约负责人公司' : '请填写您的公司'" />
+        <input v-model="form.company" class="input" placeholder="请填写您的公司" />
       </view>
 
       <view class="row">
         <text class="label">职务</text>
-        <input v-model="form.position" class="input"
-          :placeholder="mode === 'group' ? '预约负责人职务' : '请填写您的职务'" />
+        <input v-model="form.position" class="input" placeholder="请填写您的职务" />
       </view>
 
       <view class="row">
@@ -124,50 +116,35 @@
         <textarea v-model="form.purpose" class="textarea" maxlength="50" placeholder="请输入具体事由" />
         <text class="counter">{{ form.purpose.length }} / 50</text>
       </view>
-
-      <!-- 二维码开门：需审批人同意后才可用，所以这里只是"申请" -->
-      <view class="qr-apply">
-        <label class="qr-apply__row">
-          <checkbox :checked="form.qrRequested" @click="form.qrRequested = !form.qrRequested" />
-          <text class="qr-apply__label">申请二维码开门</text>
-        </label>
-        <text class="qr-apply__tip">
-          勾选后需审批人同意；同意后可在「我的预约」出示二维码进闸（60 秒有效）。
-          未同意时仍按正常流程刷身份证进门。
-        </text>
-      </view>
     </view>
 
-    <!-- 团体预约：同行人放最下面，填总数后自动展开姓名 + 手机号 -->
-    <view v-if="mode === 'group'" class="sheet">
+    <!-- 随行人员：选人数后展开多行，只填姓名 + 手机号（跟着主访客一起进，不单独下发） -->
+    <view class="sheet">
       <view class="sheet-title">
         <text class="dot" />
-        <text>同行人信息</text>
+        <text>随行人员</text>
       </view>
 
       <view class="row">
-        <text class="label required">同行人总数</text>
+        <text class="label">随行人数</text>
         <input v-model="mateTotal" class="input" type="number" maxlength="2"
-          placeholder="不含负责人，如 3" @blur="syncMates" />
+          placeholder="不含本人，如 2" @blur="syncMates" />
       </view>
 
       <view v-for="(mate, index) in mates" :key="index" class="mate">
-        <text class="mate-index">同行人 {{ index + 1 }}</text>
+        <text class="mate-index">随行人员 {{ index + 1 }}</text>
         <view class="mate-row">
-          <text class="mate-label">姓名</text>
+          <text class="mate-label required">姓名</text>
           <input v-model="mate.name" class="input" placeholder="请填写姓名" />
         </view>
         <view class="mate-row">
           <text class="mate-label">手机号</text>
           <input v-model="mate.phone" class="input" type="number" maxlength="11" placeholder="选填" />
         </view>
-        <view class="mate-row">
-          <text class="mate-label required">身份证号</text>
-          <input v-model="mate.idCard" class="input" maxlength="18" placeholder="必填，刷身份证进门" />
-        </view>
       </view>
 
-      <view v-if="mates.length === 0" class="ph tips">填写同行人总数后自动展开</view>
+      <view v-if="mates.length === 0" class="ph tips">没有随行人员可不填</view>
+      <view v-else class="ph tips">随行人员跟随本人一起进出，无需单独刷证；二维码在「我的预约」里出示</view>
     </view>
 
     <button class="submit" :loading="submitting" @click="submit">提交</button>
@@ -182,15 +159,11 @@ import type { GateOption, VisitDictOption } from '@/api/types'
 import { visitorOpenid } from '@/utils/visitor'
 import { alert, showToast } from '@/utils/ui'
 
-type Mode = 'personal' | 'group'
-
 interface Mate {
   name: string
   phone: string
-  idCard: string
 }
 
-const mode = ref<Mode>('personal')
 const visitTypes = ['商务', '施工', '送货']
 const typeIndex = ref(0)
 const periods = [
@@ -211,8 +184,7 @@ const form = reactive({
   position: '',
   plateNo: '',
   purpose: '',
-  areaId: undefined as number | undefined,
-  qrRequested: false
+  areaId: undefined as number | undefined
 })
 
 const hostName = ref('')
@@ -239,21 +211,13 @@ const minDate = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pa
 const future = new Date(today.getTime() + 30 * 86400000)
 const maxDate = future.getFullYear() + '-' + pad(future.getMonth() + 1) + '-' + pad(future.getDate())
 
-function switchMode(next: Mode) {
-  mode.value = next
-  if (next === 'personal') {
-    mates.value = []
-    mateTotal.value = ''
-  }
-}
-
-/** 同行人总数 → 自动补齐/裁剪行 */
+/** 随行人数 → 自动补齐/裁剪行 */
 function syncMates() {
   const total = Math.max(0, Math.min(10, Number(mateTotal.value) || 0))
   mateTotal.value = total ? String(total) : ''
   const next: Mate[] = []
   for (let i = 0; i < total; i++) {
-    next.push(mates.value[i] ?? { name: '', phone: '', idCard: '' })
+    next.push(mates.value[i] ?? { name: '', phone: '' })
   }
   mates.value = next
 }
@@ -318,12 +282,9 @@ async function submit() {
   const idCard = form.idCard.trim().toUpperCase()
   if (!idCard) return showToast('请填写身份证号（到闸机需刷身份证进门）')
   if (!/^\d{17}[0-9X]$/.test(idCard)) return showToast('身份证号需为 18 位')
-  if (mode.value === 'group') {
-    if (mates.value.some((m) => !m.name.trim())) return showToast('请填写同行人姓名')
-    if (mates.value.some((m) => !m.idCard.trim())) return showToast('请填写同行人身份证号')
-    const bad = mates.value.find((m) => !/^\d{17}[0-9X]$/.test(m.idCard.trim().toUpperCase()))
-    if (bad) return showToast('同行人「' + bad.name + '」身份证号需为 18 位')
-  }
+  if (mates.value.some((m) => !m.name.trim())) return showToast('请填写随行人员姓名')
+  const badMatePhone = mates.value.find((m) => m.phone.trim() && !/^1\d{10}$/.test(m.phone.trim()))
+  if (badMatePhone) return showToast('随行人员「' + badMatePhone.name + '」手机号格式不正确')
   if (gates.value.length > 1 && gateScope.value === 1 && selectedGateIds.value.length === 0) {
     return showToast('请至少选择一个门点')
   }
@@ -343,7 +304,7 @@ async function submit() {
       company: form.company.trim(),
       position: form.position || undefined,
       period: form.period,
-      groupCount: mode.value === 'group' ? mates.value.length + 1 : undefined,
+      groupCount: mates.value.length > 0 ? mates.value.length + 1 : undefined,
       startDate: form.date,
       gateScope: useGates ? 1 : gates.value.length === 1 ? 1 : 2,
       gateId: useGates ? selectedGateIds.value[0] : gates.value[0]?.id,
@@ -355,14 +316,12 @@ async function submit() {
         company: form.company.trim(),
         position: form.position || undefined
       },
-      mates: mode.value === 'group'
+      mates: mates.value.length > 0
         ? mates.value.map((m) => ({
             name: m.name.trim(),
-            phone: m.phone.trim() || undefined,
-            idCard: m.idCard.trim().toUpperCase()
+            phone: m.phone.trim() || undefined
           }))
         : undefined,
-      qrRequested: form.qrRequested,
       wxOpenid: openid || undefined,
       consentVersion: 'v1.0'
     })
@@ -402,29 +361,6 @@ onShow(async () => {
   min-height: 100vh;
   background: #eef4fb;
   padding-bottom: 60rpx;
-}
-
-.seg {
-  display: flex;
-  gap: 16rpx;
-  padding: 20rpx 24rpx;
-}
-
-.seg-item {
-  flex: 1;
-  height: 84rpx;
-  line-height: 84rpx;
-  text-align: center;
-  border-radius: 12rpx;
-  background: #ffffff;
-  color: #4a5160;
-  font-size: 34rpx;
-}
-
-.seg-item.active {
-  background: #1565e8;
-  color: #ffffff;
-  font-weight: 500;
 }
 
 .sheet {
@@ -617,30 +553,5 @@ onShow(async () => {
 
 .submit::after {
   border: none;
-}
-.qr-apply {
-  margin-top: 16px;
-  padding: 14px 16px;
-  background: #f7f8fa;
-  border-radius: 10px;
-}
-
-.qr-apply__row {
-  display: flex;
-  align-items: center;
-}
-
-.qr-apply__label {
-  font-size: 32rpx;
-  color: #323233;
-  margin-left: 8rpx;
-}
-
-.qr-apply__tip {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 26rpx;
-  line-height: 1.6;
-  color: #969799;
 }
 </style>

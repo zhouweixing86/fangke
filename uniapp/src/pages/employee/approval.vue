@@ -19,14 +19,6 @@
         </view>
       </view>
 
-      <view v-if="detail.qrRequested" class="card">
-        <view class="row">
-          <text class="label">同意二维码开门</text>
-          <switch :checked="qrApproved" @change="onQrChange" />
-        </view>
-        <view class="tip">访客申请了二维码开门，同意后访客可在「我的预约」出示二维码进闸。</view>
-      </view>
-
       <view v-if="detail.actions && detail.actions.length" class="card">
         <view class="card-title">审批轨迹</view>
         <view v-for="(a, i) in detail.actions" :key="i" class="action">
@@ -60,7 +52,6 @@ import { alert, showToast } from '@/utils/ui'
 const detail = ref<ApprovalDetail | null>(null)
 const taskId = ref(0)
 const comment = ref('')
-const qrApproved = ref(false)
 const submitting = ref(false)
 
 const gateText = computed(() => {
@@ -73,22 +64,16 @@ const gateText = computed(() => {
   return names.join('、') || (gates.gateScope === 2 ? '全部门点' : '-')
 })
 
-function onQrChange(e: any) {
-  qrApproved.value = !!e.detail.value
-}
-
 async function load() {
   await ensureVisitorLogin()
   detail.value = await myApprovalDetail(taskId.value)
-  qrApproved.value = !!detail.value.qrApproved
 }
 
 async function pass() {
   submitting.value = true
   try {
     const result = await approveTask(taskId.value, {
-      comment: comment.value || undefined,
-      qrApproved: detail.value?.qrRequested ? qrApproved.value : undefined
+      comment: comment.value || undefined
     })
     await alert(`预约 ${result.appointmentNo} 已通过\n当前状态：${result.statusText}`, '审批完成')
     uni.navigateBack()

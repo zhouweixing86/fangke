@@ -71,6 +71,14 @@
         <el-descriptions-item label="授权状态">
           {{ grantText(detail?.grantStatus ?? -1) }}
         </el-descriptions-item>
+        <el-descriptions-item label="随行人员">
+          <template v-if="detail?.mates && detail.mates.length">
+            <span v-for="(m, i) in detail.mates" :key="i" style="margin-right: 10px">
+              {{ m.name }}<span v-if="m.phoneMask" class="text-muted">（{{ m.phoneMask }}）</span>
+            </span>
+          </template>
+          <span v-else>-</span>
+        </el-descriptions-item>
         <el-descriptions-item label="提交时间">{{ detail?.createdAt }}</el-descriptions-item>
       </el-descriptions>
 

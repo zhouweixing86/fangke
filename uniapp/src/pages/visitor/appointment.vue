@@ -19,11 +19,10 @@
           <text class="row-label">时段</text>
           <text>{{ shortTime(detail.startTime) }} – {{ shortTime(detail.endTime) }}</text>
         </view>
-        <view class="row"><text class="row-label">同行人</text><text>{{ detail.mateModeText }}</text></view>
-      </view>
-
-      <view v-if="qrPending" class="card" style="margin-top: 10px">
-        <view class="muted">已申请二维码开门，等待审批人同意。同意后这里会出现「生成通行码」。</view>
+        <view class="row">
+          <text class="row-label">随行人员</text>
+          <text>{{ mateText }}</text>
+        </view>
       </view>
 
       <button v-if="canShowQr" class="btn btn--primary btn--block" :loading="qrLoading" @click="refreshQr">
@@ -71,19 +70,20 @@ const gateText = computed(() => {
   }
   return d.gateName || '-'
 })
+
+/** 随行人员：只展示姓名，人数一起给出；他们没有独立通行记录 */
+const mateText = computed(() => {
+  const mates = detail.value?.mates ?? []
+  if (!mates.length) return '无'
+  return mates.map((m) => m.name).join('、') + '（' + mates.length + ' 人）'
+})
 let timer: ReturnType<typeof setInterval> | null = null
 
+/** 审批通过就能出示二维码（所有预约默认都有码，不再需要单独申请/审批） */
 const canShowQr = computed(() => {
   const status = detail.value?.status ?? 0
-  // 二维码开门必须审批人同意；仅"申请"了但没同意时不给取码入口
-  if (!detail.value?.qrApproved) return false
   return status === 30 || status === 35 || status === 40
 })
-
-/** 申请了二维码但还没被同意：给个说明，避免用户以为功能坏了 */
-const qrPending = computed(() =>
-  Boolean(detail.value?.qrRequested) && !detail.value?.qrApproved
-)
 
 function shortTime(value: string) {
   return value ? value.slice(11, 16) : ''
@@ -98,6 +98,10 @@ function tagClass(status: number) {
 
 async function load() {
   detail.value = await appointmentDetail(no.value)
+  // 审批通过后进详情就直接出码，不用再点一次按钮
+  if (canShowQr.value && !qr.value) {
+    await refreshQr().catch(() => undefined)
+  }
 }
 
 async function refreshQr() {

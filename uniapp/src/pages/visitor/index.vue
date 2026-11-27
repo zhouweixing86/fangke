@@ -27,7 +27,11 @@
           <text>被访人 {{ item.visitPhoneMask || '-' }}</text>
           <text v-if="item.company"> · {{ item.company }}</text>
         </view>
+        <view v-if="item.mateCount" class="line muted">随行 {{ item.mateCount }} 人</view>
         <view class="line muted">单号 {{ item.appointmentNo }}</view>
+        <view v-if="canShowQr(item)" class="card-foot">
+          <button class="qr-btn" @click.stop="open(item)">出示通行码</button>
+        </view>
       </view>
     </template>
   </view>
@@ -64,6 +68,11 @@ function goBooking() {
 
 function open(item: AppointmentView) {
   uni.navigateTo({ url: '/pages/visitor/appointment?no=' + item.appointmentNo })
+}
+
+/** 已审批（可通行/已入/在访）就能出示二维码；二维码在详情页展示 */
+function canShowQr(item: AppointmentView) {
+  return item.status === 30 || item.status === 35 || item.status === 40
 }
 
 function switchTab(name: string) {
@@ -242,5 +251,26 @@ onShareAppMessage(() => ({
 
 .muted {
   color: #8a9099;
+}
+
+.card-foot {
+  margin-top: 16rpx;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.qr-btn {
+  height: 64rpx;
+  line-height: 64rpx;
+  padding: 0 28rpx;
+  margin: 0;
+  border-radius: 32rpx;
+  background: #1565e8;
+  color: #ffffff;
+  font-size: 28rpx;
+}
+
+.qr-btn::after {
+  border: none;
 }
 </style>

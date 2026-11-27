@@ -28,6 +28,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -151,8 +153,8 @@ class VehicleAccessServiceTest {
     }
 
     @Test
-    @DisplayName("团队预约：一辆车按人拆成多条，同行人没有编号时用预约号-序号兜底")
-    void visitorTeamSplitsPerPerson() {
+    @DisplayName("团队预约：一辆车只记主访客一条，同行人不拆行（同行人在预约详情里看）")
+    void visitorTeamRecordedAsMainVisitorOnly() {
         Appointment appointment = new Appointment();
         appointment.setId(19L);
         appointment.setAppointmentNo("V202611190001");
@@ -166,44 +168,16 @@ class VehicleAccessServiceTest {
         visitor.setName("李小红");
         visitor.setPersonNo("V202611190001");
         when(visitorRepository.findById(15L)).thenReturn(Optional.of(visitor));
+        // 就算预约里有同行人，也不再给通行记录拆行
         when(appointmentRepository.findMates(19L)).thenReturn(List.of(
                 new AppointmentMate(1L, 19L, "李小红", null, null, null, null, null, true, "V202611190001"),
-                new AppointmentMate(2L, 19L, "王五", null, null, null, null, null, false, null),
-                new AppointmentMate(3L, 19L, "赵六", null, null, null, null, null, false, "V202611190003")));
+                new AppointmentMate(2L, 19L, "王五", null, null, null, null, null, false, null)));
 
-        List<VehicleAccessService.Decision> group = service.judgeGroup("京B12345", 10L, at);
+        VehicleAccessService.Decision decision = service.judge("京B12345", 10L, at);
 
-        assertEquals(3, group.size(), "主访客 + 2 个同行人");
-        assertEquals("李小红", group.get(0).matchedName());
-        assertEquals("王五", group.get(1).matchedName());
-        assertEquals("V202611190001-1", group.get(1).personNo(), "同行人没编号时用预约号-序号兜底");
-        assertEquals("V202611190003", group.get(2).personNo(), "有编号就用编号");
-        assertTrue(group.stream().allMatch(VehicleAccessService.Decision::allowed));
-    }
-
-    @Test
-    @DisplayName("按人落库：3 个人写 3 条记录，事件号派生，抓拍图与原始报文只存一份")
-    void recordGroupWritesRowPerPerson() {
-        when(eventRepository.insertIfAbsent(any())).thenReturn(true);
-        List<VehicleAccessService.Decision> group = List.of(
-                new VehicleAccessService.Decision(true, "访客车辆", VehicleEvent.TYPE_VISITOR,
-                        15L, "李小红", "V202611190001"),
-                new VehicleAccessService.Decision(true, "访客同行人", VehicleEvent.TYPE_VISITOR,
-                        15L, "王五", "V202611190001-1"),
-                new VehicleAccessService.Decision(true, "访客同行人", VehicleEvent.TYPE_VISITOR,
-                        15L, "赵六", "V202611190001-2"));
-
-        List<VehicleEvent> saved = service.recordGroup("EV123", "SN1", 10L, "京B12345", 1, at, 90,
-                group, null, null, "{\"k\":1}");
-
-        assertEquals(3, saved.size());
-        assertEquals("EV123", saved.get(0).eventUuid());
-        assertEquals("EV123-1", saved.get(1).eventUuid());
-        assertEquals("EV123-2", saved.get(2).eventUuid());
-        assertEquals("王五", saved.get(1).matchedName());
-        assertEquals("V202611190001-1", saved.get(1).personNo());
-        assertEquals("{\"k\":1}", saved.get(0).rawJson());
-        assertNull(saved.get(1).rawJson(), "原始报文只在第一条存一份，避免一条车事件写 N 份大报文");
-        assertTrue(saved.stream().allMatch(e -> e.resultStatus() == VehicleEvent.RESULT_PASS));
+        assertTrue(decision.allowed());
+        assertEquals("李小红", decision.matchedName(), "只记主访客");
+        assertEquals("V202611190001", decision.personNo());
+        verify(appointmentRepository, never()).findMates(anyLong());
     }
 }

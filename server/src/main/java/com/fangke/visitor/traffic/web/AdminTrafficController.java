@@ -331,7 +331,12 @@ public class AdminTrafficController {
                 visitorId, Timestamp.valueOf(date.atStartOfDay()), Timestamp.valueOf(date.plusDays(1).atStartOfDay()));
 
         for (Map<String, Object> row : list) {
-            row.put("actions", actions((Long) row.get("id")));
+            Long appointmentId = (Long) row.get("id");
+            row.put("actions", actions(appointmentId));
+            // 随行人员：通行记录只记主访客本人，随行的人在这里看（C-111）
+            row.put("mates", jdbc.queryForList(
+                    "SELECT name FROM appointment_mate WHERE appointment_id = ? AND is_main = 0 ORDER BY id",
+                    String.class, appointmentId));
         }
         return list;
     }

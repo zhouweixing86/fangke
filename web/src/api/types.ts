@@ -207,6 +207,8 @@ export interface AppointmentRow {
   createdAt: string
   /** C-80 审批轨迹（仅详情接口返回） */
   actions?: ApprovalTraceItem[]
+  /** C-111 随行人员（仅详情接口返回；通行记录只记主访客本人） */
+  mates?: Array<{ name: string; phoneMask: string }>
 }
 
 export interface ApprovalTraceItem {
@@ -827,6 +829,8 @@ export interface TrafficAppointment {
   endTime: string
   createdAt: string
   actions: TrafficApprovalAction[]
+  /** C-111 随行人员姓名（通行记录只记主访客本人，随行的在这里看） */
+  mates?: string[]
 }
 
 export interface TrafficDetail {

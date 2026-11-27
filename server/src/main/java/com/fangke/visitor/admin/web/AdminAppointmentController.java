@@ -33,12 +33,15 @@ public class AdminAppointmentController {
     private final AdminQueryRepository queryRepository;
     private final GateService gateService;
     private final ApprovalActionRepository actionRepository;
+    private final com.fangke.visitor.appointment.repository.AppointmentRepository appointmentRepository;
 
     public AdminAppointmentController(AdminQueryRepository queryRepository, GateService gateService,
-                                      ApprovalActionRepository actionRepository) {
+                                      ApprovalActionRepository actionRepository,
+                                      com.fangke.visitor.appointment.repository.AppointmentRepository appointmentRepository) {
         this.queryRepository = queryRepository;
         this.gateService = gateService;
         this.actionRepository = actionRepository;
+        this.appointmentRepository = appointmentRepository;
     }
 
     @GetMapping
@@ -64,6 +67,16 @@ public class AdminAppointmentController {
         AdminQueryRepository.AppointmentRow row = queryRepository.findAppointment(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_INVALID, "预约单不存在：" + id));
         Map<String, Object> view = toView(row);
+        // 随行人员：通行记录只记主访客本人，随行的人在这里看（C-111）
+        view.put("mates", appointmentRepository.findMates(id).stream()
+                .filter(m -> !m.main())
+                .map(m -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("name", m.name());
+                    item.put("phoneMask", m.phoneMask() == null ? "" : m.phoneMask());
+                    return item;
+                })
+                .toList());
         // C-80：审批轨迹进详情，便于流程追溯（谁、哪个节点、通过/驳回、意见、门点）
         view.put("actions", actionRepository.listByAppointment(id).stream().map(a -> {
             Map<String, Object> item = new LinkedHashMap<>();

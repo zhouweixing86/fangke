@@ -269,8 +269,8 @@ class VehicleMqttServiceTest {
         String upload = "{\"command\":\"Result\",\"data\":\"{\\\"carNO\\\":\\\"苏A12345\\\",\\\"carNOC\\\":\\\"蓝\\\","
                 + "\\\"confid\\\":885,\\\"openGate\\\":0}\",\"requestId\":\"1\",\"sn\":\"" + SN
                 + "\",\"time\":\"2026-11-25 23:39:45\",\"version\":\"1.0.1\"}";
-        when(accessService.judgeGroup(eq("苏A12345"), any(), any()))
-                .thenReturn(List.of(new VehicleAccessService.Decision(true, "白名单有效", null, null, null, null)));
+        when(accessService.judge(eq("苏A12345"), any(), any()))
+                .thenReturn(new VehicleAccessService.Decision(true, "白名单有效", null, null, null, null));
 
         service.onUpload("upload/" + SN, upload);
 

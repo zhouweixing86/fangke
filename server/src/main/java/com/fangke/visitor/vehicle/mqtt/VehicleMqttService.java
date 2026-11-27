@@ -557,17 +557,13 @@ public class VehicleMqttService {
                 Device device = deviceSn == null ? null : deviceService.resolveOrRegister(deviceSn, null);
                 Long gateId = device == null ? null : device.getGateId();
                 int direction = device == null ? 1 : device.getDirection();
-                // 一辆车可能带来多个人（团队预约），按人各落一条记录
-                List<VehicleAccessService.Decision> group =
-                        accessService.judgeGroup(plate, gateId, LocalDateTime.now());
-                VehicleAccessService.Decision decision = group.get(0);
+                VehicleAccessService.Decision decision = accessService.judge(plate, gateId, LocalDateTime.now());
                 // 事件时间优先用相机上报的 triggT/imgT：离线补传时按“补传时刻”入库会把记录算到错误的日期
                 LocalDateTime eventTime = eventTimeOf(payload);
-                accessService.recordGroup(eventUuidOf(payload), deviceSn, gateId, plate, direction, eventTime,
-                        confidenceOf(payload), group, photoBase64Of(payload), extractPhotoUrl(payload),
+                accessService.record(eventUuidOf(payload), deviceSn, gateId, plate, direction, eventTime,
+                        confidenceOf(payload), decision, photoBase64Of(payload), extractPhotoUrl(payload),
                         stripPhotoBase64(payload, photoBase64Of(payload)));
-                message = plate + " 判定=" + (decision.allowed() ? "放行" : "拒绝") + "：" + decision.reason()
-                        + (group.size() > 1 ? "（同行 " + (group.size() - 1) + " 人，按人各记一条）" : "");
+                message = plate + " 判定=" + (decision.allowed() ? "放行" : "拒绝") + "：" + decision.reason();
             } catch (Exception e) {
                 message = "落库失败：" + e.getMessage();
             }
