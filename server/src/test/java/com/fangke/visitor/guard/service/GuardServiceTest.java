@@ -150,7 +150,7 @@ class GuardServiceTest {
         }
 
         @Override
-        public Optional<Long> findPlatformQrEvent(Long gateId, java.time.LocalDateTime eventTime) {
+        public Optional<Long> findPlatformQrEvent(String deviceSn, Long gateId, java.time.LocalDateTime eventTime) {
             return Optional.empty();
         }
     }

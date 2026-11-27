@@ -19,6 +19,7 @@ import com.fangke.visitor.qr.repository.QrTicketRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -170,8 +171,40 @@ class QrTicketServiceTest {
     }
 
     @Test
-    @DisplayName("BR-V-020：60 秒内可重复使用，通行后不作废")
-    void sameCodeCanBeReusedWithinTtl() {
+    @DisplayName("设备扫码：通行记录带真实 SN、设备方向与访客姓名（不是 GUARD-QR / 恒记进）")
+    void deviceScanRecordsRealDeviceAndDirection() {
+        String code = service.issue(APPOINTMENT_NO, 1L, QrTicketService.CHANNEL_GUARD).code();
+
+        QrTicketService.VerifyResult result = service.verify(code, null, 1L,
+                QrTicketService.ScanSource.device("260825207925A", 0));
+
+        assertTrue(result.allowed());
+        ArgumentCaptor<AccessEvent> captor = ArgumentCaptor.forClass(AccessEvent.class);
+        verify(eventRepo).insertIfAbsent(captor.capture());
+        AccessEvent event = captor.getValue();
+        assertEquals("260825207925A", event.deviceSn(), "设备点位要记真实终端 SN");
+        assertEquals(0, event.direction(), "出口终端扫码要记「出」");
+        assertEquals(QrTicketService.IDENTIFY_TYPE_QR, event.identifyType());
+        assertEquals("V202611160001", event.personNo(), "要能追到是谁");
+        assertEquals("访客甲", event.personName(), "通行记录列表要直接显示姓名");
+        assertEquals(1, event.resultStatus());
+    }
+
+    @Test
+    @DisplayName("保安台核验：仍记 GUARD-QR 且方向为进（没有设备上下文）")
+    void guardScanKeepsGuardSource() {
+        String code = service.issue(APPOINTMENT_NO, 1L, QrTicketService.CHANNEL_GUARD).code();
+
+        assertTrue(service.verify(code, 2L, null).allowed());
+
+        ArgumentCaptor<AccessEvent> captor = ArgumentCaptor.forClass(AccessEvent.class);
+        verify(eventRepo).insertIfAbsent(captor.capture());
+        assertEquals(QrTicketService.SCANNER_GUARD, captor.getValue().deviceSn());
+        assertEquals(1, captor.getValue().direction());
+    }
+
+    @Test
+    @DisplayName("BR-V-020：60 秒内可重复使用，通行后不作废")    void sameCodeCanBeReusedWithinTtl() {
         String code = service.issue(APPOINTMENT_NO, 1L, QrTicketService.CHANNEL_GUARD).code();
 
         QrTicketService.VerifyResult first = service.verify(code, 2L, null);

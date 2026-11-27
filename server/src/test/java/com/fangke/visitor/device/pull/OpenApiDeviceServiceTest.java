@@ -261,7 +261,7 @@ class OpenApiDeviceServiceTest {
     @Test
     @DisplayName("二维码记录：设备回传的扫码记录合并到平台核验记录，不重复入库")
     void mergeDeviceQrRecordIntoPlatformEvent() throws Exception {
-        when(eventRepo.findPlatformQrEvent(any(), any())).thenReturn(Optional.of(99L));
+        when(eventRepo.findPlatformQrEvent(any(), any(), any())).thenReturn(Optional.of(99L));
         var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(
                 "{\"time\":\"2026-11-21 16:32:49\",\"openType\":5,\"inout\":1,\"resultStatus\":1}");
 

@@ -408,11 +408,12 @@ public class OpenApiDeviceService {
                 event.temperature(), event.mateFlag(), event.abnormalFlag(), event.source(),
                 event.rawJson());
 
-        // 二维码：平台核验时已经写过一条（device_sn=GUARD-QR），设备再回传同一次扫码就合并进去，
+        // 二维码：平台核验时已经写过一条（设备点位=真实 SN），设备再回传同一次扫码就合并进去，
         // 否则一次扫码会在通行记录里出现两条（平台一条、设备一条）
         if (event.identifyType() == OpenApiRecordMapper.IDENTIFY_QR) {
             Optional<Long> platformEvent =
-                    accessEventRepository.findPlatformQrEvent(device.getGateId(), event.eventTime());
+                    accessEventRepository.findPlatformQrEvent(device.getDeviceSn(), device.getGateId(),
+                            event.eventTime());
             if (platformEvent.isPresent()) {
                 String photo = text(data, "scenePhoto");
                 if (photo != null && !photo.isBlank()) {
@@ -444,7 +445,9 @@ public class OpenApiDeviceService {
 
     /** 二维码推送：设备把码交给我们判定，返回是否开闸（协议 §3.31）。 */
     public QrTicketService.VerifyResult verifyQr(Device device, String code) {
-        return qrTicketService.verify(code, null, device.getGateId());
+        // 带上真实 SN 与进/出：通行记录才会落到具体终端，出口终端扫码也才记「出」而不是恒记「进」
+        return qrTicketService.verify(code, null, device.getGateId(),
+                QrTicketService.ScanSource.device(device.getDeviceSn(), device.getDirection()));
     }
 
     /* ---------------- 内部工具 ---------------- */

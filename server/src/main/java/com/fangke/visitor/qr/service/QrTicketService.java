@@ -58,6 +58,35 @@ public class QrTicketService {
     public static final String CHANNEL_GUARD = "GUARD";
     public static final String CHANNEL_APP = "APP";
 
+    /** 保安台/管理端核验（不是某台设备扫的码）在通行记录里的设备点位。 */
+    public static final String SCANNER_GUARD = "GUARD-QR";
+
+    /**
+     * 谁在核验这张码：设备扫码时给真实 SN 与方向，保安台核验用 {@link #SCANNER_GUARD}。
+     *
+     * <p>通行记录的「设备点位」与「进/出」都来自这里 —— 否则出口终端扫码也会记成「进」，
+     * 设备点位也只会显示 {@code GUARD-QR}，看不出是哪台机器。
+     */
+    public record ScanSource(String deviceSn, Integer direction) {
+
+        public static ScanSource guard() {
+            return new ScanSource(SCANNER_GUARD, 1);
+        }
+
+        public static ScanSource device(String deviceSn, Integer direction) {
+            return new ScanSource(deviceSn == null || deviceSn.isBlank() ? SCANNER_GUARD : deviceSn.trim(),
+                    direction == null ? 1 : direction);
+        }
+
+        public String deviceSnOrGuard() {
+            return deviceSn == null || deviceSn.isBlank() ? SCANNER_GUARD : deviceSn;
+        }
+
+        public int directionOrIn() {
+            return direction == null ? 1 : direction;
+        }
+    }
+
     public record IssueResult(String code,
                               String appointmentNo,
                               long expireAtEpoch,
@@ -167,15 +196,24 @@ public class QrTicketService {
      */
     @Transactional
     public VerifyResult verify(String code, Long operatorId, Long gateId) {
+        return verify(code, operatorId, gateId, ScanSource.guard());
+    }
+
+    /**
+     * 带「谁在扫码」的核验：设备扫码时传真实 SN 与方向，通行记录才会落到具体终端与正确的进/出。
+     */
+    @Transactional
+    public VerifyResult verify(String code, Long operatorId, Long gateId, ScanSource source) {
+        ScanSource scan = source == null ? ScanSource.guard() : source;
         Instant now = Instant.now();
         QrCodeVerifier.Outcome outcome = verifier.verify(code, now);
         switch (outcome.result()) {
             case INVALID_FORMAT, BAD_SIGNATURE -> {
-                recordEvent(null, null, "二维码无效", false, gateId, operatorId);
+                recordEvent(null, null, "二维码无效", false, gateId, operatorId, scan);
                 return VerifyResult.reject("二维码无效或已被篡改");
             }
             case EXPIRED -> {
-                recordEvent(outcome.appointmentNo(), null, "二维码已过期", false, gateId, operatorId);
+                recordEvent(outcome.appointmentNo(), null, "二维码已过期", false, gateId, operatorId, scan);
                 return VerifyResult.reject("二维码已过期，请让访客刷新后重新出示");
             }
             default -> {
@@ -186,19 +224,19 @@ public class QrTicketService {
         String nonce = extractNonce(code);
         Optional<QrTicket> found = ticketRepository.findByNonce(nonce);
         if (found.isEmpty()) {
-            recordEvent(outcome.appointmentNo(), null, "非本平台签发的码", false, gateId, operatorId);
+            recordEvent(outcome.appointmentNo(), null, "非本平台签发的码", false, gateId, operatorId, scan);
             return VerifyResult.reject("该二维码不是本平台签发的");
         }
         QrTicket ticket = found.get();
 
         if (ticket.status() == QrTicket.STATUS_REVOKED) {
-            recordEvent(ticket.appointmentNo(), null, "二维码已撤销", false, gateId, operatorId);
+            recordEvent(ticket.appointmentNo(), null, "二维码已撤销", false, gateId, operatorId, scan);
             return VerifyResult.reject("二维码已撤销");
         }
         if (ticket.status() == QrTicket.STATUS_EXPIRED
                 || (ticket.expireAt() != null && ticket.expireAt().isBefore(LocalDateTime.now()))) {
             ticketRepository.markExpired(LocalDateTime.now());
-            recordEvent(ticket.appointmentNo(), null, "二维码已过期", false, gateId, operatorId);
+            recordEvent(ticket.appointmentNo(), null, "二维码已过期", false, gateId, operatorId, scan);
             return VerifyResult.reject("二维码已过期，请让访客刷新");
         }
 
@@ -206,15 +244,15 @@ public class QrTicketService {
         GrantChecker.State state = grantChecker.check(ticket.appointmentNo(), effectiveGate, now);
         switch (state) {
             case NO_GRANT -> {
-                recordEvent(ticket.appointmentNo(), null, "无有效授权", false, gateId, operatorId);
+                recordEvent(ticket.appointmentNo(), null, "无有效授权", false, gateId, operatorId, scan);
                 return VerifyResult.reject("该预约当前没有有效授权");
             }
             case OUT_OF_WINDOW -> {
-                recordEvent(ticket.appointmentNo(), null, "不在授权时段", false, gateId, operatorId);
+                recordEvent(ticket.appointmentNo(), null, "不在授权时段", false, gateId, operatorId, scan);
                 return VerifyResult.reject("不在授权时段");
             }
             case GATE_MISMATCH -> {
-                recordEvent(ticket.appointmentNo(), null, "门点不符", false, gateId, operatorId);
+                recordEvent(ticket.appointmentNo(), null, "门点不符", false, gateId, operatorId, scan);
                 return VerifyResult.reject("门点不符");
             }
             default -> {
@@ -227,7 +265,8 @@ public class QrTicketService {
 
         Appointment appointment = appointmentRepository.findById(ticket.appointmentId()).orElse(null);
         String personNo = resolvePersonNo(appointment);
-        AccessEvent event = buildEvent(ticket.appointmentNo(), personNo, null, true, effectiveGate);
+        AccessEvent event = buildEvent(ticket.appointmentNo(), personNo, visitorName(appointment),
+                null, true, effectiveGate, scan);
         Long eventId = null;
         try {
             eventId = accessEventRepository.insertIfAbsent(event).orElse(null);
@@ -360,9 +399,9 @@ public class QrTicketService {
     }
 
     private Long recordEvent(String appointmentNo, String personNo, String failReason,
-                             boolean success, Long gateId, Long operatorId) {
+                             boolean success, Long gateId, Long operatorId, ScanSource scan) {
         try {
-            AccessEvent event = buildEvent(appointmentNo, personNo, failReason, success, gateId);
+            AccessEvent event = buildEvent(appointmentNo, personNo, null, failReason, success, gateId, scan);
             return accessEventRepository.insertIfAbsent(event).orElse(null);
         } catch (Exception e) {
             log.warn("二维码核验留痕失败 appointment={}：{}", appointmentNo, e.getMessage());
@@ -370,13 +409,14 @@ public class QrTicketService {
         }
     }
 
-    private AccessEvent buildEvent(String appointmentNo, String personNo, String failReason,
-                                   boolean success, Long gateId) {
+    private AccessEvent buildEvent(String appointmentNo, String personNo, String personName,
+                                   String failReason, boolean success, Long gateId, ScanSource scan) {
         String uuid = "Q" + System.currentTimeMillis() + "-" + Math.abs(RANDOM.nextInt(10000));
         String raw = "{\"type\":\"guard_qr\",\"appointmentNo\":"
                 + (appointmentNo == null ? "null" : "\"" + appointmentNo + "\"") + "}";
-        return new AccessEvent(uuid, null, "GUARD-QR", gateId, 1, LocalDateTime.now(),
-                IDENTIFY_TYPE_QR, personNo, null, null, success ? 1 : 0, failReason,
-                null, null, false, 0, SOURCE_GUARD_QR, raw);
+        ScanSource source = scan == null ? ScanSource.guard() : scan;
+        return new AccessEvent(uuid, null, source.deviceSnOrGuard(), gateId, source.directionOrIn(),
+                LocalDateTime.now(), IDENTIFY_TYPE_QR, personNo, personName,
+                null, success ? 1 : 0, failReason, null, null, false, 0, SOURCE_GUARD_QR, raw);
     }
 }

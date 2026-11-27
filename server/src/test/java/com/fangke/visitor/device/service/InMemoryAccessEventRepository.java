@@ -34,7 +34,7 @@ public class InMemoryAccessEventRepository implements AccessEventRepository {
     }
 
     @Override
-    public Optional<Long> findPlatformQrEvent(Long gateId, java.time.LocalDateTime eventTime) {
+    public Optional<Long> findPlatformQrEvent(String deviceSn, Long gateId, java.time.LocalDateTime eventTime) {
         // 内存实现不做二维码合并，直接返回空（等价于"没有平台记录"）
         return Optional.empty();
     }
