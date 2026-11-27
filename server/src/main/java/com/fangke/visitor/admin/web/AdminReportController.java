@@ -5,12 +5,14 @@ import com.fangke.visitor.admin.service.ReportService;
 import com.fangke.visitor.common.ApiResponse;
 import com.fangke.visitor.security.RoleGuard;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -111,6 +113,51 @@ public class AdminReportController {
                 .map(r -> row(identifyText(r.key()), r.total(), r.pass(), r.fail())).toList());
         view.put("columns", List.of("总数", "通过", "失败"));
         return ApiResponse.ok(view);
+    }
+
+    /**
+     * 报表导出：概览指标 + 逐日明细，CSV（UTF-8 BOM）。
+     */
+    @GetMapping("/export")
+    public void export(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            HttpServletRequest request,
+            HttpServletResponse response) throws IOException {
+        RoleGuard.requireAdmin(request);
+        ReportService.Range range = service.resolveRange(from, to);
+        AdminReportRepository.Overview data = service.overview(from, to);
+        List<AdminReportRepository.Daily> daily = service.daily(from, to);
+
+        String fileName = "report-" + range.from() + "_" + range.to() + ".csv";
+        response.setContentType("text/csv;charset=UTF-8");
+        response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+        StringBuilder sb = new StringBuilder();
+        sb.append('\ufeff');
+        sb.append("统计区间,").append(range.from()).append(" ~ ").append(range.to()).append("\r\n\r\n");
+        sb.append("指标,数值\r\n");
+        sb.append("预约总数,").append(data.appointments()).append("\r\n");
+        sb.append("已通过,").append(data.approved()).append("\r\n");
+        sb.append("已驳回,").append(data.rejected()).append("\r\n");
+        sb.append("审批中,").append(data.pending()).append("\r\n");
+        sb.append("已撤销,").append(data.withdrawn()).append("\r\n");
+        sb.append("到访人数,").append(data.checkins()).append("\r\n");
+        sb.append("当前在厂,").append(data.onsiteNow()).append("\r\n");
+        sb.append("通行总次数,").append(data.events()).append("\r\n");
+        sb.append("通行通过,").append(data.eventPass()).append("\r\n");
+        sb.append("通行失败,").append(data.eventFail()).append("\r\n");
+        sb.append("平均审批时长(分钟),").append(data.avgApprovalMinutes() == null
+                ? 0 : Math.round(data.avgApprovalMinutes() * 10) / 10.0).append("\r\n\r\n");
+        sb.append("日期,预约数,到访数,通行通过,通行失败\r\n");
+        for (AdminReportRepository.Daily row : daily) {
+            sb.append(row.date()).append(',')
+                    .append(row.appointments()).append(',')
+                    .append(row.checkins()).append(',')
+                    .append(row.eventPass()).append(',')
+                    .append(row.eventFail()).append("\r\n");
+        }
+        response.getWriter().write(sb.toString());
+        response.getWriter().flush();
     }
 
     private Map<String, Object> row(String key, long total, long a, long b) {

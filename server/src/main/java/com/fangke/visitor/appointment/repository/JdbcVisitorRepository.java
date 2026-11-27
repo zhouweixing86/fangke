@@ -201,6 +201,15 @@ public class JdbcVisitorRepository implements VisitorRepository {
         jdbc.update("UPDATE visitor SET wx_openid = ? WHERE id = ?", wxOpenid, visitorId);
     }
 
+    @Override
+    public Optional<String> findWxOpenidById(Long visitorId) {
+        if (visitorId == null) {
+            return Optional.empty();
+        }
+        return jdbc.query("SELECT wx_openid FROM visitor WHERE id = ? AND wx_openid IS NOT NULL",
+                (rs, i) -> rs.getString(1), visitorId).stream().findFirst();
+    }
+
     private void setNullableBytes(PreparedStatement ps, int index, byte[] value) throws SQLException {
         if (value == null) {
             ps.setNull(index, Types.VARBINARY);

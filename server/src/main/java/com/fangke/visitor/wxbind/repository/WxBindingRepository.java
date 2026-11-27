@@ -127,6 +127,28 @@ public class WxBindingRepository {
                 (rs, i) -> rs.getString(1), bindingId);
     }
 
+    /** 某角色下已绑定微信的员工（抄送投递到小程序员工消息中心）。 */
+    public List<Long> findEmployeeIdsByRole(String roleCode) {
+        if (roleCode == null || roleCode.isBlank()) {
+            return List.of();
+        }
+        return jdbc.query("""
+                SELECT DISTINCT b.employee_id FROM wx_binding b
+                JOIN wx_binding_role br ON br.binding_id = b.id
+                WHERE br.role_code = ? AND b.status = 1 AND b.employee_id IS NOT NULL
+                ORDER BY b.employee_id
+                """, (rs, i) -> rs.getLong(1), roleCode);
+    }
+
+    /** 员工绑定的微信 openid（订阅消息投递用），没绑过返回空。 */
+    public Optional<String> findOpenidByEmployeeId(long employeeId) {
+        return jdbc.query("""
+                        SELECT openid FROM wx_binding
+                        WHERE employee_id = ? AND status = 1
+                        ORDER BY id DESC LIMIT 1
+                        """, (rs, i) -> rs.getString(1), employeeId).stream().findFirst();
+    }
+
     /** 新增或更新微信绑定（openid 唯一），返回 binding id。 */
     public long upsertBinding(String openid, String name, byte[] phoneEnc, String phoneMask,
                               String phoneHmac, Long employeeId) {

@@ -3,6 +3,7 @@ package com.fangke.visitor.traffic.web;
 import com.fangke.visitor.appointment.model.Appointment;
 import com.fangke.visitor.common.ApiResponse;
 import com.fangke.visitor.common.PageResult;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -42,6 +44,9 @@ public class AdminTrafficController {
 
     /** 车牌识别在明细里的方法码（行人用 identify_type，见 docs/10）。 */
     private static final int METHOD_PLATE = 20;
+
+    /** 导出上限：一次最多 5 万行，避免误导把内存打满。 */
+    private static final int EXPORT_LIMIT = 50000;
 
     private static final String SUMMARY_FROM = """
             FROM (
@@ -109,10 +114,64 @@ public class AdminTrafficController {
         Long total = jdbc.queryForObject("SELECT COUNT(1) FROM (SELECT 1 " + SUMMARY_FROM + where
                 + " GROUP BY t.person_no, t.person_type, t.day) c", Long.class, args.toArray());
 
+        List<Map<String, Object>> list = summaryRows(where, args, safeSize, (safePage - 1) * safeSize);
+
+        long count = total == null ? 0 : total;
+        return ApiResponse.ok(PageResult.of(count, safePage, safeSize, list));
+    }
+
+    /**
+     * 汇总导出：一人一天一行，与列表同口径同筛选，CSV（UTF-8 BOM，Excel 直接打开不乱码）。
+     */
+    @GetMapping("/summary/export")
+    public void export(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String personType,
+            @RequestParam(required = false) String channel,
+            @RequestParam(required = false) Long deptId,
+            @RequestParam(required = false) String keyword,
+            HttpServletResponse response) throws IOException {
+        LocalDate end = to == null ? LocalDate.now() : to;
+        LocalDate start = from == null ? end.minusDays(6) : from;
+        if (start.isAfter(end)) {
+            LocalDate swap = start;
+            start = end;
+            end = swap;
+        }
+        List<Object> args = new ArrayList<>();
+        String where = where(from, to, personType, channel, deptId, keyword, args);
+        List<Map<String, Object>> rows = summaryRows(where, args, EXPORT_LIMIT, 0);
+
+        String fileName = "traffic-" + start + "_" + end + ".csv";
+        response.setContentType("text/csv;charset=UTF-8");
+        response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+        StringBuilder sb = new StringBuilder();
+        sb.append('\ufeff');
+        sb.append("日期,人员编号,姓名,类型,部门,通行方式,最早进入,最晚出去,进次数,出次数,总次数\r\n");
+        for (Map<String, Object> row : rows) {
+            sb.append(csv(String.valueOf(row.get("day")))).append(',')
+                    .append(csv(String.valueOf(row.get("personNo")))).append(',')
+                    .append(csv(String.valueOf(row.get("personName")))).append(',')
+                    .append(csv(String.valueOf(row.get("personTypeText")))).append(',')
+                    .append(csv(String.valueOf(row.get("deptName")))).append(',')
+                    .append(csv(String.valueOf(row.get("channelText")))).append(',')
+                    .append(csv(String.valueOf(row.get("firstIn")))).append(',')
+                    .append(csv(String.valueOf(row.get("lastOut")))).append(',')
+                    .append(csv(String.valueOf(row.get("inCount")))).append(',')
+                    .append(csv(String.valueOf(row.get("outCount")))).append(',')
+                    .append(csv(String.valueOf(row.get("totalCount")))).append("\r\n");
+        }
+        response.getWriter().write(sb.toString());
+        response.getWriter().flush();
+    }
+
+    /** 汇总查询（列表与导出共用），limit 由调用方决定。 */
+    private List<Map<String, Object>> summaryRows(String where, List<Object> args, int limit, int offset) {
         List<Object> pageArgs = new ArrayList<>(args);
-        pageArgs.add(safeSize);
-        pageArgs.add((safePage - 1) * safeSize);
-        List<Map<String, Object>> list = jdbc.query("""
+        pageArgs.add(limit);
+        pageArgs.add(offset);
+        return jdbc.query("""
                         SELECT t.person_no, MAX(t.person_name) AS person_name, t.person_type, t.day,
                                MIN(CASE WHEN t.direction = 1 THEN t.event_time END) AS first_in,
                                MAX(CASE WHEN t.direction = 0 THEN t.event_time END) AS last_out,
@@ -147,9 +206,17 @@ public class AdminTrafficController {
                     return row;
                 },
                 pageArgs.toArray());
+    }
 
-        long count = total == null ? 0 : total;
-        return ApiResponse.ok(PageResult.of(count, safePage, safeSize, list));
+    /** CSV 转义：含逗号/引号/换行时用双引号包裹并把内部引号翻倍。 */
+    private String csv(String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
     }
 
     /** 某人某天的全部进出明细（行人 + 车辆），带通行方式与设备点位。 */

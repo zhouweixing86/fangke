@@ -9,6 +9,7 @@
       <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期"
         end-placeholder="结束日期" style="width: 250px" @change="preset = ''" />
       <el-button type="primary" :loading="loading" @click="load">统计</el-button>
+      <el-button :icon="Download" :loading="exporting" @click="doExport">导出</el-button>
       <span class="spacer" />
       <span class="text-muted">统计区间 {{ data?.from }} ~ {{ data?.to }}（按预约到访日/通行时间）</span>
     </div>
@@ -110,7 +111,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { reportAccess, reportDaily, reportOverview, reportVisitor } from '@/api'
+import { Download } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { exportReport, reportAccess, reportDaily, reportOverview, reportVisitor } from '@/api'
 import type { AccessReport, ReportDaily, ReportOverview, VisitorReport } from '@/api/types'
 
 type Preset = '' | '7' | '30' | 'month'
@@ -122,6 +125,7 @@ const daily = ref<ReportDaily[]>([])
 const visitorReport = ref<VisitorReport | null>(null)
 const accessReport = ref<AccessReport | null>(null)
 const loading = ref(false)
+const exporting = ref(false)
 
 const maxEvents = computed(() =>
   Math.max(1, ...daily.value.map((d) => d.eventPass + d.eventFail))
@@ -159,6 +163,22 @@ async function load() {
     accessReport.value = accessResult
   } finally {
     loading.value = false
+  }
+}
+
+async function doExport() {
+  exporting.value = true
+  try {
+    const blob = await exportReport({ from: dateRange.value?.[0], to: dateRange.value?.[1] })
+    const url = URL.createObjectURL(blob as Blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `报表-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('已导出')
+  } finally {
+    exporting.value = false
   }
 }
 

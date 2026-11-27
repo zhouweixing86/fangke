@@ -524,6 +524,10 @@ export const reportVisitor = (params: Record<string, unknown>) =>
 export const reportAccess = (params: Record<string, unknown>) =>
   get<AccessReport>('/admin/report/access', params)
 
+/** 报表导出 CSV（概览 + 逐日明细） */
+export const exportReport = (params: Record<string, unknown>) =>
+  http.get('/admin/report/export', { params, responseType: 'blob' }) as unknown as Promise<Blob>
+
 /* ---------------- 运维（定时任务 / 通知） ---------------- */
 
 export const listJobLog = (params: Record<string, unknown>) =>
@@ -607,3 +611,7 @@ export const trafficSummary = (params: Record<string, unknown>) =>
 
 export const trafficDetail = (personNo: string, date: string) =>
   get<TrafficDetail>(`/admin/traffic/${encodeURIComponent(personNo)}/detail`, { date })
+
+/** 通行汇总导出 CSV（与列表同筛选口径，一人一天一行） */
+export const exportTrafficSummary = (params: Record<string, unknown>) =>
+  http.get('/admin/traffic/summary/export', { params, responseType: 'blob' }) as unknown as Promise<Blob>

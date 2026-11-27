@@ -147,6 +147,14 @@
       <view v-else class="ph tips">随行人员跟随本人一起进出，无需单独刷证；二维码在「我的预约」里出示</view>
     </view>
 
+    <view class="consent" @click="agreed = !agreed">
+      <view :class="['checkbox', agreed ? 'checked' : '']">
+        <text v-if="agreed" class="tick">✓</text>
+      </view>
+      <text class="consent-text">我已阅读并同意</text>
+      <text class="consent-link" @click.stop="openPrivacy">《隐私政策》</text>
+    </view>
+
     <button class="submit" :loading="submitting" @click="submit">提交</button>
   </view>
 </template>
@@ -194,6 +202,9 @@ const mateTotal = ref('')
 
 const gates = ref<GateOption[]>([])
 const gateOptions = ['全部门点', '指定门点']
+// 隐私政策同意（docs/26 B2）：同版本同意过就不再重复勾选
+const CONSENT_VERSION = 'v1.0'
+const agreed = ref(uni.getStorageSync('privacy_agreed') === CONSENT_VERSION)
 const gateIndex = ref(0)
 const gateScope = computed(() => (gateIndex.value === 0 ? 2 : 1))
 const selectedGateIds = ref<number[]>([])
@@ -269,7 +280,12 @@ async function lookupHost() {
   }
 }
 
+function openPrivacy() {
+  uni.navigateTo({ url: '/pages/visitor/privacy' })
+}
+
 async function submit() {
+  if (!agreed.value) return showToast('请先阅读并同意《隐私政策》')
   if (!form.date) return showToast('请选择来访日期')
   // 被访人手机改为选填（C-83：不再由被访人审批）；填了才校验格式
   if (form.visitPhone && !/^1\d{10}$/.test(form.visitPhone.trim())) {
@@ -323,8 +339,9 @@ async function submit() {
           }))
         : undefined,
       wxOpenid: openid || undefined,
-      consentVersion: 'v1.0'
+      consentVersion: CONSENT_VERSION
     })
+    uni.setStorageSync('privacy_agreed', CONSENT_VERSION)
     await alert('预约单号：' + result.appointmentNo + '\n状态：' + result.statusText, '提交成功')
     uni.redirectTo({ url: '/pages/visitor/index' })
   } finally {
@@ -537,6 +554,38 @@ onShow(async () => {
 .tips {
   padding: 24rpx 0 8rpx;
   text-align: center;
+}
+
+/* 隐私政策勾选：未勾选不允许提交（C-112 / docs/26 B2） */
+.consent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 32rpx;
+  font-size: 26rpx;
+  color: #4a5160;
+}
+.checkbox {
+  width: 32rpx;
+  height: 32rpx;
+  margin-right: 12rpx;
+  border: 2rpx solid #c8cdd6;
+  border-radius: 6rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.checkbox.checked {
+  background: #1565e8;
+  border-color: #1565e8;
+}
+.tick {
+  color: #ffffff;
+  font-size: 22rpx;
+  line-height: 1;
+}
+.consent-link {
+  color: #1565e8;
 }
 
 /* 提交不做通栏 bar：圆角按钮居中，视觉更干净 */

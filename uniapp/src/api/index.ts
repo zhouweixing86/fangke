@@ -157,6 +157,17 @@ export const readMyNotification = (id: number) =>
 export const readAllMyNotifications = () =>
   post<{ updated: number }>('/admin/notification/mine/read-all')
 
+/* ---------------- 小程序消息中心（员工/访客，按 token 身份取自己的消息） ---------------- */
+
+export const listAppNotifications = (params: Record<string, unknown>) =>
+  get<PageResult<MyNotification>>('/app/notifications', params)
+
+export const appUnreadCount = () => get<{ unread: number }>('/app/notifications/unread-count')
+
+export const readAppNotification = (id: number) => post<void>(`/app/notifications/${id}/read`)
+
+export const readAllAppNotifications = () => post<{ updated: number }>('/app/notifications/read-all')
+
 /* ---------------- 管理端 ---------------- */
 
 export const listAppointments = (params: Record<string, unknown>) =>

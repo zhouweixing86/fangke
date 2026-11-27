@@ -4,7 +4,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 应用配置（application.yml 前缀 fangke）。
@@ -499,6 +501,8 @@ public class AppProperties {
         private boolean mock = true;
         /** 小程序码版本：release / trial / develop（生成角色小程序码时使用）。 */
         private String envVersion = "release";
+        /** 微信订阅消息（docs/26 B1）。 */
+        private final Subscribe subscribe = new Subscribe();
 
         public String getAppId() {
             return appId;
@@ -531,6 +535,79 @@ public class AppProperties {
 
         public void setEnvVersion(String envVersion) {
             this.envVersion = envVersion;
+        }
+
+        public Subscribe getSubscribe() {
+            return subscribe;
+        }
+    }
+
+    /**
+     * 微信订阅消息（一次性订阅）：模板 ID 由客户在公众平台「订阅消息」里申请后填入。
+     *
+     * <p>模板字段名各家不同，这里用「逻辑字段 → 模板关键词」映射，
+     * 例如 {@code name=thing1, no=character_string2, time=time3}；
+     * 换模板只改配置，不改代码。模板 ID 为空时整个功能静默跳过。
+     */
+    public static class Subscribe {
+        private boolean enabled = true;
+        /** 审批待办通知模板 ID（发给审批人）。 */
+        private String todoTemplateId = "";
+        /** 审批结果通知模板 ID（发给访客）。 */
+        private String resultTemplateId = "";
+        /** 点击消息跳转的小程序页面。 */
+        private String page = "pages/employee/approvals";
+        private Map<String, String> todoFields = new LinkedHashMap<>(Map.of(
+                "name", "thing1", "no", "character_string2", "time", "time3", "purpose", "thing4"));
+        private Map<String, String> resultFields = new LinkedHashMap<>(Map.of(
+                "name", "thing1", "no", "character_string2", "result", "phrase3", "time", "time4"));
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getTodoTemplateId() {
+            return todoTemplateId;
+        }
+
+        public void setTodoTemplateId(String todoTemplateId) {
+            this.todoTemplateId = todoTemplateId;
+        }
+
+        public String getResultTemplateId() {
+            return resultTemplateId;
+        }
+
+        public void setResultTemplateId(String resultTemplateId) {
+            this.resultTemplateId = resultTemplateId;
+        }
+
+        public String getPage() {
+            return page;
+        }
+
+        public void setPage(String page) {
+            this.page = page;
+        }
+
+        public Map<String, String> getTodoFields() {
+            return todoFields;
+        }
+
+        public void setTodoFields(Map<String, String> todoFields) {
+            this.todoFields = todoFields;
+        }
+
+        public Map<String, String> getResultFields() {
+            return resultFields;
+        }
+
+        public void setResultFields(Map<String, String> resultFields) {
+            this.resultFields = resultFields;
         }
     }
 

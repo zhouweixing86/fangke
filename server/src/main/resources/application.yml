@@ -77,6 +77,12 @@ fangke:
     mock: ${WX_MOCK:true}
     # 生成「角色小程序码」用：release 正式 / trial 体验版 / develop 开发版
     env-version: ${WX_ENV_VERSION:release}
+    # 订阅消息（docs/26 B1）：模板 ID 在公众平台「订阅消息」申请后填到环境变量；留空则静默跳过
+    subscribe:
+      enabled: ${WX_SUBSCRIBE_ENABLED:true}
+      todo-template-id: ${WX_SUBSCRIBE_TODO:}
+      result-template-id: ${WX_SUBSCRIBE_RESULT:}
+      page: ${WX_SUBSCRIBE_PAGE:pages/employee/approvals}
 
   crypto:
     # 敏感字段加密：生产必须用环境变量注入，且两把密钥不同

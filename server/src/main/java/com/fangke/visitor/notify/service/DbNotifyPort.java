@@ -8,6 +8,7 @@ import com.fangke.visitor.approval.model.ApprovalTask;
 import com.fangke.visitor.approval.repository.ApprovalTaskRepository;
 import com.fangke.visitor.approval.service.NotifyPort;
 import com.fangke.visitor.notify.model.NotifyTemplates;
+import com.fangke.visitor.wxbind.service.WxSubscribeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -30,15 +31,18 @@ public class DbNotifyPort implements NotifyPort {
     private final AppointmentRepository appointmentRepository;
     private final VisitorRepository visitorRepository;
     private final ApprovalTaskRepository taskRepository;
+    private final WxSubscribeService wxSubscribeService;
 
     public DbNotifyPort(NotifyService notifyService,
                         AppointmentRepository appointmentRepository,
                         VisitorRepository visitorRepository,
-                        ApprovalTaskRepository taskRepository) {
+                        ApprovalTaskRepository taskRepository,
+                        WxSubscribeService wxSubscribeService) {
         this.notifyService = notifyService;
         this.appointmentRepository = appointmentRepository;
         this.visitorRepository = visitorRepository;
         this.taskRepository = taskRepository;
+        this.wxSubscribeService = wxSubscribeService;
     }
 
     @Override
@@ -53,6 +57,9 @@ public class DbNotifyPort implements NotifyPort {
                     appointment.getAppointmentNo(), range(appointment), appointment.getPurpose());
             notifyService.notifyEmployee(employeeId, NotifyTemplates.APPROVAL_TODO, content,
                     "APPROVAL", appointment.getAppointmentNo(), null, true);
+            // 站内之外再推一条微信订阅消息：审批人不进小程序也知道有活干（未授权时服务内部静默跳过）
+            wxSubscribeService.sendTodo(employeeId, visitorName, appointment.getAppointmentNo(),
+                    range(appointment), appointment.getPurpose());
         } catch (Exception e) {
             log.warn("待办通知失败 employee={} appointment={}：{}", employeeId, appointmentId, e.getMessage());
         }
@@ -72,6 +79,8 @@ public class DbNotifyPort implements NotifyPort {
             notifyService.notifyVisitor(appointment.getVisitorId(),
                     passed ? NotifyTemplates.APPROVAL_PASSED : NotifyTemplates.APPROVAL_REJECTED,
                     content, "APPOINTMENT", appointment.getAppointmentNo(), null, true);
+            wxSubscribeService.sendResult(appointment.getVisitorId(), visitorName,
+                    appointment.getAppointmentNo(), range(appointment), passed, reason);
         } catch (Exception e) {
             log.warn("审批结果通知失败 appointment={}：{}", appointmentId, e.getMessage());
         }

@@ -40,6 +40,15 @@ public interface VisitorRepository {
     void bindWxOpenid(Long visitorId, String wxOpenid);
 
     /**
+     * 访客绑定的 openid（订阅消息投递用）。
+     *
+     * <p>默认返回空，方便测试替身只实现自己关心的方法。
+     */
+    default Optional<String> findWxOpenidById(Long visitorId) {
+        return Optional.empty();
+    }
+
+    /**
      * 批量取访客姓名（id → name）。车闸车牌对账每 20 秒一次，逐单 findById 会变成 N+1。
      *
      * <p>默认实现兜底，JDBC 实现走单条 IN 查询。

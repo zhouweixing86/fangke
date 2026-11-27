@@ -25,6 +25,7 @@
         @keyup.enter="search" />
       <el-button type="primary" @click="search">查询</el-button>
       <el-button :icon="Refresh" @click="load">刷新</el-button>
+      <el-button :icon="Download" :loading="exporting" @click="doExport">导出</el-button>
       <span class="spacer" />
       <span class="text-muted">一人一天一行：最早进入 / 最晚出去，点「详情」看当天全部进出与审批</span>
     </div>
@@ -237,14 +238,23 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
-import { listDepts, listEventMedia, listEvents, trafficDetail, trafficSummary } from '@/api'
+import { Download, Refresh } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import {
+  exportTrafficSummary,
+  listDepts,
+  listEventMedia,
+  listEvents,
+  trafficDetail,
+  trafficSummary
+} from '@/api'
 import type { DeptView, EventMedia, EventRow, TrafficDetail, TrafficRow } from '@/api/types'
 
 /** 人员通行（汇总）/ 拒绝记录（失败明细） */
 const activeTab = ref<'traffic' | 'denied'>('traffic')
 
 const loading = ref(false)
+const exporting = ref(false)
 const rows = ref<TrafficRow[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -306,12 +316,7 @@ async function load() {
   loading.value = true
   try {
     const result = await trafficSummary({
-      from: query.range?.[0],
-      to: query.range?.[1],
-      personType: query.personType,
-      deptId: query.personType === 'VISITOR' ? undefined : query.deptId,
-      channel: query.channel,
-      keyword: query.keyword || undefined,
+      ...filters(),
       page: page.value,
       size: size.value
     })
@@ -325,6 +330,34 @@ async function load() {
 function search() {
   page.value = 1
   load()
+}
+
+/** 列表与导出共用的筛选条件（不含分页） */
+function filters() {
+  return {
+    from: query.range?.[0],
+    to: query.range?.[1],
+    personType: query.personType,
+    deptId: query.personType === 'VISITOR' ? undefined : query.deptId,
+    channel: query.channel,
+    keyword: query.keyword || undefined
+  }
+}
+
+async function doExport() {
+  exporting.value = true
+  try {
+    const blob = await exportTrafficSummary(filters())
+    const url = URL.createObjectURL(blob as Blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `通行汇总-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('已导出')
+  } finally {
+    exporting.value = false
+  }
 }
 
 /** 详情里时间压缩展示：与详情同一天只显示时间部分，跨天显示「MM-dd HH:mm」。 */

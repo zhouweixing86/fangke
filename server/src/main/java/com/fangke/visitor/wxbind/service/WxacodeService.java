@@ -107,7 +107,8 @@ public class WxacodeService {
         return v == null || v.isBlank() ? "release" : v;
     }
 
-    private synchronized String accessToken() throws Exception {
+    /** 供同包内的订阅消息复用（同一 AppID 的 access_token 两小时有效，内部有缓存）。 */
+    synchronized String accessToken() throws Exception {
         if (accessToken != null && Instant.now().isBefore(tokenExpiresAt)) {
             return accessToken;
         }
