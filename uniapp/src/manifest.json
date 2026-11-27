@@ -42,12 +42,7 @@
       "es6": true,
       "minified": true
     },
-    "usingComponents": true,
-    "permission": {
-      "scope.camera": {
-        "desc": "扫描访客通行码需要摄像头"
-      }
-    }
+    "usingComponents": true
   },
   "h5": {
     "title": "访客通行",
